@@ -12,6 +12,9 @@ builder.Services.AddOpenApi();
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
 
+//2026-04-30 18:34:15 - Arga - Add Controller
+builder.Services.AddControllers();
+
 // 2026-04-30 13:51:08 - Arga - Add Swagger
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
@@ -49,6 +52,8 @@ app.MapGet("/weatherforecast", () =>
 app.UseSwagger();
 app.UseSwaggerUI();
 
+
+app.MapControllers();
 
 app.Run();
 

@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using amtemeterai.Api.Data;
@@ -11,9 +12,11 @@ using amtemeterai.Api.Data;
 namespace amtemeterai.Api.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260430120637_RemoveUnusedDeliveryID")]
+    partial class RemoveUnusedDeliveryID
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -107,7 +110,7 @@ namespace amtemeterai.Api.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("DeliveryLineID"));
 
-                    b.Property<int>("DeliveryID")
+                    b.Property<int>("DeliveryHeaderDeliveryID")
                         .HasColumnType("integer");
 
                     b.Property<string>("DeliveryItemCode")
@@ -152,7 +155,7 @@ namespace amtemeterai.Api.Migrations
 
                     b.HasKey("DeliveryLineID");
 
-                    b.HasIndex("DeliveryID");
+                    b.HasIndex("DeliveryHeaderDeliveryID");
 
                     b.ToTable("DeliveryLines");
                 });
@@ -172,7 +175,7 @@ namespace amtemeterai.Api.Migrations
                 {
                     b.HasOne("amtemeterai.Api.Models.DeliveryHeader", "DeliveryHeader")
                         .WithMany("Lines")
-                        .HasForeignKey("DeliveryID")
+                        .HasForeignKey("DeliveryHeaderDeliveryID")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 

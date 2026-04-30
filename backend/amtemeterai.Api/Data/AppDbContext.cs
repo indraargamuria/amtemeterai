@@ -22,7 +22,12 @@ public class AppDbContext : DbContext
 
         modelBuilder.Entity<DeliveryLine>()
             .HasKey(x => x.DeliveryLineID);
-        // Customer
+
+        modelBuilder.Entity<DeliveryLine>()
+            .HasOne(x => x.DeliveryHeader)
+            .WithMany(x => x.Lines)
+            .HasForeignKey(x => x.DeliveryID);
+            
         modelBuilder.Entity<Customer>()
             .HasIndex(x => x.CustomerCode)
             .IsUnique();
