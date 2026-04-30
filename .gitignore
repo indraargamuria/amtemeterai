@@ -1,0 +1,85 @@
+# =========================
+# GENERAL
+# =========================
+.DS_Store
+Thumbs.db
+*.log
+*.tmp
+*.swp
+.vscode/
+.idea/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# =========================
+# NODE / REACT / VITE
+# =========================
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+frontend/.env
+frontend/.env.*
+frontend/npm-debug.log*
+frontend/yarn-debug.log*
+frontend/yarn-error.log*
+frontend/pnpm-debug.log*
+
+# =========================
+# .NET
+# =========================
+backend/**/bin/
+backend/**/obj/
+backend/.vs/
+backend/*.user
+backend/*.lock.json
+backend/appsettings.Development.json
+
+# Rider / VS specific
+*.DotSettings.user
+
+# =========================
+# DATABASE (POSTGRES)
+# =========================
+# local database volume dumps / backups
+*.sql
+*.dump
+
+# if using docker volumes mapped to folder
+infra/docker/postgres-data/
+postgres-data/
+
+# =========================
+# MINIO (OBJECT STORAGE)
+# =========================
+infra/docker/minio-data/
+minio-data/
+
+# =========================
+# DOCKER
+# =========================
+*.env
+.env.*
+docker-compose.override.yml
+
+# =========================
+# TEST / COVERAGE
+# =========================
+coverage/
+*.coverage
+*.coveragexml
+TestResults/
+
+# =========================
+# BUILD OUTPUT
+# =========================
+dist/
+build/
+
+# =========================
+# OS / MISC
+# =========================
+*.pid
+*.seed
+*.pid.lock

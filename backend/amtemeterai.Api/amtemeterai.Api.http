@@ -1,0 +1,6 @@
+@amtemeterai.Api_HostAddress = http://localhost:5296
+
+GET {{amtemeterai.Api_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
