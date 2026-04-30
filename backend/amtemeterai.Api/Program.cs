@@ -1,8 +1,16 @@
+using Microsoft.EntityFrameworkCore;
+using amtemeterai.Api.Data;
+
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
+
+
+//2026-04-30 18:30:44 - Arga - Add Db Context
+builder.Services.AddDbContext<AppDbContext>(options =>
+    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
 
 // 2026-04-30 13:51:08 - Arga - Add Swagger
 builder.Services.AddEndpointsApiExplorer();
