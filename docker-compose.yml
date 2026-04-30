@@ -1,0 +1,28 @@
+services:
+
+  postgres:
+    image: postgres:16
+    container_name: amtemeterai_db
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: opexdb
+    ports:
+      - "5500:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  api:
+    build: backend\amtemeterai.Api
+    container_name: amtemeterai_api
+    restart: always
+    depends_on:
+      - postgres
+    ports:
+      - "8080:8080"
+    environment:
+      ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=opexdb;Username=postgres;Password=postgres
+
+volumes:
+  pgdata:
