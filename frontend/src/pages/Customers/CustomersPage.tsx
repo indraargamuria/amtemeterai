@@ -69,7 +69,7 @@ const dummyCustomers: Customer[] = [
   },
 ]
 
-const ITEMS_PER_PAGE = 5
+const ITEMS_PER_PAGE = 10
 
 
 export function CustomersPage() {
