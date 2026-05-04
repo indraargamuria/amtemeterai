@@ -86,13 +86,15 @@ export function CustomersPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       {/* Page Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-brand-blue">Customers</h1>
-          <p className="mt-1 text-sm text-brand-blue/60">
-            Manage your customer database
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+        <div className="space-y-1">
+          <h1 className="text-2xl font-semibold text-brand-blue tracking-tight">
+            Customers
+          </h1>
+          <p className="text-sm text-brand-blue/60">
+            Manage your customer database and sync data
           </p>
         </div>
         <Button onClick={handleSyncCustomers}>Sync Customers</Button>
@@ -103,21 +105,29 @@ export function CustomersPage() {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Customer Code</TableHead>
-              <TableHead>Customer Name</TableHead>
-              <TableHead>Email</TableHead>
-              <TableHead>Address</TableHead>
+              <TableHead className="font-medium text-brand-blue/50 uppercase text-xs tracking-wider">
+                Customer Code
+              </TableHead>
+              <TableHead className="font-medium text-brand-blue/50 uppercase text-xs tracking-wider">
+                Customer Name
+              </TableHead>
+              <TableHead className="font-medium text-brand-blue/50 uppercase text-xs tracking-wider">
+                Email
+              </TableHead>
+              <TableHead className="font-medium text-brand-blue/50 uppercase text-xs tracking-wider">
+                Address
+              </TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {currentCustomers.map((customer) => (
               <TableRow key={customer.code}>
-                <TableCell className="font-medium">
+                <TableCell className="font-medium text-brand-blue">
                   {customer.code}
                 </TableCell>
                 <TableCell>{customer.name}</TableCell>
-                <TableCell>{customer.email}</TableCell>
-                <TableCell>{customer.address}</TableCell>
+                <TableCell className="text-brand-blue/70">{customer.email}</TableCell>
+                <TableCell className="text-brand-blue/70">{customer.address}</TableCell>
               </TableRow>
             ))}
           </TableBody>

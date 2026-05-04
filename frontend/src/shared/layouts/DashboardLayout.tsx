@@ -16,23 +16,23 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
 
   return (
     <div className="min-h-screen flex bg-white">
-      {/* Sidebar */}
-      <aside className="w-64 bg-brand-blue min-h-screen flex flex-col">
+      {/* Sidebar - Light Theme */}
+      <aside className="w-64 bg-white min-h-screen flex flex-col border-r border-brand-blue/5">
         {/* Logo */}
-        <div className="p-6 border-b border-white/10">
+        <div className="p-6">
           <Link to="/" className="block">
-            <h1 className="text-xl font-bold text-white tracking-tight">
+            <h1 className="text-lg font-bold text-brand-blue tracking-tight">
               AmtemeterAI
             </h1>
-            <p className="mt-1 text-xs text-white/60">
+            <p className="mt-1 text-xs text-brand-blue/50">
               e-Meterai Delivery Management
             </p>
           </Link>
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 p-4">
-          <ul className="space-y-1">
+        <nav className="flex-1 px-3">
+          <ul className="space-y-0.5">
             {menuItems.map((item) => {
               const isActive = location.pathname === item.path
               return (
@@ -40,10 +40,10 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                   <Link
                     to={item.path}
                     className={cn(
-                      "flex items-center px-4 py-3 rounded-lg text-sm font-medium transition-colors",
+                      "flex items-center px-4 py-2.5 rounded-md text-sm font-medium transition-all",
                       isActive
-                        ? "bg-brand-red text-white"
-                        : "text-white/80 hover:bg-white/10 hover:text-white"
+                        ? "bg-brand-blue/10 text-brand-blue border-l-2 border-brand-blue"
+                        : "text-brand-blue/70 hover:bg-brand-blue/5 hover:text-brand-blue border-l-2 border-transparent"
                     )}
                   >
                     {item.label}
@@ -55,22 +55,24 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
         </nav>
 
         {/* User section */}
-        <div className="p-4 border-t border-white/10">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-full bg-white/20 flex items-center justify-center">
-              <span className="text-sm font-semibold text-white">A</span>
+        <div className="p-4 border-t border-brand-blue/5">
+          <div className="flex items-center gap-3 px-2">
+            <div className="w-8 h-8 rounded-full bg-brand-blue/10 flex items-center justify-center">
+              <span className="text-xs font-semibold text-brand-blue">A</span>
             </div>
-            <div>
-              <p className="text-sm font-medium text-white">Admin User</p>
-              <p className="text-xs text-white/60">admin@amtemeterai.com</p>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-brand-blue truncate">Admin User</p>
+              <p className="text-xs text-brand-blue/50 truncate">
+                admin@amtemeterai.com
+              </p>
             </div>
           </div>
         </div>
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 overflow-auto">
-        <div className="p-8">{children}</div>
+      <main className="flex-1 overflow-auto bg-brand-blue/[0.02]">
+        <div className="p-8 max-w-6xl mx-auto">{children}</div>
       </main>
     </div>
   )

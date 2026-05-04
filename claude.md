@@ -1,113 +1,264 @@
-# Claude Frontend Guidelines
+# Claude Frontend Guidelines (Opex Launchpad)
 
 ## Tech Stack
 - React (Vite)
 - TypeScript
 - Tailwind CSS
-- shadcn/ui (component library)
+- shadcn/ui
 - React Router
 
 ---
 
-## Design Principles
+# 🎯 Core Design Goal
 
-### 1. Minimalist + Enterprise SaaS
-- Clean layout
-- Plenty of whitespace
-- No clutter
-- Professional (not playful)
+Build a **modern, premium SaaS interface** that feels:
+- Clean
+- Structured
+- Professional
+- Not generic
 
----
-
-## Color System (STRICT RULE)
-
-ONLY use these 3 colors:
-
-- White: #FFFFFF (primary background)
-- Blue: #1d2351 (primary brand color)
-- Red: #e61920 (accent color)
-
-### Rules:
-- No additional colors allowed (including gray variants unless derived from opacity)
-- Use opacity (e.g. blue/10, blue/20) instead of new colors
-- Background must be white
-- Primary actions → blue
-- Critical / highlight → red
+Focus on:
+- Visual hierarchy
+- Information density
+- Calm but intentional color usage
 
 ---
 
-## Typography
-- Use default sans-serif (Tailwind)
-- Clear hierarchy:
-  - Title → large, bold
-  - Section → medium
-  - Body → normal
+# 🎨 Color System (STRICT BUT EXTENDED)
+
+## Brand Colors
+- Primary Blue: #1d2351
+- Accent Red: #e61920
+- White: #FFFFFF
 
 ---
 
-## Layout Rules
+## Usage Rules
 
-### General
-- Use spacing generously (padding, margin)
-- Avoid cramped UI
-- Prefer grid/flex layouts
+### 1. Blue (Primary)
+Used for:
+- Primary buttons
+- Active navigation
+- Key UI elements
 
----
+### 2. Red (Accent ONLY)
+Used for:
+- Small highlights
+- Alerts
+- Critical indicators
+- Thin accents (borders, badges)
 
-### Dashboard Layout
-- Left sidebar (fixed width)
-- Main content area (flex-grow)
-- Sidebar must stay persistent across pages
-
----
-
-## Component Usage
-
-Use **shadcn/ui components** whenever possible:
-- Button
-- Card
-- Input
-- Table
-- Pagination
-- Badge
-
-Avoid building raw HTML if a component exists.
+❌ DO NOT:
+- Use red for large backgrounds
+- Use red for main navigation
 
 ---
 
-## Code Structure
+## 3. Soft Color System (IMPORTANT)
 
-Follow this structure:
+Use opacity-based variants of blue:
 
-- pages → route-level screens
-- features → business logic grouping
-- shared/components → reusable UI
-- shared/layouts → layout (Sidebar, etc)
+- blue/5 → page background sections
+- blue/10 → hover / subtle surfaces
+- blue/20 → selected state
 
----
-
-## UX Rules
-
-- Loading state placeholders (skeleton if possible)
-- Empty states must exist
-- Tables must be readable and spaced
-- Buttons must be clearly visible
+Use these instead of adding new colors.
 
 ---
 
-## DO NOT
+## 4. Background Strategy
 
-- Do not add random colors
-- Do not over-design
-- Do not use complex animations
-- Do not introduce backend logic
-- Do not use mock APIs unless explicitly asked
+- Main background → white
+- Section separation → subtle blue tint (very light)
+- Cards → white with soft border
 
 ---
 
-## Output Expectation
+# 🧠 Visual Hierarchy Rules (CRITICAL)
 
-- Clean, production-ready React TSX
-- Use Tailwind classes
+Not all elements should look equal.
+
+Use:
+- Size (big numbers, small labels)
+- Spacing (more space = more importance)
+- Weight (bold vs normal)
+
+---
+
+## Page Structure MUST include:
+
+1. Page Header
+   - Title (large, bold)
+   - Short description (1 line, muted)
+
+2. Content Sections
+   - Clearly separated using spacing (NOT borders only)
+
+---
+
+# 📐 Spacing & Density System
+
+## Spacing Rhythm
+- Section spacing: large (32px+)
+- Component spacing: medium (16–24px)
+- Internal spacing: tight (8–12px)
+
+---
+
+## Density Rules
+- Avoid overly empty layouts
+- Avoid cramped layouts
+- Use cards, grouping, and structure
+
+---
+
+# 🧩 Layout Rules
+
+## Dashboard Layout
+
+- Sidebar (fixed)
+- Main content (flex)
+
+---
+
+## Sidebar (IMPORTANT)
+
+### Preferred Style (Light Sidebar)
+
+- Background: white
+- Text: blue (#1d2351)
+
+### States:
+- Hover → blue/5
+- Active:
+  - background → blue/10
+  - left border → solid blue
+
+---
+
+### Alternative (Dark Sidebar — if used)
+
+- Background: blue (#1d2351)
+- Text: white
+- Active:
+  - background → white/10
+  - left border → red (thin accent only)
+
+---
+
+# 🧱 Component Design Rules
+
+## Cards
+
+Each card MUST include:
+- Title (small)
+- Main value (large, bold)
+- Supporting text (small)
+- Optional icon
+
+❌ Avoid plain number-only cards
+
+---
+
+## Tables
+
+Must include:
+- Row hover state
+- Proper spacing
+- Clean alignment
+
+Optional:
+- Badge/status for realism
+
+---
+
+## Buttons
+
+- Primary → blue
+- Hover → slightly lighter blue
+- Rounded, clean
+
+---
+
+# 🧭 UX Rules
+
+- Every page must explain itself (title + description)
+- Avoid empty feeling → add structure, not clutter
+- Use grouping instead of random spacing
+
+---
+
+# 📄 Page Requirements
+
+## Login Page
+
+- Split screen layout
+- Left:
+  - Logo
+  - Title
+  - Form (email + password)
+- Right:
+  - Full image
+
+Style:
+- Minimal
+- Spacious
+- Professional
+
+---
+
+## Dashboard Page
+
+Display 3 metric cards:
+
+- Ongoing Deliveries
+- Delivered but Pending Invoice
+- Remaining e-Meterai
+
+Each card:
+- Icon
+- Big number
+- Small context text
+
+---
+
+## Customers Page
+
+- Header (title + description)
+- Action button (Sync Customers)
+
+Table:
+- Customer Code
+- Name
+- Email
+- Address
+
++ Pagination
+
+---
+
+## Deliveries Page
+
+Table:
+- Delivery Code
+- Customer Name
+
+---
+
+# 🚫 DO NOT
+
+- Do not use random colors
+- Do not use red as main UI color
+- Do not leave pages visually empty
+- Do not make all elements look identical
+- Do not generate one large component file
+
+---
+
+# 📦 Output Expectations
+
+- Clean React TSX
+- Split components logically
 - Use shadcn/ui components
-- Split components logically (not one big file)
+- Use Tailwind properly
+- Follow ALL design rules strictly

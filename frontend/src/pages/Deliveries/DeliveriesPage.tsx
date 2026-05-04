@@ -89,12 +89,14 @@ export function DeliveriesPage() {
   )
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       {/* Page Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-brand-blue">Deliveries</h1>
-        <p className="mt-1 text-sm text-brand-blue/60">
-          Track and manage all deliveries
+      <div className="space-y-1">
+        <h1 className="text-2xl font-semibold text-brand-blue tracking-tight">
+          Deliveries
+        </h1>
+        <p className="text-sm text-brand-blue/60">
+          Track and manage all delivery operations
         </p>
       </div>
 
@@ -103,16 +105,24 @@ export function DeliveriesPage() {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Delivery Code</TableHead>
-              <TableHead>Customer Name</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Date</TableHead>
+              <TableHead className="font-medium text-brand-blue/50 uppercase text-xs tracking-wider">
+                Delivery Code
+              </TableHead>
+              <TableHead className="font-medium text-brand-blue/50 uppercase text-xs tracking-wider">
+                Customer Name
+              </TableHead>
+              <TableHead className="font-medium text-brand-blue/50 uppercase text-xs tracking-wider">
+                Status
+              </TableHead>
+              <TableHead className="font-medium text-brand-blue/50 uppercase text-xs tracking-wider">
+                Date
+              </TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {currentDeliveries.map((delivery) => (
               <TableRow key={delivery.code}>
-                <TableCell className="font-medium">
+                <TableCell className="font-medium text-brand-blue">
                   {delivery.code}
                 </TableCell>
                 <TableCell>{delivery.customerName}</TableCell>
@@ -121,7 +131,7 @@ export function DeliveriesPage() {
                     {delivery.status}
                   </Badge>
                 </TableCell>
-                <TableCell>{delivery.date}</TableCell>
+                <TableCell className="text-brand-blue/70">{delivery.date}</TableCell>
               </TableRow>
             ))}
           </TableBody>
