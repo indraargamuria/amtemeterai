@@ -18,6 +18,69 @@ public class DeliveriesController : ControllerBase
         _db = db;
     }
 
+    [HttpGet]
+    public async Task<ActionResult<IEnumerable<DeliveryHeaderDto>>> GetAllDeliveries()
+    {
+        var deliveries = await _db.DeliveryHeaders
+            .Include(d => d.Customer)
+            .Select(d => new DeliveryHeaderDto
+            {
+                DeliveryId = d.DeliveryID,
+                DeliveryNumber = d.DeliveryNumber,
+                DeliveryDate = d.DeliveryDate,
+                DeliveryRemarks = d.DeliveryRemarks,
+
+                CustomerCode = d.Customer.CustomerCode,
+                CustomerName = d.Customer.CustomerName,
+
+                Received = d.Received,
+                Invoiced = d.Invoiced
+            })
+            .OrderByDescending(d => d.DeliveryDate)
+            .ToListAsync();
+
+        return Ok(deliveries);
+    }
+
+
+    [HttpGet("{deliveryId:int}")]
+    public async Task<ActionResult<DeliveryResponseDto>> GetDeliveryById(int deliveryId)
+    {
+        var delivery = await _db.DeliveryHeaders
+            .Include(d => d.Lines)
+            .FirstOrDefaultAsync(d => d.DeliveryID == deliveryId);
+
+        if (delivery == null)
+            return NotFound();
+
+        var response = new DeliveryResponseDto
+        {
+            DeliveryNumber = delivery.DeliveryNumber,
+            DeliveryDate = delivery.DeliveryDate,
+            DeliveryRemarks = delivery.DeliveryRemarks,
+            ReceiverToken = delivery.ReceiverToken,
+            ReceiverName = delivery.ReceiverName,
+            ReceiverNotes = delivery.ReceiverNotes,
+            Received = delivery.Received,
+            Invoiced = delivery.Invoiced,
+
+            Lines = delivery.Lines.Select(l => new DeliveryLineResponseDto
+            {
+                DeliveryLineNumber = l.DeliveryLineNumber,
+                DeliveryItemCode = l.DeliveryItemCode,
+                DeliveryItemDescription = l.DeliveryItemDescription,
+                SalesQuantity = l.SalesQuantity,
+                SalesUOM = l.SalesUOM,
+                PackQuantity = l.PackQuantity,
+                PackUOM = l.PackUOM,
+                PackQuantityDelivered = l.PackQuantityDelivered,
+                PackQuantityReturned = l.PackQuantityReturned,
+                PackQuantityRejected = l.PackQuantityRejected
+            }).ToList()
+        };
+
+        return Ok(response);
+    }
     [HttpPost]
     [HttpPatch]
     public async Task<IActionResult> Upsert(DeliveryUpsertDto dto)
