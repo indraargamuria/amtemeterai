@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "../../shared/components/ui/Button"
 import { Card } from "../../shared/components/ui/Card"
 import {
@@ -71,10 +71,29 @@ const dummyCustomers: Customer[] = [
 
 const ITEMS_PER_PAGE = 5
 
+
 export function CustomersPage() {
   const [currentPage, setCurrentPage] = useState(1)
 
-  const totalPages = Math.ceil(dummyCustomers.length / ITEMS_PER_PAGE)
+  const [customers, setCustomers] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    const fetchCustomers = async () => {
+      try {
+        const res = await fetch("http://localhost:5296/api/customers")
+        const data = await res.json()
+        setCustomers(data)
+      } catch (err) {
+        console.error("Failed to fetch customers", err)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchCustomers()
+  }, [])
+  const totalPages = Math.ceil(customers.length / ITEMS_PER_PAGE)
   const startIndex = (currentPage - 1) * ITEMS_PER_PAGE
   const currentCustomers = dummyCustomers.slice(
     startIndex,
@@ -116,18 +135,18 @@ export function CustomersPage() {
               </TableHead>
               <TableHead className="font-medium text-brand-blue/50 uppercase text-xs tracking-wider">
                 Address
-              </TableHead>
+              </TableHead>  
             </TableRow>
           </TableHeader>
           <TableBody>
-            {currentCustomers.map((customer) => (
-              <TableRow key={customer.code}>
+            {customers.map((customer) => (
+              <TableRow key={customer.customerId}>
                 <TableCell className="font-medium text-brand-blue">
-                  {customer.code}
+                  {customer.customerCode}
                 </TableCell>
-                <TableCell>{customer.name}</TableCell>
-                <TableCell className="text-brand-blue/70">{customer.email}</TableCell>
-                <TableCell className="text-brand-blue/70">{customer.address}</TableCell>
+                <TableCell>{customer.customerName}</TableCell>
+                <TableCell className="text-brand-blue/70">{customer.customerEmail}</TableCell>
+                <TableCell className="text-brand-blue/70">-</TableCell>
               </TableRow>
             ))}
           </TableBody>
