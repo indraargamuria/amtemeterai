@@ -44,7 +44,7 @@ export function Pagination({
         onClick={() => onPageChange(currentPage - 1)}
         disabled={currentPage === 1}
         className={cn(
-          "w-10 h-10 rounded-md flex items-center justify-center text-sm font-medium transition-colors",
+          "w-16 h-10 rounded-md flex items-center justify-center text-sm font-medium transition-colors",
           currentPage === 1
             ? "text-brand-blue/30 cursor-not-allowed"
             : "text-brand-blue hover:bg-brand-blue/10"

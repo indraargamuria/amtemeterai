@@ -14,7 +14,7 @@ import { Pagination } from "../../shared/components/ui/Pagination"
 interface Delivery {
   code: string
   customerName: string
-  status: "ongoing" | "delivered" | "pending"
+  status: "OnGoing" | "Delivered" | "Pending"
   date: string
 }
 
@@ -22,43 +22,43 @@ const dummyDeliveries: Delivery[] = [
   {
     code: "DLV1001",
     customerName: "PT Maju Jaya Logistics",
-    status: "ongoing",
+    status: "OnGoing",
     date: "2025-05-03",
   },
   {
     code: "DLV1002",
     customerName: "CV Berkah Abadi",
-    status: "delivered",
+    status: "Delivered",
     date: "2025-05-02",
   },
   {
     code: "DLV1003",
     customerName: "PT Global Shipping",
-    status: "pending",
+    status: "Pending",
     date: "2025-05-02",
   },
   {
     code: "DLV1004",
     customerName: "UD Sejahtera Transport",
-    status: "ongoing",
+    status: "OnGoing",
     date: "2025-05-01",
   },
   {
     code: "DLV1005",
     customerName: "PT Fast Forward Cargo",
-    status: "delivered",
+    status: "Delivered",
     date: "2025-04-30",
   },
   {
     code: "DLV1006",
     customerName: "CV Mitra Logistik",
-    status: "pending",
+    status: "Pending",
     date: "2025-04-30",
   },
   {
     code: "DLV1007",
     customerName: "PT Sinar Sumber Rejeki",
-    status: "delivered",
+    status: "Delivered",
     date: "2025-04-29",
   },
 ]
@@ -67,11 +67,11 @@ const ITEMS_PER_PAGE = 5
 
 const getStatusVariant = (status: Delivery["status"]) => {
   switch (status) {
-    case "ongoing":
+    case "OnGoing":
       return "default"
-    case "delivered":
+    case "Delivered":
       return "default"
-    case "pending":
+    case "Pending":
       return "accent"
     default:
       return "default"

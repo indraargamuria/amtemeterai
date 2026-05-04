@@ -1,5 +1,6 @@
 import { Link, useLocation } from "react-router-dom"
 import { cn } from "../utils/cn"
+import Logo from '../../assets/amtlogo.png';
 
 interface DashboardLayoutProps {
   children: React.ReactNode
@@ -22,11 +23,12 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
         <div className="p-6">
           <Link to="/" className="block">
             <h1 className="text-lg font-bold text-brand-blue tracking-tight">
-              AmtemeterAI
+              {/* AmtemeterAI  */}
+              <img src={Logo} alt="Logo"  className="w-24 h-auto" />
             </h1>
-            <p className="mt-1 text-xs text-brand-blue/50">
+            {/* <p className="mt-1 text-xs text-brand-blue/50">
               e-Meterai Delivery Management
-            </p>
+            </p> */}
           </Link>
         </div>
 

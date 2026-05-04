@@ -2,6 +2,7 @@ import { useState } from "react"
 import { Button } from "../../shared/components/ui/Button"
 import { Input } from "../../shared/components/ui/Input"
 import { Label } from "../../shared/components/ui/Label"
+import Logo from '../../assets/amtlogo.png';
 
 export function LoginPage() {
   const [email, setEmail] = useState("")
@@ -20,11 +21,12 @@ export function LoginPage() {
           {/* Logo */}
           <div className="mb-10">
             <h1 className="text-xl font-bold text-brand-blue tracking-tight">
-              AmtemeterAI
+              {/* OpexNOW */}
+              <img src={Logo} alt="Logo"  className="w-32 h-auto" />
             </h1>
-            <p className="mt-1.5 text-xs text-brand-blue/50">
-              e-Meterai Delivery Management
-            </p>
+            {/* <p className="mt-1.5 text-xs text-brand-blue/50">
+              OpexNOW
+            </p> */}
           </div>
 
           {/* Welcome Text */}
