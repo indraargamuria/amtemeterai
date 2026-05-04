@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using amtemeterai.Api.Data;
 using amtemeterai.Api.Dtos;
 using amtemeterai.Api.Models;
+using Microsoft.EntityFrameworkCore;
 
 namespace amtemeterai.Api.Controllers;
 
@@ -14,6 +15,23 @@ public class CustomersController : ControllerBase
     public CustomersController(AppDbContext context)
     {
         _db = context;
+    }
+
+    //2026-05-04 15:36:19 - Arga - Add Customer Get
+    [HttpGet]
+    public async Task<ActionResult<IEnumerable<CustomerResponseDto>>> GetAllCustomers()
+    {
+        var customers = await _db.Customers
+            .Select(c => new CustomerResponseDto
+            {
+                CustomerId = c.CustomerID,
+                CustomerCode = c.CustomerCode,
+                CustomerName = c.CustomerName,
+                CustomerEmail = c.CustomerEmail
+            })
+            .ToListAsync();
+
+        return Ok(customers);
     }
 
     [HttpPost]
