@@ -71,6 +71,11 @@ const dummyCustomers: Customer[] = [
 
 const ITEMS_PER_PAGE = 10
 
+//2026-05-05 18:31:23 - Arga - Use .env
+const API_URL = import.meta.env.VITE_API_URL
+
+
+
 
 export function CustomersPage() {
   const [currentPage, setCurrentPage] = useState(1)
@@ -81,7 +86,8 @@ export function CustomersPage() {
   useEffect(() => {
     const fetchCustomers = async () => {
       try {
-        const res = await fetch("http://localhost:5296/api/customers")
+        //2026-05-05 18:31:36 - Arga - Use Variable for Endpoint
+        const res = await fetch(`${API_URL}/api/customers`)
         const data = await res.json()
         setCustomers(data)
       } catch (err) {

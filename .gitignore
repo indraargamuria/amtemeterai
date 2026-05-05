@@ -1,6 +1,25 @@
 # =========================
 # GENERAL
 # =========================
+
+# Node
+node_modules/
+frontend/node_modules/
+
+# Logs
+npm-debug.log*
+
+# Build
+dist/
+build/
+
+# Env
+.env
+.env.*
+
+# OS
+.DS_Store
+Thumbs.db
 .DS_Store
 Thumbs.db
 *.log
