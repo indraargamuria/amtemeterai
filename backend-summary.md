@@ -40,7 +40,8 @@ backend/amtemeterai.Api/
 │   ├── DeliveryLineResponseDto.cs
 │   ├── DeliveryReceiveDto.cs
 │   ├── DeliveryResponseDto.cs
-│   └── DeliveryUpsertDto.cs
+│   ├── DeliveryUpsertDto.cs
+│   └── PinRequestDto.cs
 ├── Data/                 # Database Context
 │   ├── AppDbContext.cs
 │   └── AppDbContextFactory.cs
@@ -450,6 +451,43 @@ http://localhost:8080/swagger
 
 ---
 
+### Verify Delivery PIN
+**Endpoint:** `POST /api/deliveries/{token}/verify-pin`
+
+**Description:** Verifies the PIN for accessing a delivery. The delivery's customer PIN must match the provided PIN.
+
+**URL Parameter:**
+- `token` (Guid) - The receiver token
+
+**Request Body:**
+```json
+{
+  "pin": "123456"
+}
+```
+
+**Response Body (Success):**
+```json
+{
+  "valid": true
+}
+```
+
+**Response:** `200 OK`, `401 Unauthorized` (invalid PIN), or `404 Not Found` (delivery not found)
+
+**Logic:**
+- Finds delivery by `ReceiverToken`
+- Includes Customer entity to access `CustomerPin`
+- Compares provided PIN with `Customer.CustomerPin`
+- Returns success only if PINs match exactly
+
+**Security Notes:**
+- PIN verification is performed on the server side
+- Delivery details are not returned by this endpoint (only validation status)
+- Customer PIN is never exposed to the client
+
+---
+
 ## Data Transfer Objects (DTOs)
 
 ### CustomerResponseDto
@@ -552,6 +590,11 @@ http://localhost:8080/swagger
 | DeliveryNumber | string | The created delivery number |
 | PublicUrl | string | Public URL for receiver access |
 | QrCodeBase64 | string | Base64-encoded QR code image |
+
+### PinRequestDto
+| Property | Type | Required |
+|----------|------|----------|
+| Pin | string | Yes |
 
 ---
 

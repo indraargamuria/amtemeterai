@@ -2,7 +2,7 @@ import { useState, useEffect } from "react"
 import { useParams } from "react-router-dom"
 import { Button } from "../../shared/components/ui/Button"
 import { Badge } from "../../shared/components/ui/Badge"
-import { Card, CardContent, CardHeader, CardTitle } from "../../shared/components/ui/Card"
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "../../shared/components/ui/Card"
 import { Input } from "../../shared/components/ui/Input"
 import { Label } from "../../shared/components/ui/Label"
 
@@ -52,6 +52,12 @@ export function DeliveryReceivePage() {
   const [lines, setLines] = useState<LineFormState[]>([])
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({})
 
+  // PIN Verification States
+  const [isVerified, setIsVerified] = useState(false)
+  const [pinInput, setPinInput] = useState("")
+  const [verifying, setVerifying] = useState(false)
+  const [pinError, setPinError] = useState<string | null>(null)
+
   useEffect(() => {
     const fetchDelivery = async () => {
       if (!token) {
@@ -87,6 +93,25 @@ export function DeliveryReceivePage() {
     }
 
     fetchDelivery()
+  }, [token])
+
+  // Check for existing verification in sessionStorage
+  useEffect(() => {
+    if (token) {
+      const verified = sessionStorage.getItem(`verified-${token}`)
+      if (verified === "true") {
+        setIsVerified(true)
+      }
+    }
+  }, [token])
+
+  // Clean up verification when token changes or component unmounts
+  useEffect(() => {
+    return () => {
+      if (token) {
+        sessionStorage.removeItem(`verified-${token}`)
+      }
+    }
   }, [token])
 
   const validateLines = (): boolean => {
@@ -184,6 +209,42 @@ export function DeliveryReceivePage() {
     }
   }
 
+  const handleVerifyPin = async () => {
+    if (!token || !pinInput) {
+      setPinError("Please enter a PIN")
+      return
+    }
+
+    setVerifying(true)
+    setPinError(null)
+
+    try {
+      const res = await fetch(`${API_URL}/api/deliveries/${token}/verify-pin`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ pin: pinInput }),
+      })
+
+      if (res.ok) {
+        setIsVerified(true)
+        // Store verification in sessionStorage for persistence
+        sessionStorage.setItem(`verified-${token}`, "true")
+      } else if (res.status === 401) {
+        setPinError("Invalid PIN. Please try again.")
+      } else if (res.status === 404) {
+        setPinError("Delivery not found.")
+      } else {
+        setPinError("Verification failed. Please try again.")
+      }
+    } catch (err) {
+      setPinError("An error occurred during verification. Please try again.")
+    } finally {
+      setVerifying(false)
+    }
+  }
+
   const handleLineChange = (
     deliveryLineNumber: string,
     field: "delivered" | "returned" | "rejected",
@@ -229,6 +290,78 @@ export function DeliveryReceivePage() {
         <Card className="w-full max-w-xl">
           <CardContent className="py-12">
             <p className="text-center text-brand-blue/60">{error || "Delivery not found"}</p>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  // Show PIN verification screen if not verified
+  if (!isVerified) {
+    return (
+      <div className="min-h-screen bg-brand-blue/[0.02] flex items-center justify-center p-4">
+        <Card className="w-full max-w-md">
+          <CardHeader className="text-center">
+            <div className="w-12 h-12 rounded-full bg-brand-blue/10 flex items-center justify-center mx-auto mb-4">
+              <svg
+                className="w-6 h-6 text-brand-blue"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
+                />
+              </svg>
+            </div>
+            <CardTitle className="text-lg font-semibold text-brand-blue tracking-tight">
+              Delivery Verification
+            </CardTitle>
+            <CardDescription className="text-sm text-brand-blue/60">
+              Please enter the security PIN provided by the sender.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="pin" className="text-sm text-brand-blue/70">
+                Security PIN
+              </Label>
+              <Input
+                id="pin"
+                type="password"
+                inputMode="numeric"
+                maxLength={6}
+                value={pinInput}
+                onChange={(e) => {
+                  setPinInput(e.target.value)
+                  setPinError(null)
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault()
+                    handleVerifyPin()
+                  }
+                }}
+                placeholder="Enter 6-digit PIN"
+                className="text-center text-lg tracking-widest h-12"
+                autoFocus
+              />
+            </div>
+            {pinError && (
+              <p className="text-sm text-brand-red bg-brand-red/10 px-3 py-2 rounded-md text-center">
+                {pinError}
+              </p>
+            )}
+            <Button
+              className="w-full"
+              onClick={handleVerifyPin}
+              disabled={verifying || !pinInput}
+            >
+              {verifying ? "Verifying..." : "Access Delivery"}
+            </Button>
           </CardContent>
         </Card>
       </div>

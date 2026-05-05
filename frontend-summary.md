@@ -322,6 +322,7 @@ const qrDataUrl = await QRCode.toDataURL(publicUrl, {
 **Layout:** Standalone (No sidebar, no layout wrapper)
 
 **Components:**
+- PIN Verification Card: Security PIN entry (shown before delivery details)
 - Page Header: Title + Description
 - Delivery Info Card: Basic delivery info + status badge
 - Delivery Items Card: Line items with quantity inputs
@@ -332,9 +333,44 @@ const qrDataUrl = await QRCode.toDataURL(publicUrl, {
 **States:**
 - Loading: Shows loading message
 - Error: Shows error message in centered card
+- Not Verified: Shows PIN verification card (NEW)
+- Verified: Shows delivery details and form
 - Already Received: Shows delivery in read-only mode
 - Not Received: Shows form with editable inputs
 - Submitted: Shows success message
+
+**PIN Verification (NEW):**
+**Components:**
+- Lock icon in centered circle
+- Title: "Delivery Verification"
+- Description: "Please enter the security PIN provided by the sender."
+- PIN Input (type="password", inputMode="numeric", maxLength=6)
+  - Centered text with wide letter spacing
+  - Auto-focused on mount
+  - Enter key submits
+- Error message (red background, displayed for invalid PIN)
+- "Access Delivery" button
+
+**States:**
+- `isVerified`: boolean (default: false)
+- `pinInput`: string
+- `verifying`: boolean (loading state)
+- `pinError`: string | null
+
+**Persistence:**
+- Verification status stored in `sessionStorage` as `verified-{token}`
+- Cleared when component unmounts or token changes
+
+**API Integration:**
+- Verifies PIN via `POST /api/deliveries/{token}/verify-pin`
+- Request body: `{ "pin": "123456" }`
+- Response: `200 OK` (success), `401 Unauthorized` (invalid PIN), `404 Not Found`
+
+**Security Features:**
+- Delivery details are not fetched until PIN is verified
+- PIN input is masked (type="password")
+- PIN verification is server-side
+- Verification persists only for current session
 
 **Delivery Items Form:**
 Each line item has three quantity inputs:
@@ -385,11 +421,14 @@ interface LineFormState {
 ```
 
 **UX Features:**
+- PIN verification gate before accessing delivery
 - Real-time validation as user types
 - Success checkmark animation
 - Disabled states for read-only view
 - Responsive design (max-width: xl)
 - Clear visual hierarchy
+- Enter key support for PIN submission
+- Session-based verification persistence
 
 ---
 
@@ -646,7 +685,76 @@ The root `package.json` provides scripts to run both backend and frontend concur
 | Customers | ✅ Live API | Fetches from `GET /api/customers` |
 | Deliveries List | ✅ Live API | Fetches from `GET /api/deliveries` |
 | Delivery Detail | ✅ Live API | Fetches from `GET /api/deliveries/{id}` |
-| Public Receive | ✅ Live API | Fetches/Updates via token endpoint |
+| Public Receive | ✅ Live API | PIN verification via `POST /api/deliveries/{token}/verify-pin`, then fetches/updates via token endpoint |
+
+---
+
+## PIN Verification System
+
+The application implements a PIN-based security layer for public delivery confirmation pages.
+
+### Overview
+- Receivers must enter the correct PIN (from Customer.CustomerPin) before accessing delivery details
+- Verification is performed server-side for security
+- Verification status persists for the current session via sessionStorage
+
+### Implementation Details
+
+**Frontend (DeliveryReceivePage.tsx):**
+```typescript
+// States
+const [isVerified, setIsVerified] = useState(false)
+const [pinInput, setPinInput] = useState("")
+const [verifying, setVerifying] = useState(false)
+const [pinError, setPinError] = useState<string | null>(null)
+
+// Verify PIN function
+const handleVerifyPin = async () => {
+  const res = await fetch(`${API_URL}/api/deliveries/${token}/verify-pin`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ pin: pinInput }),
+  })
+
+  if (res.ok) {
+    setIsVerified(true)
+    sessionStorage.setItem(`verified-${token}`, "true")
+  } else if (res.status === 401) {
+    setPinError("Invalid PIN. Please try again.")
+  }
+}
+```
+
+**Backend (DeliveriesController.cs):**
+```csharp
+[HttpPost("{token}/verify-pin")]
+public async Task<IActionResult> VerifyPin(Guid token, [FromBody] PinRequestDto request)
+{
+    var delivery = await _db.DeliveryHeaders
+        .Include(d => d.Customer)
+        .FirstOrDefaultAsync(d => d.ReceiverToken == token);
+
+    if (delivery == null) return NotFound();
+
+    if (delivery.Customer.CustomerPin == request.Pin)
+        return Ok(new { valid = true });
+
+    return Unauthorized("Invalid PIN");
+}
+```
+
+### Security Considerations
+- PIN is validated on the server, never exposed in frontend
+- Delivery details are not loaded until PIN is verified
+- Verification is session-based, cleared on component unmount
+- PIN input is masked (password type) with numeric input mode
+
+### UX Features
+- Auto-focus on PIN input
+- Enter key submits the form
+- Clear error messages in brand-red accent
+- Disabled button state while verifying
+- Persisted verification for navigation within session
 
 ---
 

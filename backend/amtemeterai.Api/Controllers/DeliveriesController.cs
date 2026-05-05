@@ -269,6 +269,22 @@ public class DeliveriesController : ControllerBase
         return Ok();
     }
 
+    [HttpPost("{token}/verify-pin")]
+    public async Task<IActionResult> VerifyPin(Guid token, [FromBody] PinRequestDto request)
+    {
+        var delivery = await _db.DeliveryHeaders
+            .Include(d => d.Customer)
+            .FirstOrDefaultAsync(d => d.ReceiverToken == token);
+
+        if (delivery == null)
+            return NotFound();
+
+        if (delivery.Customer.CustomerPin == request.Pin)
+            return Ok(new { valid = true });
+
+        return Unauthorized("Invalid PIN");
+    }
+
     [HttpPost("dev/seed-deliveries")]
     public async Task<IActionResult> SeedDeliveries()
     {
