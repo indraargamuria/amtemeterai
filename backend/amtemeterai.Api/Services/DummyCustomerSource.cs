@@ -6,7 +6,7 @@ public class DummyCustomerSource : ICustomerSource
     {
         var customers = new List<CustomerDto>
         {
-            new() { CustomerCode = "C001", CustomerName = "PT Maju Jaya Abadi" },
+            new() { CustomerCode = "C001", CustomerName = "PT Maju Jaya Abadis" },
             new() { CustomerCode = "C002", CustomerName = "PT Sumber Rejeki" },
             new() { CustomerCode = "C003", CustomerName = "PT Nusantara Logistics" },
             new() { CustomerCode = "C004", CustomerName = "PT Global Sentosa" },

@@ -23,6 +23,9 @@ interface Customer {
 }
 
 export function CustomersPage() {
+
+  const [sortField, setSortField] = useState<string>("customerCode")
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc")
   const [currentPage, setCurrentPage] = useState(1)
   const [customers, setCustomers] = useState<Customer[]>([])
   const [loading, setLoading] = useState(true)
@@ -73,9 +76,21 @@ export function CustomersPage() {
     }
   }
 
+  const sortedCustomers = [...customers].sort((a, b) => {
+    const aValue = a[sortField as keyof typeof a]
+    const bValue = b[sortField as keyof typeof b]
+
+    // handle null/undefined
+    const aSafe = aValue ?? ""
+    const bSafe = bValue ?? ""
+
+    if (aSafe < bSafe) return sortDirection === "asc" ? -1 : 1
+    if (aSafe > bSafe) return sortDirection === "asc" ? 1 : -1
+    return 0
+  })
   const totalPages = Math.ceil(customers.length / ITEMS_PER_PAGE)
   const startIndex = (currentPage - 1) * ITEMS_PER_PAGE
-  const currentCustomers = customers.slice(
+  const currentCustomers = sortedCustomers.slice(
     startIndex,
     startIndex + ITEMS_PER_PAGE
   )
@@ -140,7 +155,7 @@ export function CustomersPage() {
                   Loading customers...
                 </TableCell>
               </TableRow>
-            ) : customers.length === 0 ? (
+            ) : sortedCustomers.length === 0 ? (
               <TableRow>
                 <TableCell
                   colSpan={4}
