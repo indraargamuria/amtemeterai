@@ -15,5 +15,7 @@ public class DeliveryResponseDto
     public bool Received { get; set; }
     public bool Invoiced { get; set; }
 
+    public string PublicUrl { get; set; } = null!;
+
     public List<DeliveryLineResponseDto> Lines { get; set; } = new();
 }

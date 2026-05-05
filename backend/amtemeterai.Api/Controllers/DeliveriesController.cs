@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using amtemeterai.Api.Data;
 using amtemeterai.Api.Dtos;
 using amtemeterai.Api.Models;
+using amtemeterai.Api.Helpers;
 
 namespace amtemeterai.Api.Controllers;
 
@@ -11,19 +12,30 @@ namespace amtemeterai.Api.Controllers;
 public class DeliveriesController : ControllerBase
 {
     private readonly AppDbContext _db;
+    private readonly IConfiguration _configuration;
 
     public DeliveriesController(
-        AppDbContext db)
+        AppDbContext db,
+        IConfiguration configuration)
     {
         _db = db;
+        _configuration = configuration;
+    }
+
+    private static string GetPublicUrl(Guid token, string? baseUrl = null)
+    {
+        var effectiveBaseUrl = baseUrl ?? "http://localhost:5173";
+        return $"{effectiveBaseUrl}/receive/{token}";
     }
 
     [HttpGet]
     public async Task<ActionResult<IEnumerable<DeliveryHeaderDto>>> GetAllDeliveries()
     {
+        var baseUrl = _configuration["App:PublicBaseUrl"] ?? "http://localhost:5173";
+
         var deliveries = await _db.DeliveryHeaders
             .Include(d => d.Customer)
-            .Select(d => new DeliveryHeaderDto
+            .Select(d => new
             {
                 DeliveryId = d.DeliveryID,
                 DeliveryNumber = d.DeliveryNumber,
@@ -34,14 +46,27 @@ public class DeliveriesController : ControllerBase
                 CustomerName = d.Customer.CustomerName,
 
                 Received = d.Received,
-                Invoiced = d.Invoiced
+                Invoiced = d.Invoiced,
+                ReceiverToken = d.ReceiverToken
             })
             .OrderByDescending(d => d.DeliveryDate)
             .ToListAsync();
 
-        return Ok(deliveries);
-    }
+        var result = deliveries.Select(d => new DeliveryHeaderDto
+        {
+            DeliveryId = d.DeliveryId,
+            DeliveryNumber = d.DeliveryNumber,
+            DeliveryDate = d.DeliveryDate,
+            DeliveryRemarks = d.DeliveryRemarks,
+            CustomerCode = d.CustomerCode,
+            CustomerName = d.CustomerName,
+            Received = d.Received,
+            Invoiced = d.Invoiced,
+            PublicUrl = $"{baseUrl}/receive/{d.ReceiverToken}"
+        }).ToList();
 
+        return Ok(result);
+    }
 
     [HttpGet("{deliveryId:int}")]
     public async Task<ActionResult<DeliveryResponseDto>> GetDeliveryById(int deliveryId)
@@ -63,6 +88,7 @@ public class DeliveriesController : ControllerBase
             ReceiverNotes = delivery.ReceiverNotes,
             Received = delivery.Received,
             Invoiced = delivery.Invoiced,
+            PublicUrl = GetPublicUrl(delivery.ReceiverToken, _configuration["App:PublicBaseUrl"]),
 
             Lines = delivery.Lines.Select(l => new DeliveryLineResponseDto
             {
@@ -80,67 +106,6 @@ public class DeliveriesController : ControllerBase
         };
 
         return Ok(response);
-    }
-    [HttpPost]
-    [HttpPatch]
-    public async Task<IActionResult> Upsert(DeliveryUpsertDto dto)
-    {
-        var customer = await _db.Customers
-            .FirstOrDefaultAsync(x => x.CustomerCode == dto.CustomerCode);
-
-        if (customer == null)
-            return BadRequest("Customer not found");
-
-        var existing = await _db.DeliveryHeaders
-            .Include(x => x.Lines)
-            .FirstOrDefaultAsync(x => x.DeliveryNumber == dto.DeliveryNumber);
-
-        if (existing == null)
-        {
-            var header = new DeliveryHeader
-            {
-                CustomerID = customer.CustomerID,
-                DeliveryNumber = dto.DeliveryNumber,
-                DeliveryDate = dto.DeliveryDate,
-                DeliveryRemarks = dto.DeliveryRemarks,
-                ReceiverToken = Guid.NewGuid()
-            };
-
-            header.Lines = dto.Lines.Select(l => new DeliveryLine
-            {
-                DeliveryLineNumber = l.DeliveryLineNumber,
-                DeliveryItemCode = l.DeliveryItemCode,
-                DeliveryItemDescription = l.DeliveryItemDescription,
-                SalesQuantity = l.SalesQuantity,
-                SalesUOM = l.SalesUOM,
-                PackQuantity = l.PackQuantity,
-                PackUOM = l.PackUOM
-            }).ToList();
-
-            _db.DeliveryHeaders.Add(header);
-        }
-        else
-        {
-            existing.DeliveryDate = dto.DeliveryDate;
-            existing.DeliveryRemarks = dto.DeliveryRemarks;
-            existing.ReceiverToken = Guid.NewGuid();
-
-            _db.DeliveryLines.RemoveRange(existing.Lines);
-
-            existing.Lines = dto.Lines.Select(l => new DeliveryLine
-            {
-                DeliveryLineNumber = l.DeliveryLineNumber,
-                DeliveryItemCode = l.DeliveryItemCode,
-                DeliveryItemDescription = l.DeliveryItemDescription,
-                SalesQuantity = l.SalesQuantity,
-                SalesUOM = l.SalesUOM,
-                PackQuantity = l.PackQuantity,
-                PackUOM = l.PackUOM
-            }).ToList();
-        }
-
-        await _db.SaveChangesAsync();
-        return Ok();
     }
 
     [HttpGet("{token}")]
@@ -162,6 +127,7 @@ public class DeliveriesController : ControllerBase
             ReceiverNotes = data.ReceiverNotes,
             Received = data.Received,
             Invoiced = data.Invoiced,
+            PublicUrl = GetPublicUrl(data.ReceiverToken, _configuration["App:PublicBaseUrl"]),
             Lines = data.Lines.Select(l => new DeliveryLineResponseDto
             {
                 DeliveryLineNumber = l.DeliveryLineNumber,
@@ -178,6 +144,95 @@ public class DeliveriesController : ControllerBase
         };
 
         return Ok(result);
+    }
+
+    [HttpPost]
+    public async Task<ActionResult<DeliveryCreateResponseDto>> Create(DeliveryUpsertDto dto)
+    {
+        var customer = await _db.Customers
+            .FirstOrDefaultAsync(x => x.CustomerCode == dto.CustomerCode);
+
+        if (customer == null)
+            return BadRequest("Customer not found");
+
+        var existing = await _db.DeliveryHeaders
+            .Include(x => x.Lines)
+            .FirstOrDefaultAsync(x => x.DeliveryNumber == dto.DeliveryNumber);
+
+        if (existing != null)
+            return Conflict("Delivery already exists. Use PATCH to update.");
+
+        var header = new DeliveryHeader
+        {
+            CustomerID = customer.CustomerID,
+            DeliveryNumber = dto.DeliveryNumber,
+            DeliveryDate = dto.DeliveryDate,
+            DeliveryRemarks = dto.DeliveryRemarks,
+            ReceiverToken = Guid.NewGuid()
+        };
+
+        header.Lines = dto.Lines.Select(l => new DeliveryLine
+        {
+            DeliveryLineNumber = l.DeliveryLineNumber,
+            DeliveryItemCode = l.DeliveryItemCode,
+            DeliveryItemDescription = l.DeliveryItemDescription,
+            SalesQuantity = l.SalesQuantity,
+            SalesUOM = l.SalesUOM,
+            PackQuantity = l.PackQuantity,
+            PackUOM = l.PackUOM
+        }).ToList();
+
+        _db.DeliveryHeaders.Add(header);
+        await _db.SaveChangesAsync();
+
+        var publicUrl = GetPublicUrl(header.ReceiverToken, _configuration["App:PublicBaseUrl"]);
+        var qrCodeBase64 = QrCodeHelper.GenerateQrBase64(publicUrl);
+
+        var response = new DeliveryCreateResponseDto
+        {
+            DeliveryNumber = header.DeliveryNumber,
+            PublicUrl = publicUrl,
+            QrCodeBase64 = qrCodeBase64
+        };
+
+        return Ok(response);
+    }
+
+    [HttpPatch]
+    public async Task<IActionResult> Upsert(DeliveryUpsertDto dto)
+    {
+        var customer = await _db.Customers
+            .FirstOrDefaultAsync(x => x.CustomerCode == dto.CustomerCode);
+
+        if (customer == null)
+            return BadRequest("Customer not found");
+
+        var existing = await _db.DeliveryHeaders
+            .Include(x => x.Lines)
+            .FirstOrDefaultAsync(x => x.DeliveryNumber == dto.DeliveryNumber);
+
+        if (existing == null)
+            return NotFound("Delivery not found. Use POST to create.");
+
+        existing.DeliveryDate = dto.DeliveryDate;
+        existing.DeliveryRemarks = dto.DeliveryRemarks;
+        // Do NOT regenerate ReceiverToken on update - token must be stable
+
+        _db.DeliveryLines.RemoveRange(existing.Lines);
+
+        existing.Lines = dto.Lines.Select(l => new DeliveryLine
+        {
+            DeliveryLineNumber = l.DeliveryLineNumber,
+            DeliveryItemCode = l.DeliveryItemCode,
+            DeliveryItemDescription = l.DeliveryItemDescription,
+            SalesQuantity = l.SalesQuantity,
+            SalesUOM = l.SalesUOM,
+            PackQuantity = l.PackQuantity,
+            PackUOM = l.PackUOM
+        }).ToList();
+
+        await _db.SaveChangesAsync();
+        return Ok();
     }
 
     [HttpPatch("{token}")]

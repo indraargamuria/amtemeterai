@@ -1,8 +1,10 @@
 import { useState, useEffect } from "react"
 import { useParams, useNavigate } from "react-router-dom"
+import QRCode from "qrcode"
 import { Button } from "../../shared/components/ui/Button"
 import { Badge } from "../../shared/components/ui/Badge"
 import { Card, CardContent, CardHeader, CardTitle } from "../../shared/components/ui/Card"
+import { Input } from "../../shared/components/ui/Input"
 import {
   Table,
   TableBody,
@@ -34,6 +36,7 @@ interface DeliveryDetail {
   receiverNotes: string | null
   received: boolean
   invoiced: boolean
+  publicUrl: string
   lines: DeliveryLine[]
 }
 
@@ -45,6 +48,8 @@ export function DeliveryDetailPage() {
   const [delivery, setDelivery] = useState<DeliveryDetail | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [qrCode, setQrCode] = useState<string | null>(null)
+  const [copySuccess, setCopySuccess] = useState(false)
 
   useEffect(() => {
     const fetchDeliveryDetail = async () => {
@@ -55,8 +60,21 @@ export function DeliveryDetailPage() {
         if (!res.ok) {
           throw new Error("Delivery not found")
         }
-        const data = await res.json()
+        const data: DeliveryDetail = await res.json()
         setDelivery(data)
+
+        // Generate QR code in frontend
+        if (data.publicUrl) {
+          const qrDataUrl = await QRCode.toDataURL(data.publicUrl, {
+            width: 200,
+            margin: 1,
+            color: {
+              dark: "#1d2351",
+              light: "#ffffff",
+            },
+          })
+          setQrCode(qrDataUrl)
+        }
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to fetch delivery")
       } finally {
@@ -66,6 +84,29 @@ export function DeliveryDetailPage() {
 
     fetchDeliveryDetail()
   }, [deliveryId])
+
+  const handleCopyUrl = async () => {
+    if (delivery?.publicUrl) {
+      await navigator.clipboard.writeText(delivery.publicUrl)
+      setCopySuccess(true)
+      setTimeout(() => setCopySuccess(false), 2000)
+    }
+  }
+
+  const handleOpenLink = () => {
+    if (delivery?.publicUrl) {
+      window.open(delivery.publicUrl, "_blank")
+    }
+  }
+
+  const handleDownloadQr = () => {
+    if (qrCode && delivery) {
+      const link = document.createElement("a")
+      link.href = qrCode
+      link.download = `delivery-${delivery.deliveryNumber}.png`
+      link.click()
+    }
+  }
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString)
@@ -200,6 +241,73 @@ export function DeliveryDetailPage() {
                   </p>
                   <p className="text-sm text-brand-blue/80">{delivery.receiverNotes}</p>
                 </div>
+              )}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Receiver Access Card */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg font-semibold text-brand-blue tracking-tight">
+            Receiver Access
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Left Column - Public URL */}
+            <div className="space-y-4">
+              <div className="space-y-1">
+                <p className="text-xs font-medium text-brand-blue/50 uppercase tracking-wider">
+                  Public Link
+                </p>
+                <div className="flex gap-2">
+                  <Input
+                    value={delivery.publicUrl}
+                    readOnly
+                    className="bg-brand-blue/5 text-sm"
+                  />
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleCopyUrl}
+                    className="whitespace-nowrap"
+                  >
+                    {copySuccess ? "Copied!" : "Copy"}
+                  </Button>
+                </div>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleOpenLink}
+                className="w-full"
+              >
+                Open Link in New Tab
+              </Button>
+            </div>
+
+            {/* Right Column - QR Code */}
+            <div className="flex flex-col items-center justify-center space-y-4">
+              {qrCode && (
+                <>
+                  <div className="p-4 bg-white rounded-lg border border-brand-blue/10">
+                    <img
+                      src={qrCode}
+                      alt="Delivery QR Code"
+                      className="w-40 h-40"
+                    />
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleDownloadQr}
+                    className="text-xs"
+                  >
+                    Download QR Code
+                  </Button>
+                </>
               )}
             </div>
           </div>
