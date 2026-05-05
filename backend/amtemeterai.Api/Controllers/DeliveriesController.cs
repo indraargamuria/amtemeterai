@@ -87,6 +87,8 @@ public class DeliveriesController : ControllerBase
             DeliveryNumber = delivery.DeliveryNumber,
             DeliveryDate = delivery.DeliveryDate,
             DeliveryRemarks = delivery.DeliveryRemarks,
+            CustomerCode = delivery.Customer.CustomerCode,
+            CustomerName = delivery.Customer.CustomerName,
             ReceiverToken = delivery.ReceiverToken,
             ReceiverName = delivery.ReceiverName,
             ReceiverNotes = delivery.ReceiverNotes,

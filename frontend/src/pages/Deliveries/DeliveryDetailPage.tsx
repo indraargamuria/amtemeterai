@@ -31,6 +31,8 @@ interface DeliveryDetail {
   deliveryNumber: string
   deliveryDate: string
   deliveryRemarks: string | null
+  customerCode: string
+  customerName: string
   receiverToken: string
   receiverName: string | null
   receiverNotes: string | null
@@ -181,7 +183,7 @@ export function DeliveryDetailPage() {
                 </p>
                 <p className="text-sm text-brand-blue/80">
                   {/* Customer info will be populated from API */}
-                  -
+                  {delivery.customerCode}
                 </p>
               </div>
 
@@ -191,7 +193,8 @@ export function DeliveryDetailPage() {
                 </p>
                 <p className="text-sm text-brand-blue/80">
                   {/* Customer info will be populated from API */}
-                  -
+                  {delivery.customerName}
+                  
                 </p>
               </div>
 
