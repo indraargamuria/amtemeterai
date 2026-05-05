@@ -3,6 +3,8 @@ import { Button } from "../../shared/components/ui/Button"
 import { Input } from "../../shared/components/ui/Input"
 import { Label } from "../../shared/components/ui/Label"
 import Logo from '../../assets/amtlogo.png';
+import Landscape from '../../assets/amtlandscape.jpg';
+import { Link, useLocation } from "react-router-dom"
 
 export function LoginPage() {
   const [email, setEmail] = useState("")
@@ -75,55 +77,29 @@ export function LoginPage() {
               />
             </div>
 
-            <Button
-              type="submit"
-              variant="default"
-              size="lg"
-              className="w-full mt-6"
-            >
-              Sign In
-            </Button>
+            <Link to="/" >
+              <Button
+                type="submit"
+                variant="default"
+                size="lg"
+                className="w-full mt-6"
+              >
+                Sign In
+              </Button>
+            </Link>
           </form>
         </div>
       </div>
 
-      {/* Right Side - Abstract Pattern */}
+      {/* Right Side - Image Background */}
       <div className="hidden lg:block lg:w-1/2 relative overflow-hidden bg-brand-blue">
-        {/* Subtle pattern overlay */}
-        <svg
-          className="absolute inset-0 w-full h-full opacity-5"
-          viewBox="0 0 100 100"
-          preserveAspectRatio="none"
-        >
-          <defs>
-            <pattern
-              id="logistics-pattern"
-              patternUnits="userSpaceOnUse"
-              width="20"
-              height="20"
-              patternTransform="rotate(45)"
-            >
-              <rect
-                width="1"
-                height="1"
-                fill="#FFFFFF"
-                fillOpacity="0.8"
-              />
-            </pattern>
-          </defs>
-          <rect
-            width="100"
-            height="100"
-            fill="url(#logistics-pattern)"
-          />
-        </svg>
+        <div
+          className="absolute inset-0 bg-center bg-cover"
+          style={{ backgroundImage: `url(${Landscape})` }}
+        />
 
-        {/* Decorative elements */}
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-80 h-80 rounded-full border border-white/10" />
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-56 h-56 rounded-full border border-white/10" />
-        <div className="absolute bottom-24 right-24 w-4 h-4 rounded-full bg-white/20" />
-        <div className="absolute top-32 right-40 w-2 h-2 rounded-full bg-white/10" />
-        <div className="absolute bottom-40 left-32 w-3 h-3 rounded-full bg-white/15" />
+        {/* Optional dark overlay for readability */}
+        <div className="absolute inset-0 bg-black/20" />
       </div>
     </div>
   )
