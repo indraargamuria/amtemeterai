@@ -13,13 +13,16 @@ public class DeliveriesController : ControllerBase
 {
     private readonly AppDbContext _db;
     private readonly IConfiguration _configuration;
+    private readonly IWebHostEnvironment _env;
 
     public DeliveriesController(
         AppDbContext db,
-        IConfiguration configuration)
+        IConfiguration configuration,
+        IWebHostEnvironment env)
     {
         _db = db;
         _configuration = configuration;
+        _env = env;
     }
 
     private static string GetPublicUrl(Guid token, string? baseUrl = null)
@@ -73,6 +76,7 @@ public class DeliveriesController : ControllerBase
     {
         var delivery = await _db.DeliveryHeaders
             .Include(d => d.Lines)
+            .Include(d => d.Customer)
             .FirstOrDefaultAsync(d => d.DeliveryID == deliveryId);
 
         if (delivery == null)
@@ -261,5 +265,76 @@ public class DeliveriesController : ControllerBase
 
         await _db.SaveChangesAsync();
         return Ok();
+    }
+
+    [HttpPost("dev/seed-deliveries")]
+    public async Task<IActionResult> SeedDeliveries()
+    {
+        if (!_env.IsDevelopment())
+        {
+            return BadRequest("Not allowed outside development environment.");
+        }
+
+        var customers = await _db.Customers.ToListAsync();
+
+        if (!customers.Any())
+        {
+            return BadRequest("No customers found. Please sync customers first.");
+        }
+
+        var rnd = new Random();
+        var deliveries = new List<DeliveryHeader>();
+
+        for (int i = 1; i <= 20; i++)
+        {
+            var customer = customers[rnd.Next(customers.Count)];
+            var lineCount = rnd.Next(3, 6);
+
+            var header = new DeliveryHeader
+            {
+                CustomerID = customer.CustomerID,
+                DeliveryNumber = $"DLV-{DateTime.UtcNow:yyyyMMddHHmmss}-{i:D3}",
+                DeliveryDate = DateTime.UtcNow.AddDays(rnd.Next(-30, 0)),
+                DeliveryRemarks = "Seeded demo delivery",
+                ReceiverToken = Guid.NewGuid(),
+                Received = false,
+                Invoiced = false
+            };
+
+            var lines = new List<DeliveryLine>();
+
+            for (int j = 1; j <= lineCount; j++)
+            {
+                var packQuantity = (decimal)rnd.Next(5, 25);
+                var salesQuantity = packQuantity * (decimal)rnd.Next(50, 100);
+
+                lines.Add(new DeliveryLine
+                {
+                    DeliveryLineNumber = j.ToString(),
+                    DeliveryItemCode = $"ITEM-{rnd.Next(100, 999):D3}",
+                    DeliveryItemDescription = $"Sample Item {j}",
+                    SalesQuantity = salesQuantity,
+                    SalesUOM = "PCS",
+                    PackQuantity = packQuantity,
+                    PackUOM = "ROLL",
+                    PackQuantityDelivered = 0,
+                    PackQuantityReturned = 0,
+                    PackQuantityRejected = 0
+                });
+            }
+
+            header.Lines = lines;
+            deliveries.Add(header);
+        }
+
+        _db.DeliveryHeaders.AddRange(deliveries);
+        await _db.SaveChangesAsync();
+
+        return Ok(new
+        {
+            created = deliveries.Count,
+            status = "All deliveries are on-going (not delivered)",
+            message = $"Successfully seeded {deliveries.Count} deliveries with {deliveries.Sum(d => d.Lines.Count)} total lines"
+        });
     }
 }
