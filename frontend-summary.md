@@ -89,6 +89,30 @@ Use these instead of adding new colors:
 
 ---
 
+## Environment Configuration
+
+The frontend uses environment variables for API URL configuration based on the runtime environment:
+
+### Development (`.env.development`)
+```env
+VITE_API_URL=http://localhost:8080
+```
+
+### Docker (`.env.docker`)
+```env
+VITE_API_URL=http://api:8080
+```
+
+**Usage:**
+```typescript
+const API_URL = import.meta.env.VITE_API_URL
+const res = await fetch(`${API_URL}/api/customers`)
+```
+
+This allows seamless switching between local development and Docker environments.
+
+---
+
 ## Routes
 
 | Path | Page | Layout |
@@ -181,13 +205,17 @@ Each card includes:
 - Uppercase, tracking-wider
 - `text-brand-blue/50`
 
+**API Integration:**
+- Fetches customer data from `GET /api/customers` on mount
+- Uses environment variable `VITE_API_URL` for endpoint configuration
+- Displays `customerId`, `customerCode`, `customerName`, `customerEmail` from API response
+- Loading state with `loading` boolean
+
 **Pagination:**
-- 7 items per page
+- 10 items per page (`ITEMS_PER_PAGE`)
 - Smart ellipsis display for 7+ pages
 - Previous/Next buttons
 - Page number buttons with active state
-
-**Dummy Data:** 8 customers (CUST001 - CUST008)
 
 ---
 
@@ -204,8 +232,8 @@ Each card includes:
 | Column | Style |
 |--------|-------|
 | Delivery Code | `font-medium text-brand-blue` |
-| Customer Name | Default |
-| Status | Badge component |
+| Customer Code | Default |
+| Status | Badge component (currently commented out) |
 | Date | `text-brand-blue/70` |
 
 **Status Badges:**
@@ -213,11 +241,15 @@ Each card includes:
 - `Delivered` → `default` variant (blue)
 - `Pending` → `accent` variant (red)
 
-**Pagination:**
-- 5 items per page
-- Smart ellipsis display
+**API Integration:**
+- Fetches delivery data from `GET /api/deliveries` on mount
+- Uses environment variable `VITE_API_URL` for endpoint configuration
+- Displays `deliveryId`, `deliveryNumber`, `customerCode`, `deliveryDate`, `received`, `invoiced` from API response
+- Loading state with `loading` boolean
 
-**Dummy Data:** 7 deliveries (DLV1001 - DLV1007)
+**Pagination:**
+- 5 items per page (`ITEMS_PER_PAGE`)
+- Smart ellipsis display
 
 ---
 
@@ -405,7 +437,17 @@ cn("class1", condition && "class2", "class3")
 
 ## Development
 
-### Available Scripts
+### Root Scripts (Concurrent Development)
+
+The root `package.json` provides scripts to run both backend and frontend concurrently:
+
+| Command | Description |
+|---------|-------------|
+| `npm run dev` | Runs both backend and frontend concurrently |
+| `npm run dev:backend` | Runs backend only (`dotnet run`) |
+| `npm run dev:frontend` | Runs frontend only (`npm run dev` in frontend directory) |
+
+### Frontend Scripts
 
 | Command | Description |
 |---------|-------------|
@@ -417,6 +459,7 @@ cn("class1", condition && "class2", "class3")
 ### Dev Server
 - Default port: 5173 (auto-increments if in use)
 - Hot Module Replacement (HMR) enabled
+- Host flag enabled for Docker compatibility (`--host`)
 
 ---
 
@@ -451,14 +494,24 @@ cn("class1", condition && "class2", "class3")
 
 ---
 
+## API Integration Status
+
+| Page | API Integration | Notes |
+|------|----------------|-------|
+| Dashboard | Mock data | Static metrics displayed |
+| Customers | ✅ Live API | Fetches from `GET /api/customers` |
+| Deliveries | ✅ Live API | Fetches from `GET /api/deliveries` |
+
+---
+
 ## Future Enhancements
 
 - Mobile sidebar (drawer/modal)
-- Real API integration (currently using dummy data)
-- Loading states
-- Empty states
-- Error handling
+- Real-time metrics on Dashboard (fetch from API)
+- Loading states and skeletons
+- Empty states for no data
+- Enhanced error handling
 - Form validation on login
-- Data fetching from backend API
 - Search and filter functionality
 - Sortable tables
+- Status badges re-enabled on Deliveries page

@@ -11,7 +11,9 @@ The Docker setup consists of a PostgreSQL database and an ASP.NET Core API, orch
 | File | Location | Purpose |
 |------|----------|---------|
 | `docker-compose.yml` | Project root | Orchestrates all services |
+| `package.json` | Project root | Concurrent development scripts |
 | `Dockerfile` | `backend/amtemeterai.Api/` | Builds the API container image |
+| `Dockerfile` | `frontend/` | Builds the Frontend container image |
 | `appsettings.json` | `backend/amtemeterai.Api/` | Application configuration |
 | `appsettings.Development.json` | `backend/amtemeterai.Api/` | Development overrides |
 
@@ -83,6 +85,36 @@ api:
 
 ---
 
+#### 3. Frontend Service
+
+```yaml
+frontend:
+  build: ./frontend
+  container_name: amtemeterai_frontend
+  restart: always
+  depends_on:
+    - api
+  ports:
+    - "3000:5173"
+  profiles: ["full"]
+```
+
+**Configuration:**
+| Setting | Value | Description |
+|---------|-------|-------------|
+| Build Context | `./frontend` | Path to Dockerfile |
+| Container Name | `amtemeterai_frontend` | Identifies the container |
+| Restart Policy | `always` | Auto-restart on failure |
+| Port Mapping | `3000:5173` | Host port 3000 → Container port 5173 |
+| Dependency | `api` | Waits for API to start |
+| Profile | `full` | Optional profile for frontend |
+
+**Environment Configuration:**
+- Uses `.env.docker` for `VITE_API_URL=http://api:8080`
+- API URL uses internal Docker network hostname `api`
+
+---
+
 ### Volumes
 
 ```yaml
@@ -138,6 +170,37 @@ ENTRYPOINT ["dotnet","amtemeterai.Api.dll"]
 
 ---
 
+## Dockerfile (`frontend/Dockerfile`)
+
+```dockerfile
+FROM node:20
+
+WORKDIR /app
+
+COPY package*.json ./
+RUN npm install
+
+COPY . .
+
+EXPOSE 5173
+
+CMD ["npm", "run", "dev", "--", "--host"]
+```
+
+### Build Instructions
+
+| Instruction | Purpose |
+|-------------|---------|
+| `FROM node:20` | Use Node.js 20 image |
+| `WORKDIR /app` | Set working directory |
+| `COPY package*.json ./` | Copy package files |
+| `RUN npm install` | Install dependencies |
+| `COPY . .` | Copy all source files |
+| `EXPOSE 5173` | Expose port 5173 (Vite dev server) |
+| `CMD ["npm", "run", "dev", "--", "--host"]` | Start dev server with host flag for Docker |
+
+---
+
 ## Application Configuration
 
 ### appsettings.json
@@ -188,22 +251,22 @@ ENTRYPOINT ["dotnet","amtemeterai.Api.dll"]
 ## Network Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                         Host Machine                        │
-│                                                              │
-│  ┌──────────────┐                  ┌──────────────┐         │
-│  │  Port 5500   │                  │  Port 8080   │         │
-│  └──────┬───────┘                  └──────┬───────┘         │
-│         │                                 │                  │
-│  ┌──────▼────────┐              ┌──────────▼─────────┐     │
-│  │ amtemeterai_db │              │  amtemeterai_api  │     │
-│  │   PostgreSQL   │◄─────────────│  ASP.NET Core API │     │
-│  │   Port 5432    │              │   Port 8080       │     │
-│  └───────────────┘              └───────────────────┘     │
-│         │                                  │              │
-│         └──────────────────────────────────┘              │
-│              Docker Network (bridge)                      │
-└─────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────┐
+│                           Host Machine                               │
+│                                                                      │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐               │
+│  │  Port 5500   │  │  Port 8080   │  │  Port 3000   │               │
+│  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘               │
+│         │                 │                 │                        │
+│  ┌──────▼────────┐  ┌──────▼────────┐  ┌───▼────────────┐          │
+│  │ amtemeterai_db │  │ amtemeterai_api │  │ amtemeterai_   │          │
+│  │   PostgreSQL   │◄─│ ASP.NET Core   │◄─│   frontend     │          │
+│  │   Port 5432    │  │   Port 8080    │  │   Port 5173    │          │
+│  └───────────────┘  └─────────────────┘  └────────────────┘          │
+│         │                                  │                         │
+│         └──────────────────────────────────┘                         │
+│              Docker Network (bridge)                                 │
+└──────────────────────────────────────────────────────────────────────┘
                   │
                   ▼
           ┌───────────────┐
@@ -212,6 +275,10 @@ ENTRYPOINT ["dotnet","amtemeterai.Api.dll"]
           └───────────────┘
 ```
 
+**Data Flow:**
+- Frontend (`localhost:3000`) → API (`api:8080`) → Database (`postgres:5432`)
+- Frontend uses `VITE_API_URL=http://api:8080` for internal Docker network communication
+
 ---
 
 ## Usage
@@ -219,7 +286,11 @@ ENTRYPOINT ["dotnet","amtemeterai.Api.dll"]
 ### Start All Services
 
 ```bash
+# Start database and API only
 docker-compose up
+
+# Start all services including frontend
+docker-compose --profile full up
 ```
 
 ### Start in Detached Mode
@@ -282,6 +353,10 @@ docker exec -it amtemeterai_api sh
 - **Base URL:** `http://localhost:8080`
 - **Swagger UI:** `http://localhost:8080/swagger`
 
+### Frontend
+- **URL:** `http://localhost:3000`
+- **Environment:** Uses `.env.docker` with `VITE_API_URL=http://api:8080`
+
 ---
 
 ## Environment Variables
@@ -305,7 +380,10 @@ docker exec -it amtemeterai_api sh
 1. **PostgreSQL** starts first
 2. **API** waits for PostgreSQL to be ready (`depends_on: postgres`)
 3. **API** applies database migrations on startup (`db.Database.Migrate()`)
-4. API becomes available at `http://localhost:8080`
+4. **Frontend** waits for API to be ready (`depends_on: api`)
+5. Services become available:
+   - API at `http://localhost:8080`
+   - Frontend at `http://localhost:3000` (with `--profile full`)
 
 ---
 
@@ -324,6 +402,7 @@ The PostgreSQL data is persisted using a Docker named volume:
 |---------|-----------|----------------|---------|
 | PostgreSQL | 5500 | 5432 | Database access |
 | API | 8080 | 8080 | API endpoint access |
+| Frontend | 3000 | 5173 | Frontend web interface |
 
 ---
 
@@ -405,11 +484,42 @@ For production deployment:
 | Docker | - |
 | Docker Compose | - |
 | PostgreSQL Image | 16 |
+| Node.js Image | 20 |
 | .NET SDK Image | 8.0 |
 | .NET Runtime Image | 8.0 |
 | ASP.NET Core | 8.0 |
 | Entity Framework Core | 8.0.0 |
 | Npgsql (PostgreSQL Provider) | 8.0.0 |
+| React | 19.2.5 |
+| Vite | 8.0.10 |
+
+---
+
+## Concurrent Development Scripts
+
+The root `package.json` provides scripts for running both backend and frontend concurrently during development:
+
+```json
+{
+  "scripts": {
+    "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
+    "dev:backend": "dotnet run --project backend/amtemeterai.Api",
+    "dev:frontend": "npm run dev --prefix frontend"
+  }
+}
+```
+
+**Usage:**
+```bash
+# From project root - runs both backend and frontend
+npm run dev
+
+# Backend only
+npm run dev:backend
+
+# Frontend only
+npm run dev:frontend
+```
 
 ---
 
@@ -418,5 +528,7 @@ For production deployment:
 This Docker configuration supports the AmtemeterAI e-Meterai delivery management system, providing:
 - Persistent PostgreSQL database for customer and delivery data
 - RESTful API with Swagger documentation
+- React frontend with modern UI
 - Automatic database migrations on startup
-- Easy local development and production deployment
+- Easy local development (with concurrent scripts) and production deployment
+- Environment-based API URL configuration for seamless dev/Docker switching

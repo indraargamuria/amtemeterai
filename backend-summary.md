@@ -124,6 +124,27 @@ http://localhost:8080/swagger
 
 ## Customers API
 
+### Get All Customers
+**Endpoint:** `GET /api/customers`
+
+**Description:** Retrieves all customers from the database.
+
+**Response Body:**
+```json
+[
+  {
+    "customerId": 1,
+    "customerCode": "CUST001",
+    "customerName": "PT Maju Jaya Logistics",
+    "customerEmail": "contact@majujaya.co.id"
+  }
+]
+```
+
+**Response:** `200 OK`
+
+---
+
 ### Upsert Customer
 **Endpoint:** `POST /api/customers` or `PATCH /api/customers`
 
@@ -149,6 +170,43 @@ http://localhost:8080/swagger
 ---
 
 ## Deliveries API
+
+### Get All Deliveries
+**Endpoint:** `GET /api/deliveries`
+
+**Description:** Retrieves all delivery headers with customer information, ordered by delivery date descending.
+
+**Response Body:**
+```json
+[
+  {
+    "deliveryId": 1,
+    "deliveryNumber": "DLV1001",
+    "deliveryDate": "2025-05-03T10:00:00",
+    "deliveryRemarks": "Express delivery",
+    "customerCode": "CUST001",
+    "customerName": "PT Maju Jaya Logistics",
+    "received": false,
+    "invoiced": false
+  }
+]
+```
+
+**Response:** `200 OK`
+
+---
+
+### Get Delivery by ID
+**Endpoint:** `GET /api/deliveries/{deliveryId}`
+
+**Description:** Retrieves delivery details including lines by delivery ID.
+
+**URL Parameter:**
+- `deliveryId` (int) - The delivery ID
+
+**Response:** `200 OK` or `404 Not Found`
+
+---
 
 ### Upsert Delivery
 **Endpoint:** `POST /api/deliveries` or `PATCH /api/deliveries`
@@ -266,6 +324,26 @@ http://localhost:8080/swagger
 
 ## Data Transfer Objects (DTOs)
 
+### CustomerResponseDto
+| Property | Type |
+|----------|------|
+| CustomerId | int |
+| CustomerCode | string |
+| CustomerName | string |
+| CustomerEmail | string? |
+
+### DeliveryHeaderDto
+| Property | Type |
+|----------|------|
+| DeliveryId | int |
+| DeliveryNumber | string |
+| DeliveryDate | DateTime |
+| DeliveryRemarks | string? |
+| CustomerCode | string |
+| CustomerName | string |
+| Received | bool |
+| Invoiced | bool |
+
 ### CustomerUpsertDto
 | Property | Type | Required |
 |----------|------|----------|
@@ -335,6 +413,23 @@ http://localhost:8080/swagger
 | PackQuantityDelivered | decimal | Yes |
 | PackQuantityReturned | decimal | Yes |
 | PackQuantityRejected | decimal | Yes |
+
+---
+
+## CORS Configuration
+
+The API is configured to allow CORS for frontend applications dynamically based on `appsettings.json`:
+
+```json
+"Cors": {
+  "Origins": [
+    "http://localhost:5173",
+    "http://localhost:3000"
+  ]
+}
+```
+
+This allows the frontend running on ports 5173 (Vite dev) or 3000 (Docker) to access the API.
 
 ---
 
