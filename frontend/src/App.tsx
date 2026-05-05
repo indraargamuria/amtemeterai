@@ -2,7 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom"
 import { LoginPage } from "./pages/Login"
 import { DashboardPage } from "./pages/Dashboard"
 import { CustomersPage } from "./pages/Customers"
-import { DeliveriesPage } from "./pages/Deliveries"
+import { DeliveriesPage, DeliveryDetailPage } from "./pages/Deliveries"
 import { DashboardLayout } from "./shared/layouts"
 
 function App() {
@@ -31,6 +31,14 @@ function App() {
           element={
             <DashboardLayout>
               <DeliveriesPage />
+            </DashboardLayout>
+          }
+        />
+        <Route
+          path="/deliveries/:deliveryId"
+          element={
+            <DashboardLayout>
+              <DeliveryDetailPage />
             </DashboardLayout>
           }
         />
