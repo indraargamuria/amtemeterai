@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react"
 import { Button } from "../../shared/components/ui/Button"
-import { Card } from "../../shared/components/ui/Card"
+import { Card, CardContent  } from "../../shared/components/ui/Card"
 import {
   Table,
   TableBody,
@@ -11,104 +11,74 @@ import {
 } from "../../shared/components/ui/Table"
 import { Pagination } from "../../shared/components/ui/Pagination"
 
-interface Customer {
-  code: string
-  name: string
-  email: string
-  address: string
-}
-
-const dummyCustomers: Customer[] = [
-  {
-    code: "CUST001",
-    name: "PT Maju Jaya Logistics",
-    email: "contact@majujaya.co.id",
-    address: "Jl. Industri No. 123, Jakarta",
-  },
-  {
-    code: "CUST002",
-    name: "CV Berkah Abadi",
-    email: "info@berkahabadi.com",
-    address: "Jl. Raya Bogor KM 45, Depok",
-  },
-  {
-    code: "CUST003",
-    name: "PT Global Shipping",
-    email: "ops@globalshipping.id",
-    address: "Jl. Tanjung Priok No. 88, Jakarta Utara",
-  },
-  {
-    code: "CUST004",
-    name: "UD Sejahtera Transport",
-    email: "admin@sejahteratransport.com",
-    address: "Jl. Ahmad Yani No. 234, Bekasi",
-  },
-  {
-    code: "CUST005",
-    name: "PT Fast Forward Cargo",
-    email: "cs@fastforwardcargo.co.id",
-    address: "Jl. Pemuda No. 56, Surabaya",
-  },
-  {
-    code: "CUST006",
-    name: "CV Mitra Logistik",
-    email: "mitra@logistikmitra.com",
-    address: "Jl. Gatot Subroto No. 78, Bandung",
-  },
-  {
-    code: "CUST007",
-    name: "PT Sinar Sumber Rejeki",
-    email: "sinar@ssr.co.id",
-    address: "Jl. Sudirman No. 12, Medan",
-  },
-  {
-    code: "CUST008",
-    name: "UD Rahmat Transport",
-    email: "rahmat@transport.com",
-    address: "Jl. Diponegoro No. 45, Semarang",
-  },
-]
-
 const ITEMS_PER_PAGE = 10
 
-//2026-05-05 18:31:23 - Arga - Use .env
 const API_URL = import.meta.env.VITE_API_URL
 
-
-
+interface Customer {
+  customerId: number
+  customerCode: string
+  customerName: string
+  customerEmail: string | null
+}
 
 export function CustomersPage() {
   const [currentPage, setCurrentPage] = useState(1)
-
-  const [customers, setCustomers] = useState<any[]>([])
+  const [customers, setCustomers] = useState<Customer[]>([])
   const [loading, setLoading] = useState(true)
+  const [syncing, setSyncing] = useState(false)
+  const [syncMessage, setSyncMessage] = useState<string | null>(null)
+
+  const fetchCustomers = async () => {
+    try {
+      const res = await fetch(`${API_URL}/api/customers`)
+      const data = await res.json()
+      setCustomers(data)
+    } catch (err) {
+      console.error("Failed to fetch customers", err)
+    }
+  }
 
   useEffect(() => {
-    const fetchCustomers = async () => {
-      try {
-        //2026-05-05 18:31:36 - Arga - Use Variable for Endpoint
-        const res = await fetch(`${API_URL}/api/customers`)
-        const data = await res.json()
-        setCustomers(data)
-      } catch (err) {
-        console.error("Failed to fetch customers", err)
-      } finally {
-        setLoading(false)
-      }
+    const loadCustomers = async () => {
+      setLoading(true)
+      await fetchCustomers()
+      setLoading(false)
     }
 
-    fetchCustomers()
+    loadCustomers()
   }, [])
+
+  const handleSyncCustomers = async () => {
+    setSyncing(true)
+    setSyncMessage(null)
+
+    try {
+      const res = await fetch(`${API_URL}/api/customers/sync`, {
+        method: "POST",
+      })
+
+      if (!res.ok) {
+        throw new Error("Sync failed")
+      }
+
+      const data = await res.json()
+      setSyncMessage(data.message || `Sync completed: ${data.total} customers processed`)
+      await fetchCustomers()
+    } catch (err) {
+      console.error("Failed to sync customers", err)
+      setSyncMessage("Failed to sync customers. Please try again.")
+    } finally {
+      setSyncing(false)
+    }
+  }
+
   const totalPages = Math.ceil(customers.length / ITEMS_PER_PAGE)
   const startIndex = (currentPage - 1) * ITEMS_PER_PAGE
-  const currentCustomers = dummyCustomers.slice(
+  const currentCustomers = customers.slice(
     startIndex,
     startIndex + ITEMS_PER_PAGE
   )
-
-  const handleSyncCustomers = () => {
-    console.log("Sync customers clicked")
-  }
 
   return (
     <div className="space-y-8">
@@ -122,8 +92,24 @@ export function CustomersPage() {
             Manage your customer database and sync data
           </p>
         </div>
-        <Button onClick={handleSyncCustomers}>Sync Customers</Button>
+        <Button
+          onClick={handleSyncCustomers}
+          disabled={syncing}
+        >
+          {syncing ? "Syncing..." : "Sync Customers"}
+        </Button>
       </div>
+
+      {/* Sync Message */}
+      {syncMessage && (
+        <Card className={`border ${syncMessage.includes("failed") ? "border-brand-red/20" : "border-brand-blue/20"}`}>
+          <CardContent className="py-4">
+            <p className={`text-sm ${syncMessage.includes("failed") ? "text-brand-red" : "text-brand-blue/80"}`}>
+              {syncMessage}
+            </p>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Customers Table */}
       <Card>
@@ -141,20 +127,42 @@ export function CustomersPage() {
               </TableHead>
               <TableHead className="font-medium text-brand-blue/50 uppercase text-xs tracking-wider">
                 Address
-              </TableHead>  
+              </TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {customers.map((customer) => (
-              <TableRow key={customer.customerId}>
-                <TableCell className="font-medium text-brand-blue">
-                  {customer.customerCode}
+            {loading ? (
+              <TableRow>
+                <TableCell
+                  colSpan={4}
+                  className="text-center text-brand-blue/60 py-8"
+                >
+                  Loading customers...
                 </TableCell>
-                <TableCell>{customer.customerName}</TableCell>
-                <TableCell className="text-brand-blue/70">{customer.customerEmail}</TableCell>
-                <TableCell className="text-brand-blue/70">-</TableCell>
               </TableRow>
-            ))}
+            ) : customers.length === 0 ? (
+              <TableRow>
+                <TableCell
+                  colSpan={4}
+                  className="text-center text-brand-blue/60 py-8"
+                >
+                  No customers found. Click "Sync Customers" to load data.
+                </TableCell>
+              </TableRow>
+            ) : (
+              currentCustomers.map((customer) => (
+                <TableRow key={customer.customerId}>
+                  <TableCell className="font-medium text-brand-blue">
+                    {customer.customerCode}
+                  </TableCell>
+                  <TableCell>{customer.customerName}</TableCell>
+                  <TableCell className="text-brand-blue/70">
+                    {customer.customerEmail || "-"}
+                  </TableCell>
+                  <TableCell className="text-brand-blue/70">-</TableCell>
+                </TableRow>
+              ))
+            )}
           </TableBody>
         </Table>
       </Card>

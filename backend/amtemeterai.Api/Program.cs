@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using amtemeterai.Api.Data;
+using amtemeterai.Api.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -28,6 +29,20 @@ builder.Services.AddCors(options =>
               .AllowAnyMethod();
     });
 });
+
+// 2026-05-06 - Customer Source Configuration
+var customerSourceType = builder.Configuration["CustomerSource"] ?? "Dummy";
+
+if (customerSourceType == "Dummy")
+{
+    builder.Services.AddScoped<ICustomerSource, DummyCustomerSource>();
+}
+else
+{
+    builder.Services.AddScoped<ICustomerSource, ErpCustomerSource>();
+}
+
+builder.Services.AddScoped<CustomerService>();
 
 var app = builder.Build();
 

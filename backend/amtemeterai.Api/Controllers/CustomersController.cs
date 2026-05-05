@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using amtemeterai.Api.Data;
 using amtemeterai.Api.Dtos;
 using amtemeterai.Api.Models;
+using amtemeterai.Api.Services;
 using Microsoft.EntityFrameworkCore;
 
 namespace amtemeterai.Api.Controllers;
@@ -11,10 +12,17 @@ namespace amtemeterai.Api.Controllers;
 public class CustomersController : ControllerBase
 {
     private readonly AppDbContext _db;
+    private readonly ICustomerSource _customerSource;
+    private readonly CustomerService _customerService;
 
-    public CustomersController(AppDbContext context)
+    public CustomersController(
+        AppDbContext context,
+        ICustomerSource customerSource,
+        CustomerService customerService)
     {
         _db = context;
+        _customerSource = customerSource;
+        _customerService = customerService;
     }
 
     //2026-05-04 15:36:19 - Arga - Add Customer Get
@@ -34,12 +42,29 @@ public class CustomersController : ControllerBase
         return Ok(customers);
     }
 
+    //2026-05-06 - Customer Sync Endpoint
+    [HttpPost("sync")]
+    public async Task<IActionResult> SyncCustomers()
+    {
+        var externalCustomers = await _customerSource.GetCustomersAsync();
+
+        var (inserted, updated) = await _customerService.UpsertCustomersAsync(externalCustomers);
+
+        return Ok(new
+        {
+            inserted,
+            updated,
+            total = inserted + updated,
+            message = $"Sync completed: {inserted} inserted, {updated} updated"
+        });
+    }
+
     [HttpPost]
     [HttpPatch]
     public async Task<IActionResult> Upsert(CustomerUpsertDto dto)
     {
         var existing = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions
-        .FirstOrDefaultAsync(_db.Customers, x => x.CustomerCode == dto.CustomerCode);
+            .FirstOrDefaultAsync(_db.Customers, x => x.CustomerCode == dto.CustomerCode);
 
         if (existing == null)
         {
