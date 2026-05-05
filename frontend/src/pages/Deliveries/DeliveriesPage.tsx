@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Badge } from "../../shared/components/ui/Badge"
 import { Card } from "../../shared/components/ui/Card"
 import {
@@ -78,8 +78,31 @@ const getStatusVariant = (status: Delivery["status"]) => {
   }
 }
 
+//2026-05-05 22:26:33 - Arga - Link to Env Config
+const API_URL = import.meta.env.VITE_API_URL
+
 export function DeliveriesPage() {
   const [currentPage, setCurrentPage] = useState(1)
+
+  const [deliveryHeader, setDeliveryHeader] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    const fetchDeliveries = async () => {
+      try {
+        //2026-05-05 18:31:36 - Arga - Use Variable for Endpoint
+        const res = await fetch(`${API_URL}/api/deliveries`)
+        const data = await res.json()
+        setDeliveryHeader(data)
+      } catch (err) {
+        console.error("Failed to fetch deliveries", err)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchDeliveries()
+  }, [])
 
   const totalPages = Math.ceil(dummyDeliveries.length / ITEMS_PER_PAGE)
   const startIndex = (currentPage - 1) * ITEMS_PER_PAGE
@@ -120,18 +143,18 @@ export function DeliveriesPage() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {currentDeliveries.map((delivery) => (
-              <TableRow key={delivery.code}>
+            {deliveryHeader.map((delivery) => (
+              <TableRow key={delivery.deliveryNumber}>
                 <TableCell className="font-medium text-brand-blue">
-                  {delivery.code}
+                  {delivery.deliveryNumber}
                 </TableCell>
-                <TableCell>{delivery.customerName}</TableCell>
+                <TableCell>{delivery.customerCode}</TableCell>
                 <TableCell>
-                  <Badge variant={getStatusVariant(delivery.status)}>
+                  {/* <Badge variant={getStatusVariant(delivery.status)}>
                     {delivery.status}
-                  </Badge>
+                  </Badge> */}
                 </TableCell>
-                <TableCell className="text-brand-blue/70">{delivery.date}</TableCell>
+                <TableCell className="text-brand-blue/70">{delivery.deliveryDate}</TableCell>
               </TableRow>
             ))}
           </TableBody>
