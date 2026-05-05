@@ -297,7 +297,7 @@ public class DeliveriesController : ControllerBase
                 CustomerID = customer.CustomerID,
                 DeliveryNumber = $"DLV-{DateTime.UtcNow:yyyyMMddHHmmss}-{i:D3}",
                 DeliveryDate = DateTime.UtcNow.AddDays(rnd.Next(-30, 0)),
-                DeliveryRemarks = "Seeded demo delivery",
+                DeliveryRemarks = "-",
                 ReceiverToken = Guid.NewGuid(),
                 Received = false,
                 Invoiced = false

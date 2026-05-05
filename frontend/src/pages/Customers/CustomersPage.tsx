@@ -140,9 +140,9 @@ export function CustomersPage() {
               <TableHead className="font-medium text-brand-blue/50 uppercase text-xs tracking-wider">
                 Email
               </TableHead>
-              <TableHead className="font-medium text-brand-blue/50 uppercase text-xs tracking-wider">
+              {/* <TableHead className="font-medium text-brand-blue/50 uppercase text-xs tracking-wider">
                 Address
-              </TableHead>
+              </TableHead> */}
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -174,7 +174,7 @@ export function CustomersPage() {
                   <TableCell className="text-brand-blue/70">
                     {customer.customerEmail || "-"}
                   </TableCell>
-                  <TableCell className="text-brand-blue/70">-</TableCell>
+                  {/* <TableCell className="text-brand-blue/70">-</TableCell> */}
                 </TableRow>
               ))
             )}
