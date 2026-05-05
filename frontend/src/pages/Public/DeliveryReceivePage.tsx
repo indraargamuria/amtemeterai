@@ -152,9 +152,30 @@ export function DeliveryReceivePage() {
         throw new Error("Failed to update delivery")
       }
 
-      // Refresh delivery data
-      const updatedData: DeliveryDetail = await res.json()
-      setDelivery(updatedData)
+      // Update delivery state locally (PATCH returns no content)
+      setDelivery((prev) => {
+        if (!prev) return prev
+
+        return {
+          ...prev,
+          received: true,
+          receiverName: receiverName || null,
+          receiverNotes: receiverNotes || null,
+          lines: prev.lines.map((line) => {
+            const lineState = lines.find(
+              (l) => l.deliveryLineNumber === line.deliveryLineNumber
+            )
+
+            return {
+              ...line,
+              packQuantityDelivered: parseFloat(lineState?.delivered || "0"),
+              packQuantityReturned: parseFloat(lineState?.returned || "0"),
+              packQuantityRejected: parseFloat(lineState?.rejected || "0"),
+            }
+          }),
+        }
+      })
+
       setSubmitted(true)
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to submit delivery")
