@@ -20,6 +20,7 @@ The frontend is built with **React 19** and **Vite** using **TypeScript**. It pr
 | clsx | 2.1.1 | Class Name Utilities |
 | tailwind-merge | 3.5.0 | Tailwind Class Merging |
 | lucide-react | 1.14.0 | Icons (used in Dashboard) |
+| qrcode | 1.5.4 | QR Code Generation |
 
 ---
 
@@ -40,8 +41,12 @@ frontend/src/
 │   ├── Customers/
 │   │   ├── CustomersPage.tsx        # Customers Table + Pagination
 │   │   └── index.ts
-│   └── Deliveries/
-│       ├── DeliveriesPage.tsx       # Deliveries Table + Status Badges
+│   ├── Deliveries/
+│   │   ├── DeliveriesPage.tsx       # Deliveries Table + Status Badges
+│   │   ├── DeliveryDetailPage.tsx   # Delivery Details with QR Code
+│   │   └── index.ts
+│   └── Public/
+│       ├── DeliveryReceivePage.tsx  # Public Delivery Receive Form
 │       └── index.ts
 ├── shared/
 │   ├── layouts/
@@ -120,7 +125,9 @@ This allows seamless switching between local development and Docker environments
 | `/login` | Login Page | Standalone (Split Screen) |
 | `/` | Dashboard | DashboardLayout (Sidebar) |
 | `/customers` | Customers | DashboardLayout (Sidebar) |
-| `/deliveries` | Deliveries | DashboardLayout (Sidebar) |
+| `/deliveries` | Deliveries List | DashboardLayout (Sidebar) |
+| `/deliveries/:deliveryId` | Delivery Detail | DashboardLayout (Sidebar) |
+| `/receive/:token` | Public Delivery Receive | Standalone (No Layout) |
 | `*` | Redirect to `/` | - |
 
 ---
@@ -253,6 +260,139 @@ Each card includes:
 
 ---
 
+### 5. Delivery Detail Page (`/deliveries/:deliveryId`)
+
+**Layout:** DashboardLayout with Sidebar
+
+**Components:**
+- Page Header: Title + Description + Back Button
+- Delivery Header Card: Delivery info with customer details
+- Receiver Access Card: Public URL + QR Code
+- Delivery Lines Table: Detailed line items
+
+**Delivery Info Displayed:**
+- Delivery Number, Date, Remarks
+- Customer Code and Name
+- Received Status (Badge: "Received" / "Not Received")
+- Invoice Status (Badge: "Invoiced" / "Not Invoiced")
+- Receiver Name and Notes (if received)
+
+**Receiver Access Features:**
+- Public URL input field (read-only)
+- Copy URL button with success feedback
+- "Open Link in New Tab" button
+- QR Code display (200x200px, generated with qrcode library)
+- Download QR Code button (saves as PNG)
+
+**Delivery Lines Table Columns:**
+| Column | Style |
+|--------|-------|
+| Line # | `font-medium text-brand-blue` |
+| Item Code | `text-brand-blue/70` |
+| Description | Default |
+| Sales Qty | `text-right text-brand-blue/80` |
+| Pack Qty | `text-right text-brand-blue/80` |
+| Delivered | `text-right text-brand-blue/80` |
+| Returned | `text-right text-brand-blue/80` |
+| Rejected | `text-right text-brand-blue/80` |
+
+**API Integration:**
+- Fetches delivery data from `GET /api/deliveries/{deliveryId}` on mount
+- Uses `useParams` hook to get `deliveryId` from URL
+- Generates QR code in frontend using `qrcode` library
+- Error handling with back button navigation
+- Loading state display
+
+**QR Code Generation:**
+```typescript
+const qrDataUrl = await QRCode.toDataURL(publicUrl, {
+  width: 200,
+  margin: 1,
+  color: {
+    dark: "#1d2351",  // Brand blue
+    light: "#ffffff",
+  },
+})
+```
+
+---
+
+### 6. Public Delivery Receive Page (`/receive/:token`)
+
+**Layout:** Standalone (No sidebar, no layout wrapper)
+
+**Components:**
+- Page Header: Title + Description
+- Delivery Info Card: Basic delivery info + status badge
+- Delivery Items Card: Line items with quantity inputs
+- Receiver Information Card: Name and notes (if not received)
+- Success Message Card: Displayed after submission
+- Submit Button
+
+**States:**
+- Loading: Shows loading message
+- Error: Shows error message in centered card
+- Already Received: Shows delivery in read-only mode
+- Not Received: Shows form with editable inputs
+- Submitted: Shows success message
+
+**Delivery Items Form:**
+Each line item has three quantity inputs:
+- Delivered (number, step 0.01)
+- Returned (number, step 0.01)
+- Rejected (number, step 0.01)
+
+**Validation:**
+- Total (Delivered + Returned + Rejected) cannot exceed Pack Quantity
+- Per-line validation errors displayed in red
+- Receiver Name is required
+- Inputs disabled when already received or after submission
+
+**Receiver Information:**
+- Receiver Name (required text input)
+- Notes (optional text input)
+- Only shown for new (not received) deliveries
+
+**API Integration:**
+- Fetches delivery data from `GET /api/deliveries/{token}` on mount
+- Submits delivery confirmation to `PATCH /api/deliveries/{token}`
+- Request body includes:
+  ```json
+  {
+    "receiverName": "John Doe",
+    "receiverNotes": "Received in good condition",
+    "lines": [
+      {
+        "deliveryLineNumber": "1",
+        "packQuantityDelivered": 10.00,
+        "packQuantityReturned": 0.00,
+        "packQuantityRejected": 0.00
+      }
+    ]
+  }
+  ```
+- Updates local state after successful submission
+- Error handling with user-friendly messages
+
+**Form State:**
+```typescript
+interface LineFormState {
+  deliveryLineNumber: string
+  delivered: string
+  returned: string
+  rejected: string
+}
+```
+
+**UX Features:**
+- Real-time validation as user types
+- Success checkmark animation
+- Disabled states for read-only view
+- Responsive design (max-width: xl)
+- Clear visual hierarchy
+
+---
+
 ## Layouts
 
 ### DashboardLayout
@@ -358,6 +498,10 @@ Each card includes:
 **Features:**
 - `text-sm font-medium`
 - Peer-disabled support
+- Proper htmlFor attribute for accessibility
+- Used with Input components for form labeling
+
+---
 
 ---
 
@@ -500,7 +644,118 @@ The root `package.json` provides scripts to run both backend and frontend concur
 |------|----------------|-------|
 | Dashboard | Mock data | Static metrics displayed |
 | Customers | ✅ Live API | Fetches from `GET /api/customers` |
-| Deliveries | ✅ Live API | Fetches from `GET /api/deliveries` |
+| Deliveries List | ✅ Live API | Fetches from `GET /api/deliveries` |
+| Delivery Detail | ✅ Live API | Fetches from `GET /api/deliveries/{id}` |
+| Public Receive | ✅ Live API | Fetches/Updates via token endpoint |
+
+---
+
+## QR Code Generation
+
+The application uses the `qrcode` library to generate QR codes client-side:
+
+**Installation:**
+```bash
+npm install qrcode
+```
+
+**Usage in DeliveryDetailPage:**
+```typescript
+import QRCode from "qrcode"
+
+const qrDataUrl = await QRCode.toDataURL(publicUrl, {
+  width: 200,
+  margin: 1,
+  color: {
+    dark: "#1d2351",  // Brand blue
+    light: "#ffffff",
+  },
+})
+```
+
+**Features:**
+- Generates Data URL (base64) for direct image display
+- Configurable size and colors
+- Used for sharing delivery links with customers
+
+---
+
+## Public URL Handling
+
+The frontend generates public URLs for delivery receiving:
+
+**Format:**
+```
+{VITE_API_URL}/receive/{receiverToken}
+```
+
+**Usage:**
+- Displayed in Delivery Detail page
+- Can be copied to clipboard
+- Opens in new tab for customer access
+- Embedded in QR code for easy scanning
+
+**Environment-Based:**
+- Development: `http://localhost:5173/receive/{token}`
+- Production: Configured via `VITE_API_URL`
+
+---
+
+## Form Handling Patterns
+
+### State Management
+```typescript
+const [loading, setLoading] = useState(true)
+const [error, setError] = useState<string | null>(null)
+const [submitting, setSubmitting] = useState(false)
+const [submitted, setSubmitted] = useState(false)
+```
+
+### Validation
+```typescript
+const validateLines = (): boolean => {
+  const errors: Record<string, string> = {}
+  let isValid = true
+
+  // Validation logic
+  delivery.lines.forEach((line) => {
+    const total = delivered + returned + rejected
+    if (total > line.packQuantity) {
+      errors[line.deliveryLineNumber] = "Total exceeds pack quantity"
+      isValid = false
+    }
+  })
+
+  setValidationErrors(errors)
+  return isValid
+}
+```
+
+### Submission Pattern
+```typescript
+const handleSubmit = async (e: React.FormEvent) => {
+  e.preventDefault()
+  if (!validate()) return
+
+  setSubmitting(true)
+  try {
+    const res = await fetch(`${API_URL}/endpoint`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    })
+
+    if (!res.ok) throw new Error("Failed")
+
+    setSubmitted(true)
+    // Update local state
+  } catch (err) {
+    setError(err.message)
+  } finally {
+    setSubmitting(false)
+  }
+}
+```
 
 ---
 
@@ -514,4 +769,7 @@ The root `package.json` provides scripts to run both backend and frontend concur
 - Form validation on login
 - Search and filter functionality
 - Sortable tables
-- Status badges re-enabled on Deliveries page
+- Customer profile pages
+- Invoice generation and download
+- Email notifications for new deliveries
+- Delivery history and analytics

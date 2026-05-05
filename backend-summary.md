@@ -16,6 +16,7 @@ The backend is built with **ASP.NET Core 8.0** using **Entity Framework Core** w
 | PostgreSQL | 16 | Database |
 | Npgsql | 8.0.0 | PostgreSQL Provider |
 | Swashbuckle.AspNetCore | 6.5.0 | Swagger/OpenAPI |
+| QRCoder | 1.5.1 | QR Code Generation |
 
 ---
 
@@ -31,18 +32,30 @@ backend/amtemeterai.Api/
 │   ├── DeliveryHeader.cs
 │   └── DeliveryLine.cs
 ├── Dtos/                 # Data Transfer Objects
+│   ├── CustomerResponseDto.cs
 │   ├── CustomerUpsertDto.cs
-│   ├── DeliveryUpsertDto.cs
-│   ├── DeliveryResponseDto.cs
+│   ├── DeliveryCreateResponseDto.cs
+│   ├── DeliveryHeaderDto.cs
 │   ├── DeliveryLineDto.cs
-│   └── DeliveryReceiveDto.cs
+│   ├── DeliveryLineResponseDto.cs
+│   ├── DeliveryReceiveDto.cs
+│   ├── DeliveryResponseDto.cs
+│   └── DeliveryUpsertDto.cs
 ├── Data/                 # Database Context
 │   ├── AppDbContext.cs
 │   └── AppDbContextFactory.cs
+├── Services/             # Business Logic Layer
+│   ├── CustomerService.cs
+│   ├── ICustomerSource.cs
+│   ├── DummyCustomerSource.cs
+│   └── ErpCustomerSource.cs
+├── Helpers/              # Helper Utilities
+│   └── QrCodeHelper.cs
 ├── Migrations/           # Database Migrations
 │   ├── 20260430111946_InitialCreate.cs
 │   ├── 20260430120637_RemoveUnusedDeliveryID.cs
 │   └── 20260430153546_ChangeForeignKeyForDeliveryLine.cs
+├── Properties/           # .NET Project Properties
 └── Program.cs            # Application Entry Point
 ```
 
@@ -169,6 +182,30 @@ http://localhost:8080/swagger
 
 ---
 
+### Sync Customers
+**Endpoint:** `POST /api/customers/sync`
+
+**Description:** Synchronizes customers from the configured external source (Dummy or ERP).
+
+**Response Body:**
+```json
+{
+  "inserted": 5,
+  "updated": 3,
+  "total": 8,
+  "message": "Sync completed: 5 inserted, 3 updated"
+}
+```
+
+**Response:** `200 OK`
+
+**Logic:**
+- Fetches customers from `ICustomerSource` implementation
+- Upserts all customers using `CustomerService`
+- Returns count of inserted and updated customers
+
+---
+
 ## Deliveries API
 
 ### Get All Deliveries
@@ -187,7 +224,8 @@ http://localhost:8080/swagger
     "customerCode": "CUST001",
     "customerName": "PT Maju Jaya Logistics",
     "received": false,
-    "invoiced": false
+    "invoiced": false,
+    "publicUrl": "http://localhost:5173/receive/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
   }
 ]
 ```
@@ -204,12 +242,77 @@ http://localhost:8080/swagger
 **URL Parameter:**
 - `deliveryId` (int) - The delivery ID
 
+**Response Body:**
+```json
+{
+  "deliveryNumber": "DLV1001",
+  "deliveryDate": "2025-05-03T10:00:00",
+  "deliveryRemarks": "Express delivery",
+  "customerCode": "CUST001",
+  "customerName": "PT Maju Jaya Logistics",
+  "receiverToken": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+  "receiverName": null,
+  "receiverNotes": null,
+  "received": false,
+  "invoiced": false,
+  "publicUrl": "http://localhost:5173/receive/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+  "lines": [...]
+}
+```
+
 **Response:** `200 OK` or `404 Not Found`
 
 ---
 
-### Upsert Delivery
-**Endpoint:** `POST /api/deliveries` or `PATCH /api/deliveries`
+### Create Delivery
+**Endpoint:** `POST /api/deliveries`
+
+**Description:** Creates a new delivery. Returns conflict if delivery number already exists.
+
+**Request Body:**
+```json
+{
+  "customerCode": "CUST001",
+  "deliveryNumber": "DLV1001",
+  "deliveryDate": "2025-05-03T10:00:00",
+  "deliveryRemarks": "Express delivery",
+  "lines": [
+    {
+      "deliveryLineNumber": "1",
+      "deliveryItemCode": "ITEM001",
+      "deliveryItemDescription": "e-Meterai Roll",
+      "salesQuantity": 1000.00,
+      "salesUOM": "PCS",
+      "packQuantity": 10.00,
+      "packUOM": "ROLL"
+    }
+  ]
+}
+```
+
+**Response Body:**
+```json
+{
+  "deliveryNumber": "DLV1001",
+  "publicUrl": "http://localhost:5173/receive/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+  "qrCodeBase64": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAA..."
+}
+```
+
+**Response:** `200 OK`, `400 Bad Request` (customer not found), or `409 Conflict` (delivery exists)
+
+**Logic:**
+- Validates customer exists by `CustomerCode`
+- Creates new `DeliveryHeader` with new `ReceiverToken` (Guid)
+- Creates all `DeliveryLine` records
+- Generates `PublicUrl` and `QrCodeBase64` for the delivery
+
+---
+
+### Update Delivery
+**Endpoint:** `PATCH /api/deliveries`
+
+**Description:** Updates an existing delivery. Does NOT regenerate the ReceiverToken.
 
 **Description:** Creates a new delivery or updates an existing one based on DeliveryNumber.
 
@@ -238,12 +341,10 @@ http://localhost:8080/swagger
 
 **Logic:**
 - Validates customer exists by `CustomerCode`
-- If delivery with `DeliveryNumber` doesn't exist:
-  - Creates new `DeliveryHeader` with new `ReceiverToken` (Guid)
-  - Creates all `DeliveryLine` records
+- If delivery doesn't exist → Returns `404 Not Found`
 - If delivery exists:
   - Updates `DeliveryDate`, `DeliveryRemarks`
-  - Generates new `ReceiverToken`
+  - **Does NOT** regenerate `ReceiverToken` (token must remain stable)
   - **Replaces** all existing lines with new lines (delete old, insert new)
 
 ---
@@ -322,6 +423,33 @@ http://localhost:8080/swagger
 
 ---
 
+### Seed Deliveries (Dev Only)
+**Endpoint:** `POST /api/deliveries/dev/seed-deliveries`
+
+**Description:** Seeds the database with 20 random deliveries for development testing. Only works in development environment.
+
+**Response Body:**
+```json
+{
+  "created": 20,
+  "status": "All deliveries are on-going (not delivered)",
+  "message": "Successfully seeded 20 deliveries with 85 total lines"
+}
+```
+
+**Response:** `200 OK` or `400 Bad Request` (not in dev or no customers)
+
+**Logic:**
+- Only works in development environment
+- Requires existing customers in database
+- Creates 20 random deliveries with:
+  - Random customer assignment
+  - Random delivery date within last 30 days
+  - 3-6 delivery lines per delivery
+  - All deliveries start as not received and not invoiced
+
+---
+
 ## Data Transfer Objects (DTOs)
 
 ### CustomerResponseDto
@@ -343,6 +471,7 @@ http://localhost:8080/swagger
 | CustomerName | string |
 | Received | bool |
 | Invoiced | bool |
+| PublicUrl | string |
 
 ### CustomerUpsertDto
 | Property | Type | Required |
@@ -378,11 +507,14 @@ http://localhost:8080/swagger
 | DeliveryNumber | string |
 | DeliveryDate | DateTime |
 | DeliveryRemarks | string? |
+| CustomerCode | string |
+| CustomerName | string |
 | ReceiverToken | Guid |
 | ReceiverName | string? |
 | ReceiverNotes | string? |
 | Received | bool |
 | Invoiced | bool |
+| PublicUrl | string |
 | Lines | List\<DeliveryLineResponseDto\> |
 
 ### DeliveryLineResponseDto
@@ -413,6 +545,55 @@ http://localhost:8080/swagger
 | PackQuantityDelivered | decimal | Yes |
 | PackQuantityReturned | decimal | Yes |
 | PackQuantityRejected | decimal | Yes |
+
+### DeliveryCreateResponseDto
+| Property | Type | Description |
+|----------|------|-------------|
+| DeliveryNumber | string | The created delivery number |
+| PublicUrl | string | Public URL for receiver access |
+| QrCodeBase64 | string | Base64-encoded QR code image |
+
+---
+
+## Services Architecture
+
+### Customer Service Layer
+
+The customer service follows a strategy pattern for customer data sources:
+
+#### `ICustomerSource` (Interface)
+Defines the contract for fetching customer data from external sources.
+
+```csharp
+Task<List<CustomerDto>> GetCustomersAsync();
+```
+
+#### `DummyCustomerSource`
+- Provides mock/dummy customer data for testing
+- Returns a list of sample customers with fixed data
+- Used for development and demonstration purposes
+
+#### `ErpCustomerSource`
+- Integrates with external ERP system
+- Fetches real customer data from ERP
+- Placeholder for actual ERP integration implementation
+
+#### `CustomerService`
+- Business logic for customer upsert operations
+- Method: `UpsertCustomersAsync(List<CustomerDto> customers)`
+- Returns: `(int inserted, int updated)` tuple
+- Logic:
+  - If customer code doesn't exist → Insert new customer
+  - If customer exists → Update name, email, and optionally PIN
+  - Default PIN: "123456"
+
+### QR Code Helper
+
+#### `QrCodeHelper`
+- Static utility class for QR code generation
+- Method: `GenerateQrBase64(string text)`
+- Returns: Base64-encoded PNG image of QR code
+- Uses QRCoder library for generation
 
 ---
 
@@ -494,21 +675,38 @@ All decimal fields in `DeliveryLine` use precision 18,2:
 
 ## Key Business Logic
 
+### Customer Sync
+- Fetches customers from configured `ICustomerSource` (Dummy or ERP)
+- Upserts all customers using `CustomerService`
+- Returns counts of inserted and updated records
+
 ### Customer Upsert
 - Idempotent operation based on `CustomerCode`
 - Preserves existing `CustomerPin` if not provided in update
 - Default PIN: "123456"
 
-### Delivery Upsert
+### Delivery Create
 - Requires valid `CustomerCode`
-- Generates fresh `ReceiverToken` on each upsert
+- Creates new `DeliveryHeader` with new `ReceiverToken` (Guid)
+- Creates all `DeliveryLine` records
+- Generates `PublicUrl` and `QrCodeBase64` for delivery sharing
+- `DeliveryNumber` must be unique (returns 409 Conflict if exists)
+
+### Delivery Update
+- Requires valid `CustomerCode` and existing `DeliveryNumber`
+- Updates `DeliveryDate`, `DeliveryRemarks`
+- **Does NOT** regenerate `ReceiverToken` (token must remain stable for QR codes to work)
 - Replaces all delivery lines (delete + insert pattern)
-- `DeliveryNumber` must be unique
 
 ### Delivery Receipt
 - Accessible only via `ReceiverToken`
 - Sets `Received = true` on update
 - Updates line quantities by matching `DeliveryLineNumber`
+
+### Public URL Generation
+- Format: `{App:PublicBaseUrl}/receive/{ReceiverToken}`
+- Default base URL: `http://localhost:5173`
+- Configurable via `appsettings.json`
 
 ---
 
