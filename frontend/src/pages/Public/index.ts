@@ -1,0 +1,1 @@
+export { DeliveryReceivePage } from "./DeliveryReceivePage"

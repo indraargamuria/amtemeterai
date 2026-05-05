@@ -3,6 +3,7 @@ import { LoginPage } from "./pages/Login"
 import { DashboardPage } from "./pages/Dashboard"
 import { CustomersPage } from "./pages/Customers"
 import { DeliveriesPage, DeliveryDetailPage } from "./pages/Deliveries"
+import { DeliveryReceivePage } from "./pages/Public"
 import { DashboardLayout } from "./shared/layouts"
 
 function App() {
@@ -10,6 +11,7 @@ function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/login" element={<LoginPage />} />
+        <Route path="/receive/:token" element={<DeliveryReceivePage />} />
         <Route
           path="/"
           element={
