@@ -23,16 +23,14 @@ interface Customer {
 
 export function CustomersPage() {
 
-  const [sortField, setSortField] = useState<string>("customerCode")
-  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc")
+  const [sortField, _setSortField] = useState<string>("customerCode")
+  const [sortDirection, _setSortDirection] = useState<"asc" | "desc">("asc")
   const [currentPage, setCurrentPage] = useState(1)
   const [customers, setCustomers] = useState<Customer[]>([])
   const [loading, setLoading] = useState(true)
   const [syncing, setSyncing] = useState(false)
   const [syncMessage, setSyncMessage] = useState<string | null>(null)
 
-  setSortField("customerCode")
-  setSortDirection("asc")
   const api = useApi()
 
   const fetchCustomers = async () => {

@@ -118,8 +118,21 @@ var summaries = new[]
 // .WithName("GetWeatherForecast");
 
 //2026-04-30 13:51:36 - Arga - Add Swagger
-app.UseSwagger();
-app.UseSwaggerUI();
+//2026-05-12 11:20:08 - Arga - Adjust Swagger Config based on NGINX
+app.UseSwagger(options =>
+{
+    // This tells Swagger to generate the JSON file at /api/swagger/v1/swagger.json
+    options.RouteTemplate = "api/swagger/{documentName}/swagger.json";
+});
+
+app.UseSwaggerUI(options =>
+{
+    // This tells the UI where to find that JSON file
+    options.SwaggerEndpoint("/api/swagger/v1/swagger.json", "v1");
+
+    // This sets the address you type in the browser to localhost/api/swagger
+    options.RoutePrefix = "api/swagger";
+});
 
 // 2026-05-06 - Add Authentication & Authorization middleware
 app.UseAuthentication();
