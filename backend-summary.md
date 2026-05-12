@@ -42,7 +42,7 @@ The API uses **JWT (JSON Web Token)** Bearer authentication for securing endpoin
 ### JWT Configuration
 ```json
 "Jwt": {
-  "Key": "AMTEMETERAI_SUPER_SECRET_KEY_FOR_JWT_TOKEN_GENERATION_2024",
+  "Key": "af326aa84d2198e82c5a8dce01f26d96cb29539d3c92e8028f10b58aa3df7204",
   "Issuer": "amtemeterai-api",
   "Audience": "amtemeterai-web"
 }
@@ -170,7 +170,7 @@ http://localhost:8080
 
 ### Swagger UI
 ```
-http://localhost:8080/swagger
+http://localhost/api/swagger
 ```
 
 ---
@@ -363,7 +363,7 @@ Authorization: Bearer {token}
     "customerName": "PT Maju Jaya Logistics",
     "received": false,
     "invoiced": false,
-    "publicUrl": "http://localhost:5173/receive/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+    "publicUrl": "http://192.168.110.183/receive/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
   }
 ]
 ```
@@ -393,7 +393,7 @@ Authorization: Bearer {token}
   "receiverNotes": null,
   "received": false,
   "invoiced": false,
-  "publicUrl": "http://localhost:5173/receive/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+  "publicUrl": "http://192.168.110.183/receive/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
   "lines": [...]
 }
 ```
@@ -432,7 +432,7 @@ Authorization: Bearer {token}
 ```json
 {
   "deliveryNumber": "DLV1001",
-  "publicUrl": "http://localhost:5173/receive/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+  "publicUrl": "http://192.168.110.183/receive/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
   "qrCodeBase64": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAA..."
 }
 ```
@@ -451,8 +451,6 @@ Authorization: Bearer {token}
 **Endpoint:** `PATCH /api/deliveries`
 
 **Description:** Updates an existing delivery. Does NOT regenerate the ReceiverToken.
-
-**Description:** Creates a new delivery or updates an existing one based on DeliveryNumber.
 
 **Request Body:**
 ```json
@@ -588,6 +586,30 @@ Authorization: Bearer {token}
 
 ---
 
+## Activity Logging
+
+**Response Body:**
+```json
+{
+  "created": 20,
+  "status": "All deliveries are on-going (not delivered)",
+  "message": "Successfully seeded 20 deliveries with 85 total lines"
+}
+```
+
+**Response:** `200 OK` or `400 Bad Request` (not in dev or no customers)
+
+**Logic:**
+- Only works in development environment
+- Requires existing customers in database
+- Creates 20 random deliveries with:
+  - Random customer assignment
+  - Random delivery date within last 30 days
+  - 3-6 delivery lines per delivery
+  - All deliveries start as not received and not invoiced
+
+---
+
 ### Verify Delivery PIN
 **Endpoint:** `POST /api/deliveries/{token}/verify-pin`
 
@@ -663,7 +685,7 @@ Authorization: Bearer {token}
 | DeliveryNumber | string | Yes |
 | DeliveryDate | DateTime | Yes |
 | DeliveryRemarks | string? | No |
-| Lines | List\<DeliveryLineDto\> | Yes |
+| Lines | List<DeliveryLineDto> | Yes |
 
 ### DeliveryLineDto
 | Property | Type | Required |
@@ -690,7 +712,7 @@ Authorization: Bearer {token}
 | Received | bool |
 | Invoiced | bool |
 | PublicUrl | string |
-| Lines | List\<DeliveryLineResponseDto\> |
+| Lines | List<DeliveryLineResponseDto> |
 
 ### DeliveryLineResponseDto
 | Property | Type |
@@ -711,7 +733,7 @@ Authorization: Bearer {token}
 |----------|------|----------|
 | ReceiverName | string? | No |
 | ReceiverNotes | string? | No |
-| Lines | List\<DeliveryLineReceiveDto\> | Yes |
+| Lines | List<DeliveryLineReceiveDto> | Yes |
 
 ### DeliveryLineReceiveDto
 | Property | Type | Required |
@@ -806,17 +828,24 @@ Host=postgres;Port=5432;Database=opexdb;Username=postgres;Password=postgres
 ```yaml
 postgres:
   image: postgres:16
-  ports:
-    - "5500:5432"
+  container_name: amtemeterai-postgres
   environment:
-    POSTGRES_USER: postgres
-    POSTGRES_PASSWORD: postgres
-    POSTGRES_DB: opexdb
+    POSTGRES_USER: ${DB_USER}
+    POSTGRES_PASSWORD: ${DB_PASSWORD}
+    POSTGRES_DB: ${DB_NAME}
+  volumes:
+    - postgres_data:/var/lib/postgresql/data
 
 api:
   build: backend\amtemeterai.Api
-  ports:
-    - "8080:8080"
+  image: amtemeterai-api:v2
+  container_name: amtemeterai-api
+  environment:
+    ConnectionStrings__DefaultConnection: Host=postgres;Port=${DB_PORT};Database=${DB_NAME};Username=${DB_USER};Password=${DB_PASSWORD}
+    Jwt__Key: ${JWT_SECRET}
+    Jwt__Issuer: ${JWT_ISSUER}
+    Jwt__Audience: ${JWT_AUDIENCE}
+    App__PublicBaseUrl: ${PUBLIC_BASE_URL}
   depends_on:
     - postgres
 ```
@@ -869,6 +898,28 @@ All decimal fields in `DeliveryLine` use precision 18,2:
 - Requires valid `CustomerCode`
 - Creates new `DeliveryHeader` with new `ReceiverToken` (Guid)
 - Creates all `DeliveryLine` records
+- Generates `PublicUrl` and `QrCodeBase64` for delivery
+- `DeliveryNumber` must be unique (returns 409 Conflict if exists)
+
+### Delivery Update
+- Requires valid `CustomerCode` and existing `DeliveryNumber`
+- Updates `DeliveryDate`, `DeliveryRemarks`
+- **Does NOT** regenerate `ReceiverToken` (token must remain stable for QR codes to work)
+- Replaces all delivery lines (delete + insert pattern)
+
+### Delivery Receipt
+- Accessible only via `ReceiverToken`
+- Sets `Received = true` on update
+- Updates line quantities by matching `DeliveryLineNumber`
+
+### Public URL Generation
+- Format: `{App__PublicBaseUrl}/receive/{ReceiverToken}`
+- Default base URL: Configurable via `PUBLIC_BASE_URL` environment variable
+
+### Delivery Create
+- Requires valid `CustomerCode`
+- Creates new `DeliveryHeader` with new `ReceiverToken` (Guid)
+- Creates all `DeliveryLine` records
 - Generates `PublicUrl` and `QrCodeBase64` for delivery sharing
 - `DeliveryNumber` must be unique (returns 409 Conflict if exists)
 
@@ -884,9 +935,9 @@ All decimal fields in `DeliveryLine` use precision 18,2:
 - Updates line quantities by matching `DeliveryLineNumber`
 
 ### Public URL Generation
-- Format: `{App:PublicBaseUrl}/receive/{ReceiverToken}`
-- Default base URL: `http://localhost:5173`
-- Configurable via `appsettings.json`
+- Format: `{App__PublicBaseUrl}/receive/{ReceiverToken}`
+- Default base URL: Configurable via `PUBLIC_BASE_URL` environment variable
+- Example: `http://192.168.110.183/receive/{token}`
 
 ---
 
@@ -896,7 +947,14 @@ All decimal fields in `DeliveryLine` use precision 18,2:
 
 **Using Docker:**
 ```bash
-docker-compose up
+# Build and run all services
+docker-compose up -d
+
+# View logs
+docker-compose logs -f
+
+# Stop services
+docker-compose down
 ```
 
 **Manual:**
@@ -924,4 +982,16 @@ dotnet ef migrations add MigrationName
 |------|-------------|
 | 200 OK | Request successful |
 | 400 Bad Request | Invalid request data or customer not found |
+| 401 Unauthorized | Invalid credentials or PIN |
 | 404 Not Found | Resource not found (delivery token invalid) |
+| 409 Conflict | Delivery number already exists |
+
+---
+
+## Swagger Configuration
+
+The API is configured to work behind Nginx reverse proxy:
+
+- Swagger JSON endpoint: `/api/swagger/v1/swagger.json`
+- Swagger UI: `/api/swagger`
+- This configuration ensures proper routing through the reverse proxy

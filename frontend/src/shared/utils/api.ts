@@ -3,7 +3,7 @@
 const API_URL = import.meta.env.VITE_API_URL
 
 /**
- * Creates a fetch function that automatically includes the JWT token
+ * Creates a fetch function that automatically includes a JWT token
  * in the Authorization header
  */
 export function createAuthenticatedFetch() {
@@ -21,14 +21,12 @@ export function createAuthenticatedFetch() {
       ...options,
       headers,
     })
-
     // Handle 401 Unauthorized - token expired or invalid
     if (response.status === 401) {
       localStorage.removeItem("auth_token")
       localStorage.removeItem("auth_user")
       window.location.href = "/login"
     }
-
     return response
   }
 }
@@ -78,4 +76,38 @@ export function useApi() {
     delete: authDelete,
     fetch: createAuthenticatedFetch(),
   }
+}
+
+// =========================
+// Dashboard API Functions
+// =========================
+
+/**
+ * GET /api/dashboard/stats
+ * Returns aggregated KPI data for dashboard
+ */
+export async function getDashboardStats() {
+  const response = await authGet("/api/dashboard/stats")
+  if (!response.ok) throw new Error("Failed to fetch dashboard stats")
+  return await response.json()
+}
+
+/**
+ * GET /api/dashboard/charts
+ * Returns data grouped by date for last 30 days
+ */
+export async function getDashboardCharts() {
+  const response = await authGet("/api/dashboard/charts")
+  if (!response.ok) throw new Error("Failed to fetch dashboard charts")
+  return await response.json()
+}
+
+/**
+ * GET /api/dashboard/logs
+ * Returns latest activity log entries
+ */
+export async function getDashboardLogs(count: number = 20) {
+  const response = await authGet(`/api/dashboard/logs?count=${count}`)
+  if (!response.ok) throw new Error("Failed to fetch dashboard logs")
+  return await response.json()
 }

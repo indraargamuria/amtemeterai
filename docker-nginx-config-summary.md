@@ -1,17 +1,18 @@
 # Docker & Nginx Configuration Summary
-**Generated for Debugging Reference**
 
 ---
 
 ## Table of Contents
 1. [Current Docker Compose](#current-docker-compose)
-2. [Old Docker Compose](#old-docker-compose)
-3. [Nginx Configuration](#nginx-configuration)
-4. [Backend Dockerfile](#backend-dockerfile)
-5. [Frontend Dockerfile](#frontend-dockerfile)
-6. [Architecture Overview](#architecture-overview)
-7. [Service Ports & Connections](#service-ports--connections)
-8. [Environment Variables](#environment-variables)
+2. [Production Docker Compose](#production-docker-compose-copytoserver)
+3. [Old Docker Compose](#old-docker-compose)
+4. [Root Nginx Configuration](#root-nginx-configuration)
+5. [Frontend Nginx Configuration](#frontend-nginx-configuration)
+6. [Backend Dockerfile](#backend-dockerfile)
+7. [Frontend Dockerfile](#frontend-dockerfile)
+8. [Architecture Overview](#architecture-overview)
+9. [Service Ports & Connections](#service-ports--connections)
+10. [Environment Variables](#environment-variables)
 
 ---
 
@@ -39,7 +40,7 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
-    image: amtemeterai-frontend:v1
+    image: amtemeterai-frontend:v2
     container_name: amtemeterai-frontend
     restart: always
 
@@ -47,19 +48,17 @@ services:
     build:
       context: ./backend/amtemeterai.Api
       dockerfile: Dockerfile
-    image: amtemeterai-api:v1
+    image: amtemeterai-api:v2
     container_name: amtemeterai-api
     restart: always
     environment:
       ASPNETCORE_ENVIRONMENT: Production
-
-      ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=opexdb;Username=postgres;Password=postgres
-
-      Jwt__Key: af326aa84d2198e82c5a8dce01f26d96cb29539d3c92e8028f10b58aa3df7204
-      Jwt__Issuer: amtemeterai-api
-      Jwt__Audience: amtemeterai-web
-
-      App__PublicBaseUrl: http://localhost
+      # Injected from .env
+      ConnectionStrings__DefaultConnection: Host=postgres;Port=${DB_PORT};Database=${DB_NAME};Username=${DB_USER};Password=${DB_PASSWORD}
+      Jwt__Key: ${JWT_SECRET}
+      Jwt__Issuer: ${JWT_ISSUER}
+      Jwt__Audience: ${JWT_AUDIENCE}
+      App__PublicBaseUrl: ${PUBLIC_BASE_URL}
 
     depends_on:
       - postgres
@@ -69,15 +68,80 @@ services:
     container_name: amtemeterai-postgres
     restart: always
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: opexdb
+      # Injected from .env
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
 volumes:
   postgres_data:
 ```
+
+---
+
+## Production Docker Compose (CopyToServer)
+**File:** `docker-compose-CopyToServer.yml`
+
+```yaml
+version: "3.9"
+
+services:
+  reverse-proxy:
+    image: nginx:alpine
+    container_name: amtemeterai-reverse-proxy
+    restart: always
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - frontend
+      - api
+
+  frontend:
+    # No 'build' section: Pulling pre-built black-box image
+    image: indraargaaa/amtemeterai-frontend:v2
+    container_name: amtemeterai-frontend
+    restart: always
+
+  api:
+    # No 'build' section: Pulling pre-built black-box image
+    image: indraargaaa/amtemeterai-api:v2
+    container_name: amtemeterai-api
+    restart: always
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      # Injected from .env
+      ConnectionStrings__DefaultConnection: Host=postgres;Port=${DB_PORT};Database=${DB_NAME};Username=${DB_USER};Password=${DB_PASSWORD}
+      Jwt__Key: ${JWT_SECRET}
+      Jwt__Issuer: ${JWT_ISSUER}
+      Jwt__Audience: ${JWT_AUDIENCE}
+      App__PublicBaseUrl: ${PUBLIC_BASE_URL}
+    depends_on:
+      - postgres
+
+  postgres:
+    image: postgres:16
+    container_name: amtemeterai-postgres
+    restart: always
+    environment:
+      # Injected from .env
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:
+```
+
+**Key Differences from Current Config:**
+- Uses pre-built Docker Hub images (`indraargaaa/amtemeterai-*:v2`)
+- No `build` sections - images are pulled directly
+- Intended for production deployment on target servers
 
 ---
 
@@ -126,7 +190,7 @@ volumes:
 
 ---
 
-## Nginx Configuration
+## Root Nginx Configuration
 **File:** `nginx.conf`
 
 ```nginx
@@ -145,11 +209,15 @@ http {
     server {
 
         listen 80;
-
         client_max_body_size 50M;
 
         location / {
             proxy_pass http://frontend;
+            # Add these headers to ensure frontend receives correct info
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
         }
 
         location /api/ {
@@ -158,6 +226,47 @@ http {
     }
 }
 ```
+
+**Key Features:**
+- **Reverse Proxy:** Routes traffic to appropriate services
+- **Upstream Configuration:** Defines frontend and API servers
+- **Proxy Headers:** Added for proper client information forwarding
+- **Max Body Size:** Set to 50M for larger uploads
+- **Routing Rules:**
+  - `/` → Frontend (React SPA)
+  - `/api/` → Backend API
+
+---
+
+## Frontend Nginx Configuration
+**File:** `frontend/nginx.conf`
+
+```nginx
+server {
+    listen 80;
+
+    location / {
+        root /usr/share/nginx/html;
+        index index.html index.htm;
+        # This line is the magic fix for SPA routing:
+        try_files $uri $uri/ /index.html;
+    }
+
+    # Optional: Handle static assets cache
+    location ~* \.(?:ico|css|js|gif|jpe?g|png)$ {
+        root /usr/share/nginx/html;
+        expires 30d;
+        add_header Cache-Control "public";
+    }
+}
+```
+
+**Key Features:**
+- **SPA Routing:** The `try_files` directive enables client-side routing
+  - Falls back to `index.html` when requested file doesn't exist
+  - Essential for React Router to work correctly
+- **Static Assets Cache:** 30-day cache for images, CSS, JS files
+- **Container Configuration:** Copied during Docker build to `/etc/nginx/conf.d/default.conf`
 
 ---
 
@@ -192,6 +301,13 @@ EXPOSE 8080
 ENTRYPOINT ["dotnet", "amtemeterai.Api.dll"]
 ```
 
+**Key Features:**
+- **Multi-stage build:** Separates build and runtime images
+- **SDK Image:** Uses .NET 8.0 SDK for building
+- **Runtime Image:** Uses lightweight ASP.NET runtime
+- **Optimized Size:** Only publishes application artifacts
+- **Port 8080:** API listening port
+
 ---
 
 ## Frontend Dockerfile
@@ -218,54 +334,21 @@ RUN npm run build
 # =========================
 FROM nginx:alpine
 
+# Copy build output
 COPY --from=build /app/dist /usr/share/nginx/html
+
+# COPY YOUR NEW NGINX CONFIG HERE:
+COPY nginx.conf /etc/nginx/conf.d/default.conf
 
 EXPOSE 80
 ```
 
----
-
-## Old Backend Dockerfile
-**File:** `backend/amtemeterai.Api/DockerfileOld`
-
-```dockerfile
-FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
-WORKDIR /src
-
-COPY . .
-
-RUN dotnet restore amtemeterai.Api.csproj
-RUN dotnet publish amtemeterai.Api.csproj -c Release -o /app/publish
-
-FROM mcr.microsoft.com/dotnet/aspnet:8.0
-WORKDIR /app
-
-COPY --from=build /app/publish .
-
-EXPOSE 8080
-
-ENTRYPOINT ["dotnet","amtemeterai.Api.dll"]
-```
-
----
-
-## Old Frontend Dockerfile
-**File:** `frontend/DockerfileOld`
-
-```dockerfile
-FROM node:20
-
-WORKDIR /app
-
-COPY package*.json ./
-RUN npm install
-
-COPY . .
-
-EXPOSE 5173
-
-CMD ["npm", "run", "dev", "--", "--host"]
-```
+**Key Features:**
+- **Multi-stage build:** Node.js for build, Nginx Alpine for serving
+- **Build Output:** Copy `/app/dist` to Nginx HTML directory
+- **Custom Nginx Config:** Includes SPA routing configuration
+- **Alpine Linux:** Minimal image size for production
+- **Port 80:** Standard HTTP port
 
 ---
 
@@ -333,19 +416,43 @@ CMD ["npm", "run", "dev", "--", "--host"]
 | Variable                                    | Value                                      |
 |---------------------------------------------|--------------------------------------------|
 | `ASPNETCORE_ENVIRONMENT`                    | Production                                 |
-| `ConnectionStrings__DefaultConnection`      | Host=postgres;Port=5432;Database=opexdb;Username=postgres;Password=postgres |
-| `Jwt__Key`                                  | af326aa84d2198e82c5a8dce01f26d96cb29539d3c92e8028f10b58aa3df7204 |
-| `Jwt__Issuer`                               | amtemeterai-api                            |
-| `Jwt__Audience`                             | amtemeterai-web                            |
-| `App__PublicBaseUrl`                        | http://localhost                           |
+| `ConnectionStrings__DefaultConnection`      | Host=postgres;Port=${DB_PORT};Database=${DB_NAME};Username=${DB_USER};Password=${DB_PASSWORD} |
+| `Jwt__Key`                                  | ${JWT_SECRET}                               |
+| `Jwt__Issuer`                               | ${JWT_ISSUER}                               |
+| `Jwt__Audience`                             | ${JWT_AUDIENCE}                              |
+| `App__PublicBaseUrl`                        | ${PUBLIC_BASE_URL}                            |
 
 ### PostgreSQL Service (`amtemeterai-postgres`)
 
 | Variable          | Value     |
 |-------------------|-----------|
-| `POSTGRES_USER`   | postgres  |
-| `POSTGRES_PASSWORD`| postgres  |
-| `POSTGRES_DB`     | opexdb    |
+| `POSTGRES_USER`   | ${DB_USER}|
+| `POSTGRES_PASSWORD`| ${DB_PASSWORD}|
+| `POSTGRES_DB`     | ${DB_NAME} |
+
+### .env File Example
+
+```env
+# =========================================================
+# OPEXIO CONFIGURATION
+# =========================================================
+
+# --- DATABASE CONFIGURATION ---
+DB_NAME=opexdb
+DB_USER=postgres
+DB_PASSWORD=postgres
+DB_PORT=5432
+
+# --- BACKEND SECURITY ---
+# Generate a unique, long random string for each customer
+JWT_SECRET=af326aa84d2198e82c5a8dce01f26d96cb29539d3c92e8028f10b58aa3df7204
+JWT_ISSUER=amtemeterai-api
+JWT_AUDIENCE=amtemeterai-web
+
+# --- NETWORK SETTINGS ---
+# Set this to customer's actual domain or IP address
+PUBLIC_BASE_URL=http://192.168.110.183
+```
 
 ---
 
@@ -359,23 +466,42 @@ CMD ["npm", "run", "dev", "--", "--host"]
 | Frontend External Port| None (only via reverse proxy)  | 3000                           |
 | PostgreSQL External   | No (internal only)            | Yes (5500:5432)                |
 | Frontend Profile      | None                           | Requires `--profile full`      |
+| Environment Variables  | From `.env` file                | Hardcoded in compose file       |
+| Image Version        | v2                             | No version tag                 |
+
+---
+
+## Key Differences: Current vs Production (CopyToServer)
+
+| Aspect                | Current (`docker-compose.yml`) | Production (`docker-compose-CopyToServer.yml`) |
+|-----------------------|--------------------------------|--------------------------------------------|
+| Frontend Image       | Built locally from source        | Pulled from Docker Hub (`indraargaaa/amtemeterai-frontend:v2`) |
+| API Image           | Built locally from source        | Pulled from Docker Hub (`indraargaaa/amtemeterai-api:v2`) |
+| Build Sections       | Yes (includes `build` context) | No (pulling pre-built images)      |
+| Use Case            | Local development and testing  | Production deployment on target server |
+| Deployment Process   | Build + Run                   | Pull + Run                          |
 
 ---
 
 ## Routing Rules (Nginx)
 
-| Request Path | Destination Service |
-|--------------|---------------------|
-| `/`          | Frontend (port 80)  |
-| `/api/*`     | API (port 8080)     |
+| Request Path | Destination Service | Description |
+|--------------|---------------------|-------------|
+| `/`          | Frontend (port 80)  | React SPA application |
+| `/api/*`     | API (port 8080)     | Backend API endpoints |
+| `/api/swagger` | API (port 8080)     | Swagger documentation |
 
 ---
 
 ## Build Images
 
-### Current Images
-- `amtemeterai-frontend:v1` - From `frontend/Dockerfile`
-- `amtemeterai-api:v1` - From `backend/amtemeterai.Api/Dockerfile`
+### Current Images (Built Locally)
+- `amtemeterai-frontend:v2` - From `frontend/Dockerfile`
+- `amtemeterai-api:v2` - From `backend/amtemeterai.Api/Dockerfile`
+
+### Production Images (Docker Hub)
+- `indraargaaa/amtemeterai-frontend:v2` - Pre-built frontend
+- `indraargaaa/amtemeterai-api:v2` - Pre-built backend
 
 ### Base Images Used
 - `nginx:alpine` - Reverse proxy & frontend runtime
@@ -413,6 +539,18 @@ docker-compose down
 
 # Stop services and remove volumes
 docker-compose down -v
+```
+
+### Deploy to Server (Production)
+```bash
+# Copy files to server (including docker-compose-CopyToServer.yml and .env)
+scp -r ./ user@192.168.110.183:/path/to/amtemeterai/
+
+# On server: Rename and start
+cd /path/to/amtemeterai
+mv docker-compose-CopyToServer.yml docker-compose.yml
+docker-compose pull
+docker-compose up -d
 ```
 
 ### Access Individual Services
@@ -459,14 +597,48 @@ docker exec -it amtemeterai-postgres psql -U postgres -d opexdb
 
 ---
 
+## Swagger Configuration
+
+The API is configured to work behind Nginx reverse proxy:
+
+- **Swagger JSON endpoint:** `/api/swagger/v1/swagger.json`
+- **Swagger UI:** `/api/swagger`
+- **Route template:** Configured to use `/api/swagger/{documentName}/swagger.json`
+
+This configuration ensures proper routing through the reverse proxy.
+
+---
+
 ## File Locations
 
 | File                           | Path                                           |
 |--------------------------------|------------------------------------------------|
 | Current Docker Compose         | `./docker-compose.yml`                         |
+| Production Docker Compose     | `./docker-compose-CopyToServer.yml`             |
 | Old Docker Compose             | `./docker-compose-Old.yml`                     |
-| Nginx Config                   | `./nginx.conf`                                 |
-| Backend Dockerfile             | `./backend/amtemeterai.Api/Dockerfile`        |
-| Frontend Dockerfile            | `./frontend/Dockerfile`                        |
-| Old Backend Dockerfile         | `./backend/amtemeterai.Api/DockerfileOld`     |
-| Old Frontend Dockerfile        | `./frontend/DockerfileOld`                     |
+| Root Nginx Config           | `./nginx.conf`                                 |
+| Frontend Nginx Config       | `./frontend/nginx.conf`                         |
+| Backend Dockerfile            | `./backend/amtemeterai.Api/Dockerfile`        |
+| Frontend Dockerfile           | `./frontend/Dockerfile`                        |
+| Environment Variables          | `./.env`                                       |
+
+---
+
+## Deployment Workflow
+
+### Local Development
+1. Use `docker-compose.yml` (builds from source)
+2. Configure `.env` with local settings
+3. Run: `docker-compose up -d`
+
+### Production Deployment
+1. Build and push images to Docker Hub
+2. Copy `docker-compose-CopyToServer.yml` to server
+3. Configure `.env` with production values
+4. Rename to `docker-compose.yml` on server
+5. Run: `docker-compose pull && docker-compose up -d`
+
+### Notes
+- Production config uses pre-built images (no build time on server)
+- Environment variables kept in `.env` file (not in git)
+- Database data persisted in `postgres_data` volume

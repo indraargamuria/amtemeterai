@@ -17,6 +17,20 @@ public class CustomersController : ControllerBase
     private readonly ICustomerSource _customerSource;
     private readonly CustomerService _customerService;
 
+    // Helper method to log activity
+    private async Task LogActivity(string eventType, string referenceId, string message, string severity = "Info")
+    {
+        var log = new ActivityLog
+        {
+            EventType = eventType,
+            ReferenceID = referenceId,
+            Message = message,
+            Severity = severity
+        };
+        _db.ActivityLogs.Add(log);
+        await _db.SaveChangesAsync();
+    }
+
     public CustomersController(
         AppDbContext context,
         ICustomerSource customerSource,
@@ -51,6 +65,14 @@ public class CustomersController : ControllerBase
         var externalCustomers = await _customerSource.GetCustomersAsync();
 
         var (inserted, updated) = await _customerService.UpsertCustomersAsync(externalCustomers);
+
+        // Log customer sync activity
+        await LogActivity(
+            "CustomerSynced",
+            "-",
+            $"Customer sync completed: {inserted} inserted, {updated} updated",
+            "Success"
+        );
 
         return Ok(new
         {

@@ -68,8 +68,11 @@ frontend/src/
 │   └── utils/
 │       ├── api.ts                   # Authenticated API Helper Functions
 │       └── cn.ts                    # className Utility (clsx + tailwind-merge)
-└── assets/                          # Static Assets
-    └── amtlogo.png                  # Company Logo
+├── assets/                          # Static Assets
+│   └── amtlogo.png                  # Company Logo
+├── nginx.conf                       # Nginx configuration for SPA routing
+├── Dockerfile                      # Docker build configuration
+└── package.json                     # Dependencies and scripts
 ```
 
 ---
@@ -423,13 +426,13 @@ const qrDataUrl = await QRCode.toDataURL(publicUrl, {
 **States:**
 - Loading: Shows loading message
 - Error: Shows error message in centered card
-- Not Verified: Shows PIN verification card (NEW)
+- Not Verified: Shows PIN verification card
 - Verified: Shows delivery details and form
 - Already Received: Shows delivery in read-only mode
 - Not Received: Shows form with editable inputs
 - Submitted: Shows success message
 
-**PIN Verification (NEW):**
+**PIN Verification:**
 **Components:**
 - Lock icon in centered circle
 - Title: "Delivery Verification"
@@ -548,12 +551,12 @@ interface LineFormState {
    - Avatar circle with initial "A"
    - User name: "Admin User"
    - Email: "admin@amtemeterai.com"
+   - Logout button
 
 **Main Content:**
 - Background: `bg-brand-blue/[0.02]`
 - Padding: `p-8`
 - Max width: `max-w-6xl mx-auto`
-- Shows current user info with logout button
 
 ---
 
@@ -679,8 +682,6 @@ const data = await response("/api/customers", {
 - Peer-disabled support
 - Proper htmlFor attribute for accessibility
 - Used with Input components for form labeling
-
----
 
 ---
 
@@ -811,7 +812,6 @@ The root `package.json` provides scripts to run both backend and frontend concur
 
 ### Responsive
 - Split-screen login collapses on mobile
-- Sidebar hidden on mobile (for future enhancement)
 - Table overflow handling
 - Responsive grid layouts
 
@@ -835,7 +835,7 @@ The root `package.json` provides scripts to run both backend and frontend concur
 The application implements a PIN-based security layer for public delivery confirmation pages.
 
 ### Overview
-- Receivers must enter the correct PIN (from Customer.CustomerPin) before accessing delivery details
+- Receivers must enter correct PIN (from Customer.CustomerPin) before accessing delivery details
 - Verification is performed server-side for security
 - Verification status persists for the current session via sessionStorage
 
@@ -901,7 +901,7 @@ public async Task<IActionResult> VerifyPin(Guid token, [FromBody] PinRequestDto 
 
 ## QR Code Generation
 
-The application uses the `qrcode` library to generate QR codes client-side:
+The application uses `qrcode` library to generate QR codes client-side:
 
 **Installation:**
 ```bash
@@ -935,7 +935,7 @@ The frontend generates public URLs for delivery receiving:
 
 **Format:**
 ```
-{VITE_API_URL}/receive/{receiverToken}
+{PUBLIC_BASE_URL}/receive/{receiverToken}
 ```
 
 **Usage:**
@@ -946,7 +946,7 @@ The frontend generates public URLs for delivery receiving:
 
 **Environment-Based:**
 - Development: `http://localhost:5173/receive/{token}`
-- Production: Configured via `VITE_API_URL`
+- Production: `http://192.168.110.183/receive/{token}` (configured via PUBLIC_BASE_URL)
 
 ---
 
@@ -1005,6 +1005,68 @@ const handleSubmit = async (e: React.FormEvent) => {
   }
 }
 ```
+
+---
+
+## Docker Build Configuration
+
+### Frontend Dockerfile
+
+```dockerfile
+# =========================
+# BUILD STAGE
+# =========================
+FROM node:20 AS build
+
+WORKDIR /app
+
+COPY package*.json ./
+
+RUN npm install
+
+COPY . .
+
+RUN npm run build
+
+# =========================
+# RUNTIME STAGE
+# =========================
+FROM nginx:alpine
+
+# Copy build output
+COPY --from=build /app/dist /usr/share/nginx/html
+
+# Copy nginx configuration for SPA routing
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+
+EXPOSE 80
+```
+
+### Frontend Nginx Configuration
+
+The frontend includes a custom `nginx.conf` for SPA routing:
+
+```nginx
+server {
+    listen 80;
+
+    location / {
+        root /usr/share/nginx/html;
+        index index.html index.htm;
+        # This line is the magic fix for SPA routing:
+        try_files $uri $uri/ /index.html;
+    }
+
+    # Optional: Handle static assets cache
+    location ~* \.(?:ico|css|js|gif|jpe?g|png)$ {
+        root /usr/share/nginx/html;
+        expires 30d;
+        add_header Cache-Control "public";
+    }
+}
+```
+
+**Key Feature:** The `try_files` directive ensures that client-side routing works correctly by redirecting all requests to `index.html` when the requested file doesn't exist.
 
 ---
 

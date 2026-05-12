@@ -11,6 +11,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<Customer> Customers => Set<Customer>();
     public DbSet<DeliveryHeader> DeliveryHeaders => Set<DeliveryHeader>();
     public DbSet<DeliveryLine> DeliveryLines => Set<DeliveryLine>();
+    public DbSet<ActivityLog> ActivityLogs => Set<ActivityLog>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -54,5 +55,9 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
 
         modelBuilder.Entity<DeliveryLine>()
             .Property(x => x.PackQuantityRejected).HasPrecision(18, 2);
+
+        // ActivityLog
+        modelBuilder.Entity<ActivityLog>()
+            .HasKey(x => x.LogID);
     }
 }

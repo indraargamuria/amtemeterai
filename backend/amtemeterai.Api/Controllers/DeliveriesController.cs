@@ -17,6 +17,20 @@ public class DeliveriesController : ControllerBase
     private readonly IConfiguration _configuration;
     private readonly IWebHostEnvironment _env;
 
+    // Helper method to log activity
+    private async Task LogActivity(string eventType, string referenceId, string message, string severity = "Info")
+    {
+        var log = new ActivityLog
+        {
+            EventType = eventType,
+            ReferenceID = referenceId,
+            Message = message,
+            Severity = severity
+        };
+        _db.ActivityLogs.Add(log);
+        await _db.SaveChangesAsync();
+    }
+
     public DeliveriesController(
         AppDbContext db,
         IConfiguration configuration,
@@ -195,6 +209,14 @@ public class DeliveriesController : ControllerBase
         _db.DeliveryHeaders.Add(header);
         await _db.SaveChangesAsync();
 
+        // Log delivery creation activity
+        await LogActivity(
+            "DeliveryCreated",
+            header.DeliveryNumber,
+            $"Delivery {header.DeliveryNumber} created for customer {customer.CustomerName}",
+            "Success"
+        );
+
         var publicUrl = GetPublicUrl(header.ReceiverToken, _configuration["App:PublicBaseUrl"]);
         var qrCodeBase64 = QrCodeHelper.GenerateQrBase64(publicUrl);
 
@@ -272,6 +294,20 @@ public class DeliveriesController : ControllerBase
         }
 
         await _db.SaveChangesAsync();
+
+        // FIXED LINE BELOW: Removed ?? 0m
+        var totalRejected = data.Lines.Sum(l => l.PackQuantityRejected);
+        
+        var hasRejections = totalRejected > 0m;
+        await LogActivity(
+            "DeliveryReceived",
+            data.DeliveryNumber,
+            hasRejections
+                ? $"Delivery {data.DeliveryNumber} confirmed by {data.ReceiverName} with {totalRejected} rejections"
+                : $"Delivery {data.DeliveryNumber} confirmed by {data.ReceiverName}",
+            hasRejections ? "Warning" : "Success"
+        );
+
         return Ok();
     }
 
