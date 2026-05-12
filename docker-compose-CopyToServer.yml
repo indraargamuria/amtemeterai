@@ -1,7 +1,6 @@
 version: "3.9"
 
 services:
-
   reverse-proxy:
     image: nginx:alpine
     container_name: amtemeterai-reverse-proxy
@@ -15,18 +14,14 @@ services:
       - api
 
   frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-    image: amtemeterai-frontend:v2
+    # No 'build' section: Pulling pre-built black-box image
+    image: indraargaaa/amtemeterai-frontend:v2
     container_name: amtemeterai-frontend
     restart: always
 
   api:
-    build:
-      context: ./backend/amtemeterai.Api
-      dockerfile: Dockerfile
-    image: amtemeterai-api:v2
+    # No 'build' section: Pulling pre-built black-box image
+    image: indraargaaa/amtemeterai-api:v2
     container_name: amtemeterai-api
     restart: always
     environment:
@@ -37,7 +32,6 @@ services:
       Jwt__Issuer: ${JWT_ISSUER}
       Jwt__Audience: ${JWT_AUDIENCE}
       App__PublicBaseUrl: ${PUBLIC_BASE_URL}
-
     depends_on:
       - postgres
 

@@ -136,7 +136,7 @@ export function DeliveriesPage() {
               currentDeliveries.map((delivery) => (
                 <TableRow
                   key={delivery.deliveryId}
-                  className="cursor-pointer hover:bg-brand-blue/[0.02]"
+                  className="cursor-pointer hover:bg-brand-blue/2"
                   onClick={() => handleRowClick(delivery.deliveryId)}
                 >
                   <TableCell className="font-medium text-brand-blue">
