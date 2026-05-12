@@ -1,12 +1,12 @@
+using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using amtemeterai.Api.Models;
 
 namespace amtemeterai.Api.Data;
 
-public class AppDbContext : DbContext
+public class AppDbContext : IdentityDbContext<ApplicationUser>
 {
     public AppDbContext(DbContextOptions<AppDbContext> options) : base(options) { }
-
 
     public DbSet<Customer> Customers => Set<Customer>();
     public DbSet<DeliveryHeader> DeliveryHeaders => Set<DeliveryHeader>();
@@ -14,6 +14,8 @@ public class AppDbContext : DbContext
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        base.OnModelCreating(modelBuilder);
+
         modelBuilder.Entity<DeliveryHeader>()
             .HasKey(x => x.DeliveryID);
 
@@ -27,7 +29,7 @@ public class AppDbContext : DbContext
             .HasOne(x => x.DeliveryHeader)
             .WithMany(x => x.Lines)
             .HasForeignKey(x => x.DeliveryID);
-            
+
         modelBuilder.Entity<Customer>()
             .HasIndex(x => x.CustomerCode)
             .IsUnique();

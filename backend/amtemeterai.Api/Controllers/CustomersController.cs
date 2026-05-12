@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
 using amtemeterai.Api.Data;
 using amtemeterai.Api.Dtos;
 using amtemeterai.Api.Models;
@@ -9,6 +10,7 @@ namespace amtemeterai.Api.Controllers;
 
 [ApiController]
 [Route("api/customers")]
+[Authorize]
 public class CustomersController : ControllerBase
 {
     private readonly AppDbContext _db;

@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
 using amtemeterai.Api.Data;
 using amtemeterai.Api.Dtos;
@@ -9,6 +10,7 @@ namespace amtemeterai.Api.Controllers;
 
 [ApiController]
 [Route("api/deliveries")]
+[Authorize]
 public class DeliveriesController : ControllerBase
 {
     private readonly AppDbContext _db;
@@ -114,6 +116,8 @@ public class DeliveriesController : ControllerBase
         return Ok(response);
     }
 
+    // Public endpoint for delivery receive page - allows anonymous access after PIN verification
+    [AllowAnonymous]
     [HttpGet("{token}")]
     public async Task<IActionResult> Get(Guid token)
     {
@@ -241,6 +245,8 @@ public class DeliveriesController : ControllerBase
         return Ok();
     }
 
+    // Public endpoint for delivery receive (after PIN verification) - allows anonymous access
+    [AllowAnonymous]
     [HttpPatch("{token}")]
     public async Task<IActionResult> UpdateByToken(Guid token, DeliveryReceiveDto dto)
     {
@@ -269,6 +275,8 @@ public class DeliveriesController : ControllerBase
         return Ok();
     }
 
+    // Public endpoint for PIN verification - allows anonymous access
+    [AllowAnonymous]
     [HttpPost("{token}/verify-pin")]
     public async Task<IActionResult> VerifyPin(Guid token, [FromBody] PinRequestDto request)
     {

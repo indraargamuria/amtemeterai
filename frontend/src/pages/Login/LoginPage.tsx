@@ -1,18 +1,45 @@
 import { useState } from "react"
+import { useNavigate, useLocation } from "react-router-dom"
 import { Button } from "../../shared/components/ui/Button"
 import { Input } from "../../shared/components/ui/Input"
 import { Label } from "../../shared/components/ui/Label"
 import Logo from '../../assets/amtlogo.png';
 import Landscape from '../../assets/amtlandscape.jpg';
-import { Link, useLocation } from "react-router-dom"
+import { useAuth } from "../../shared/contexts/AuthContext"
 
 export function LoginPage() {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const navigate = useNavigate()
+  const location = useLocation()
+  const { login } = useAuth()
+
+  // Get the redirect path from location state, default to '/'
+  const from = (location.state as any)?.from?.pathname || "/"
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    console.log("Login attempt:", { email, password })
+    setError(null)
+
+    if (!email || !password) {
+      setError("Please enter your email and password")
+      return
+    }
+
+    setLoading(true)
+
+    try {
+      await login(email, password)
+      // Navigate to the page they tried to visit, or home
+      navigate(from, { replace: true })
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Login failed. Please try again.")
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (
@@ -23,12 +50,8 @@ export function LoginPage() {
           {/* Logo */}
           <div className="mb-10">
             <h1 className="text-xl font-bold text-brand-blue tracking-tight">
-              {/* OpexNOW */}
-              <img src={Logo} alt="Logo"  className="w-32 h-auto" />
+              <img src={Logo} alt="Logo" className="w-32 h-auto" />
             </h1>
-            {/* <p className="mt-1.5 text-xs text-brand-blue/50">
-              OpexNOW
-            </p> */}
           </div>
 
           {/* Welcome Text */}
@@ -40,6 +63,13 @@ export function LoginPage() {
               Sign in to access your account
             </p>
           </div>
+
+          {/* Error Message */}
+          {error && (
+            <div className="mb-6 p-3 rounded-md bg-brand-red/10 border border-brand-red/20">
+              <p className="text-sm text-brand-red">{error}</p>
+            </div>
+          )}
 
           {/* Form */}
           <form onSubmit={handleSubmit} className="space-y-5">
@@ -56,7 +86,9 @@ export function LoginPage() {
                 placeholder="your@email.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
+                disabled={loading}
                 className="text-brand-blue placeholder:text-brand-blue/30"
+                required
               />
             </div>
 
@@ -73,21 +105,35 @@ export function LoginPage() {
                 placeholder="••••••••"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
+                disabled={loading}
                 className="text-brand-blue placeholder:text-brand-blue/30"
+                required
               />
             </div>
 
-            <Link to="/" >
-              <Button
-                type="submit"
-                variant="default"
-                size="lg"
-                className="w-full mt-6"
-              >
-                Sign In
-              </Button>
-            </Link>
+            <Button
+              type="submit"
+              variant="default"
+              size="lg"
+              className="w-full mt-6"
+              disabled={loading}
+            >
+              {loading ? "Signing in..." : "Sign In"}
+            </Button>
           </form>
+
+          {/* Demo Credentials Hint */}
+          <div className="mt-6 p-4 rounded-md bg-brand-blue/5 border border-brand-blue/10">
+            <p className="text-xs text-brand-blue/50 font-medium mb-2">
+              Demo Credentials:
+            </p>
+            <p className="text-xs text-brand-blue/60">
+              Email: admin@amtemeterai.com
+            </p>
+            <p className="text-xs text-brand-blue/60">
+              Password: Admin@123
+            </p>
+          </div>
         </div>
       </div>
 

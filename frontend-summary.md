@@ -2,7 +2,7 @@
 
 ## Overview
 
-The frontend is built with **React 19** and **Vite** using **TypeScript**. It provides a premium, enterprise SaaS interface for the e-Meterai delivery management system with a clean, modern design following strict color constraints.
+The frontend is built with **React 19** and **Vite** using **TypeScript**. It provides a premium, enterprise SaaS interface for the e-Meterai delivery management system with a clean, modern design following strict color constraints. The application includes **JWT-based authentication** with protected routes and automatic token management.
 
 ---
 
@@ -28,12 +28,12 @@ The frontend is built with **React 19** and **Vite** using **TypeScript**. It pr
 
 ```
 frontend/src/
-├── App.tsx                          # Main App with Routing
+├── App.tsx                          # Main App with Routing & AuthProvider
 ├── main.tsx                         # Application Entry Point
 ├── index.css                        # Tailwind CSS Imports
 ├── pages/                           # Route Pages
 │   ├── Login/
-│   │   ├── LoginPage.tsx            # Login Form (Split Screen)
+│   │   ├── LoginPage.tsx            # Login Form with API Integration
 │   │   └── index.ts
 │   ├── Dashboard/
 │   │   ├── DashboardPage.tsx        # Dashboard with Metrics
@@ -49,10 +49,13 @@ frontend/src/
 │       ├── DeliveryReceivePage.tsx  # Public Delivery Receive Form
 │       └── index.ts
 ├── shared/
+│   ├── contexts/
+│   │   └── AuthContext.tsx           # Authentication State & Context
 │   ├── layouts/
-│   │   ├── DashboardLayout.tsx      # Sidebar Layout Wrapper
+│   │   ├── DashboardLayout.tsx      # Sidebar Layout Wrapper (with logout)
 │   │   └── index.ts
 │   ├── components/
+│   │   ├── ProtectedRoute.tsx        # Route Protection Component
 │   │   └── ui/                     # shadcn-style Components
 │   │       ├── Button.tsx           # Button with variants
 │   │       ├── Badge.tsx            # Status Badges
@@ -63,6 +66,7 @@ frontend/src/
 │   │       ├── Pagination.tsx       # Pagination Component
 │   │       └── index.ts
 │   └── utils/
+│       ├── api.ts                   # Authenticated API Helper Functions
 │       └── cn.ts                    # className Utility (clsx + tailwind-merge)
 └── assets/                          # Static Assets
     └── amtlogo.png                  # Company Logo
@@ -118,17 +122,87 @@ This allows seamless switching between local development and Docker environments
 
 ---
 
+## Authentication System
+
+### Overview
+The application uses **JWT (JSON Web Token)** authentication with React Context for state management. Protected routes require a valid JWT token, while public routes (like the delivery receive page) are accessible without authentication.
+
+### Auth Context (`AuthContext.tsx`)
+Provides authentication state and methods:
+```typescript
+interface AuthContextType {
+  user: User | null           // Current user info
+  token: string | null        // JWT token
+  loading: boolean            // Loading state
+  login: (email, password) => Promise<void>
+  logout: () => void
+  isAuthenticated: boolean
+}
+```
+
+### Auth Provider (`AuthProvider`)
+Wraps the entire application and provides:
+- Automatic token persistence in `localStorage`
+- User state management
+- Session restoration on page reload
+
+### Protected Route (`ProtectedRoute`)
+Component that wraps protected routes and:
+- Redirects to `/login` if not authenticated
+- Shows loading state while checking authentication
+- Only renders children when authenticated
+
+### API Helper (`api.ts`)
+Provides authenticated API functions that automatically include the JWT token:
+```typescript
+const api = useApi()
+const res = await api.get("/api/customers")
+```
+Features:
+- Automatically adds `Authorization: Bearer {token}` header
+- Handles 401 responses by clearing tokens and redirecting to login
+- Provides `get`, `post`, `patch`, `delete` helper methods
+
+### Route Protection
+| Route | Protected | Description |
+|-------|-----------|-------------|
+| `/login` | No | Public login page (redirects to home if already authenticated) |
+| `/` | Yes | Dashboard (requires authentication) |
+| `/customers` | Yes | Customers page (requires authentication) |
+| `/deliveries` | Yes | Deliveries list (requires authentication) |
+| `/deliveries/:id` | Yes | Delivery details (requires authentication) |
+| `/receive/:token` | No | Public delivery receive (PIN-protected) |
+
+### Authentication Flow
+1. User navigates to a protected route
+2. `ProtectedRoute` checks authentication status
+3. If not authenticated, redirects to `/login`
+4. User submits login form
+5. Credentials sent to `POST /api/account/login`
+6. Server returns JWT token and user info
+7. Token stored in `localStorage` and state
+8. User redirected to originally requested route
+9. All subsequent API requests include the token
+
+### Logout
+- Click logout button in sidebar
+- `AuthContext.logout()` clears token and user
+- Redirects to `/login`
+- Protected routes now redirect to login
+
+---
+
 ## Routes
 
-| Path | Page | Layout |
-|------|------|--------|
-| `/login` | Login Page | Standalone (Split Screen) |
-| `/` | Dashboard | DashboardLayout (Sidebar) |
-| `/customers` | Customers | DashboardLayout (Sidebar) |
-| `/deliveries` | Deliveries List | DashboardLayout (Sidebar) |
-| `/deliveries/:deliveryId` | Delivery Detail | DashboardLayout (Sidebar) |
-| `/receive/:token` | Public Delivery Receive | Standalone (No Layout) |
-| `*` | Redirect to `/` | - |
+| Path | Page | Layout | Protected |
+|------|------|--------|-----------|
+| `/login` | Login Page | Standalone (Split Screen) | No |
+| `/` | Dashboard | DashboardLayout (Sidebar) | Yes |
+| `/customers` | Customers | DashboardLayout (Sidebar) | Yes |
+| `/deliveries` | Deliveries List | DashboardLayout (Sidebar) | Yes |
+| `/deliveries/:deliveryId` | Delivery Detail | DashboardLayout (Sidebar) | Yes |
+| `/receive/:token` | Public Delivery Receive | Standalone (No Layout) | No |
+| `*` | Redirect to login or home | - | - |
 
 ---
 
@@ -142,10 +216,12 @@ This allows seamless switching between local development and Docker environments
 - Company logo (amtlogo.png, w-32)
 - Title: "Welcome Back"
 - Subtitle: "Sign in to access your account"
+- Error message display (brand-red accent on failure)
 - Form fields:
-  - Email input
-  - Password input
-  - "Sign In" button (full width, blue)
+  - Email input (required, validated)
+  - Password input (required, masked)
+  - "Sign In" button (full width, blue, shows loading state)
+- Demo credentials hint for development
 
 **Right Side (Pattern):**
 - Solid blue background (`bg-brand-blue`)
@@ -156,11 +232,25 @@ This allows seamless switching between local development and Docker environments
 **State Management:**
 - `email`: string
 - `password`: string
+- `loading`: boolean (submitting state)
+- `error`: string | null (error message)
+
+**API Integration:**
+- Posts to `POST /api/account/login`
+- On success: stores JWT token and user info via `AuthContext`
+- On success: redirects to originally requested page or `/`
+- On failure: displays error message
+- Preserves redirect destination via `useLocation().state`
+
+**Demo Credentials:**
+- Email: admin@amtemeterai.com
+- Password: Admin@123
 
 **Styling:**
 - Background: `bg-brand-blue/[0.02]`
 - Premium rounded corners (`rounded-lg`)
 - Subtle shadows and transitions
+- Error messages use brand-red accent
 
 ---
 
@@ -463,6 +553,56 @@ interface LineFormState {
 - Background: `bg-brand-blue/[0.02]`
 - Padding: `p-8`
 - Max width: `max-w-6xl mx-auto`
+- Shows current user info with logout button
+
+---
+
+## API Helper (`api.ts`)
+
+### Purpose
+Provides authenticated API calls with automatic JWT token injection.
+
+### Usage
+```typescript
+import { useApi } from "../utils/api"
+
+const api = useApi()
+
+// GET request
+const res = await api.get("/api/customers")
+
+// POST request
+const res = await api.post("/api/customers/sync", { data: "value" })
+
+// PATCH request
+const res = await api.patch("/api/deliveries/123", { received: true })
+
+// DELETE request
+const res = await api.delete("/api/items/123")
+
+// Custom fetch
+const res = await api.fetch("/api/customers", {
+  method: "POST",
+  body: JSON.stringify(customerData),
+})
+```
+
+### Features
+- Automatically adds `Authorization: Bearer {token}` header
+- Token retrieved from `localStorage` (`auth_token`)
+- Handles 401 responses by:
+  - Clearing token from localStorage
+  - Clearing user from localStorage
+  - Redirecting to `/login`
+
+### Custom Fetch
+```typescript
+const response = await createAuthenticatedFetch()
+const data = await response("/api/customers", {
+  method: "POST",
+  body: JSON.stringify(payload),
+})
+```
 
 ---
 
@@ -679,13 +819,14 @@ The root `package.json` provides scripts to run both backend and frontend concur
 
 ## API Integration Status
 
-| Page | API Integration | Notes |
-|------|----------------|-------|
-| Dashboard | Mock data | Static metrics displayed |
-| Customers | ✅ Live API | Fetches from `GET /api/customers` |
-| Deliveries List | ✅ Live API | Fetches from `GET /api/deliveries` |
-| Delivery Detail | ✅ Live API | Fetches from `GET /api/deliveries/{id}` |
-| Public Receive | ✅ Live API | PIN verification via `POST /api/deliveries/{token}/verify-pin`, then fetches/updates via token endpoint |
+| Page | API Integration | Authentication | Notes |
+|------|----------------|----------------|-------|
+| Login | ✅ Live API | No | Posts to `POST /api/account/login` |
+| Dashboard | Mock data | Yes (via ProtectedRoute) | Static metrics displayed |
+| Customers | ✅ Live API | Yes | Uses authenticated API helper |
+| Deliveries List | ✅ Live API | Yes | Uses authenticated API helper |
+| Delivery Detail | ✅ Live API | Yes | Uses authenticated API helper |
+| Public Receive | ✅ Live API | No | PIN verification via `POST /api/deliveries/{token}/verify-pin`, then fetches/updates via token endpoint |
 
 ---
 

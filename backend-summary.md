@@ -2,7 +2,7 @@
 
 ## Overview
 
-The backend is built with **ASP.NET Core 8.0** using **Entity Framework Core** with **PostgreSQL** database. It provides RESTful APIs for managing customers and deliveries in the e-Meterai delivery management system.
+The backend is built with **ASP.NET Core 8.0** using **Entity Framework Core** with **PostgreSQL** database. It provides RESTful APIs for managing customers and deliveries in the e-Meterai delivery management system with **JWT Bearer Token Authentication**.
 
 ---
 
@@ -13,10 +13,44 @@ The backend is built with **ASP.NET Core 8.0** using **Entity Framework Core** w
 | .NET | 8.0 | Framework |
 | ASP.NET Core | 8.0 | Web API |
 | Entity Framework Core | 8.0.0 | ORM |
+| ASP.NET Core Identity | 8.0.0 | User Management & Authentication |
+| ASP.NET Core Authentication.JwtBearer | 8.0.0 | JWT Token Authentication |
+| System.IdentityModel.Tokens.Jwt | 8.0.0 | JWT Token Handling |
 | PostgreSQL | 16 | Database |
 | Npgsql | 8.0.0 | PostgreSQL Provider |
 | Swashbuckle.AspNetCore | 6.5.0 | Swagger/OpenAPI |
 | QRCoder | 1.5.1 | QR Code Generation |
+
+---
+
+## Authentication & Authorization
+
+### Overview
+The API uses **JWT (JSON Web Token)** Bearer authentication for securing endpoints. ASP.NET Core Identity is used for user management.
+
+### Authentication Flow
+1. User registers or logs in via `/api/account/register` or `/api/account/login`
+2. Server validates credentials and generates a JWT token
+3. Client includes the token in the `Authorization` header: `Bearer {token}`
+4. Server validates the token on each protected request
+
+### Default Admin Account
+- **Email:** admin@amtemeterai.com
+- **Password:** Admin@123
+- **Role:** Admin
+
+### JWT Configuration
+```json
+"Jwt": {
+  "Key": "AMTEMETERAI_SUPER_SECRET_KEY_FOR_JWT_TOKEN_GENERATION_2024",
+  "Issuer": "amtemeterai-api",
+  "Audience": "amtemeterai-web"
+}
+```
+
+### Token Expiration
+- **Valid for:** 7 days
+- **Clock Skew:** 0 (strict validation)
 
 ---
 
@@ -25,13 +59,18 @@ The backend is built with **ASP.NET Core 8.0** using **Entity Framework Core** w
 ```
 backend/amtemeterai.Api/
 ├── Controllers/          # API Controllers
-│   ├── CustomersController.cs
-│   └── DeliveriesController.cs
+│   ├── AccountController.cs    # Authentication endpoints
+│   ├── CustomersController.cs  # Customer management (requires auth)
+│   └── DeliveriesController.cs # Delivery management (mixed auth)
 ├── Models/               # Domain Models
+│   ├── ApplicationUser.cs   # Identity User (extends IdentityUser)
 │   ├── Customer.cs
 │   ├── DeliveryHeader.cs
 │   └── DeliveryLine.cs
 ├── Dtos/                 # Data Transfer Objects
+│   ├── AuthResponseDto.cs     # Login/Register response
+│   ├── LoginDto.cs            # Login request
+│   ├── RegisterDto.cs         # Register request
 │   ├── CustomerResponseDto.cs
 │   ├── CustomerUpsertDto.cs
 │   ├── DeliveryCreateResponseDto.cs
@@ -43,7 +82,7 @@ backend/amtemeterai.Api/
 │   ├── DeliveryUpsertDto.cs
 │   └── PinRequestDto.cs
 ├── Data/                 # Database Context
-│   ├── AppDbContext.cs
+│   ├── AppDbContext.cs           # Inherits from IdentityDbContext<ApplicationUser>
 │   └── AppDbContextFactory.cs
 ├── Services/             # Business Logic Layer
 │   ├── CustomerService.cs
@@ -136,7 +175,98 @@ http://localhost:8080/swagger
 
 ---
 
+## Account API
+
+### Register
+**Endpoint:** `POST /api/account/register`
+
+**Description:** Creates a new user account.
+
+**Request Body:**
+```json
+{
+  "email": "user@example.com",
+  "password": "Password123",
+  "fullName": "John Doe"
+}
+```
+
+**Response Body:**
+```json
+{
+  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "email": "user@example.com",
+  "fullName": "John Doe"
+}
+```
+
+**Response:** `200 OK` or `400 Bad Request` (validation errors)
+
+**Requirements:**
+- Email must be unique
+- Password must be at least 6 characters
+- FullName is required
+
+---
+
+### Login
+**Endpoint:** `POST /api/account/login`
+
+**Description:** Authenticates a user and returns a JWT token.
+
+**Request Body:**
+```json
+{
+  "email": "admin@amtemeterai.com",
+  "password": "Admin@123"
+}
+```
+
+**Response Body:**
+```json
+{
+  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "email": "admin@amtemeterai.com",
+  "fullName": "Administrator"
+}
+```
+
+**Response:** `200 OK` or `401 Unauthorized` (invalid credentials)
+
+**JWT Token Usage:**
+Include the token in the Authorization header for subsequent requests:
+```
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+```
+
+---
+
+### Get Current User
+**Endpoint:** `GET /api/account/me`
+
+**Description:** Gets information about the currently authenticated user.
+
+**Headers:**
+```
+Authorization: Bearer {token}
+```
+
+**Response Body:**
+```json
+{
+  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "email": "admin@amtemeterai.com",
+  "fullName": "Administrator"
+}
+```
+
+**Response:** `200 OK`, `401 Unauthorized`, or `404 Not Found`
+
+---
+
 ## Customers API
+
+**Note:** All Customers API endpoints require authentication (`[Authorize]`).
 
 ### Get All Customers
 **Endpoint:** `GET /api/customers`
@@ -208,6 +338,13 @@ http://localhost:8080/swagger
 ---
 
 ## Deliveries API
+
+**Authentication:**
+- Most endpoints require authentication (`[Authorize]`)
+- Public endpoints (no auth required):
+  - `GET /api/deliveries/{token}` - Get delivery by receiver token (for public receive page)
+  - `POST /api/deliveries/{token}/verify-pin` - Verify PIN for delivery access
+  - `PATCH /api/deliveries/{token}` - Update delivery by receiver token (after PIN verification)
 
 ### Get All Deliveries
 **Endpoint:** `GET /api/deliveries`

@@ -10,10 +10,9 @@ import {
   TableRow,
 } from "../../shared/components/ui/Table"
 import { Pagination } from "../../shared/components/ui/Pagination"
+import { useApi } from "../../shared/utils/api"
 
 const ITEMS_PER_PAGE = 10
-
-const API_URL = import.meta.env.VITE_API_URL
 
 interface Customer {
   customerId: number
@@ -32,9 +31,16 @@ export function CustomersPage() {
   const [syncing, setSyncing] = useState(false)
   const [syncMessage, setSyncMessage] = useState<string | null>(null)
 
+  setSortField("customerCode")
+  setSortDirection("asc")
+  const api = useApi()
+
   const fetchCustomers = async () => {
     try {
-      const res = await fetch(`${API_URL}/api/customers`)
+      const res = await api.get("/api/customers")
+      if (!res.ok) {
+        throw new Error("Failed to fetch customers")
+      }
       const data = await res.json()
       setCustomers(data)
     } catch (err) {
@@ -57,9 +63,7 @@ export function CustomersPage() {
     setSyncMessage(null)
 
     try {
-      const res = await fetch(`${API_URL}/api/customers/sync`, {
-        method: "POST",
-      })
+      const res = await api.post("/api/customers/sync")
 
       if (!res.ok) {
         throw new Error("Sync failed")

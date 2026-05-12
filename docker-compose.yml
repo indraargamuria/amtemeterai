@@ -1,37 +1,58 @@
+version: "3.9"
+
 services:
+
+  reverse-proxy:
+    image: nginx:alpine
+    container_name: amtemeterai-reverse-proxy
+    restart: always
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - frontend
+      - api
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    image: amtemeterai-frontend:v1
+    container_name: amtemeterai-frontend
+    restart: always
+
+  api:
+    build:
+      context: ./backend/amtemeterai.Api
+      dockerfile: Dockerfile
+    image: amtemeterai-api:v1
+    container_name: amtemeterai-api
+    restart: always
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+
+      ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=opexdb;Username=postgres;Password=postgres
+
+      Jwt__Key: af326aa84d2198e82c5a8dce01f26d96cb29539d3c92e8028f10b58aa3df7204
+      Jwt__Issuer: amtemeterai-api
+      Jwt__Audience: amtemeterai-web
+
+      App__PublicBaseUrl: http://localhost
+
+    depends_on:
+      - postgres
+
   postgres:
     image: postgres:16
-    container_name: amtemeterai_db
+    container_name: amtemeterai-postgres
     restart: always
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: opexdb
-    ports:
-      - "5500:5432"
     volumes:
-      - pgdata:/var/lib/postgresql/data
-
-  api:
-    build: ./backend/amtemeterai.Api
-    container_name: amtemeterai_api
-    restart: always
-    depends_on:
-      - postgres
-    ports:
-      - "8080:8080"
-    environment:
-      ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=opexdb;Username=postgres;Password=postgres
-
-  frontend:
-    build: ./frontend
-    container_name: amtemeterai_frontend
-    restart: always
-    depends_on:
-      - api
-    ports:
-      - "3000:5173"   # 🔥 external 3000, internal 5173
-    profiles: ["full"]
+      - postgres_data:/var/lib/postgresql/data
 
 volumes:
-  pgdata:
+  postgres_data:

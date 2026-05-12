@@ -1,4 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom"
+import { AuthProvider, useAuth } from "./shared/contexts/AuthContext"
+import { ProtectedRoute } from "./shared/components/ProtectedRoute"
 import { LoginPage } from "./pages/Login"
 import { DashboardPage } from "./pages/Dashboard"
 import { CustomersPage } from "./pages/Customers"
@@ -6,46 +8,73 @@ import { DeliveriesPage, DeliveryDetailPage } from "./pages/Deliveries"
 import { DeliveryReceivePage } from "./pages/Public"
 import { DashboardLayout } from "./shared/layouts"
 
-function App() {
+function AppRoutes() {
+  const { isAuthenticated } = useAuth()
+
   return (
-    <BrowserRouter>
-      <Routes>
-        <Route path="/login" element={<LoginPage />} />
-        <Route path="/receive/:token" element={<DeliveryReceivePage />} />
-        <Route
-          path="/"
-          element={
+    <Routes>
+      {/* Public Routes */}
+      <Route path="/login" element={
+        isAuthenticated ? <Navigate to="/" replace /> : <LoginPage />
+      } />
+      <Route path="/receive/:token" element={<DeliveryReceivePage />} />
+
+      {/* Protected Routes - require authentication */}
+      <Route
+        path="/"
+        element={
+          <ProtectedRoute>
             <DashboardLayout>
               <DashboardPage />
             </DashboardLayout>
-          }
-        />
-        <Route
-          path="/customers"
-          element={
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/customers"
+        element={
+          <ProtectedRoute>
             <DashboardLayout>
               <CustomersPage />
             </DashboardLayout>
-          }
-        />
-        <Route
-          path="/deliveries"
-          element={
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/deliveries"
+        element={
+          <ProtectedRoute>
             <DashboardLayout>
               <DeliveriesPage />
             </DashboardLayout>
-          }
-        />
-        <Route
-          path="/deliveries/:deliveryId"
-          element={
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/deliveries/:deliveryId"
+        element={
+          <ProtectedRoute>
             <DashboardLayout>
               <DeliveryDetailPage />
             </DashboardLayout>
-          }
-        />
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
+          </ProtectedRoute>
+        }
+      />
+
+      {/* Catch all - redirect to home if authenticated, login if not */}
+      <Route path="*" element={
+        <Navigate to={isAuthenticated ? "/" : "/login"} replace />
+      } />
+    </Routes>
+  )
+}
+
+function App() {
+  return (
+    <BrowserRouter>
+      <AuthProvider>
+        <AppRoutes />
+      </AuthProvider>
     </BrowserRouter>
   )
 }

@@ -1,6 +1,7 @@
-import { Link, useLocation } from "react-router-dom"
+import { Link, useLocation, useNavigate } from "react-router-dom"
 import { cn } from "../utils/cn"
 import Logo from '../../assets/amtlogo.png';
+import { useAuth } from "../contexts/AuthContext"
 
 interface DashboardLayoutProps {
   children: React.ReactNode
@@ -14,6 +15,21 @@ const menuItems = [
 
 export function DashboardLayout({ children }: DashboardLayoutProps) {
   const location = useLocation()
+  const navigate = useNavigate()
+  const { user, logout } = useAuth()
+
+  const handleLogout = () => {
+    logout()
+    navigate("/login")
+  }
+
+  // Get user initial for avatar
+  const userInitial = user?.fullName
+    ? user.fullName.charAt(0).toUpperCase()
+    : user?.email.charAt(0).toUpperCase() || "A"
+
+  const userName = user?.fullName || "Admin User"
+  const userEmail = user?.email || "admin@amtemeterai.com"
 
   return (
     <div className="min-h-screen flex bg-white">
@@ -23,12 +39,8 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
         <div className="p-6">
           <Link to="/" className="block">
             <h1 className="text-lg font-bold text-brand-blue tracking-tight">
-              {/* AmtemeterAI  */}
-              <img src={Logo} alt="Logo"  className="w-24 h-auto" />
+              <img src={Logo} alt="Logo" className="w-24 h-auto" />
             </h1>
-            {/* <p className="mt-1 text-xs text-brand-blue/50">
-              e-Meterai Delivery Management
-            </p> */}
           </Link>
         </div>
 
@@ -60,14 +72,31 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
         <div className="p-4 border-t border-brand-blue/5">
           <div className="flex items-center gap-3 px-2">
             <div className="w-8 h-8 rounded-full bg-brand-blue/10 flex items-center justify-center">
-              <span className="text-xs font-semibold text-brand-blue">A</span>
+              <span className="text-xs font-semibold text-brand-blue">{userInitial}</span>
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-brand-blue truncate">Admin User</p>
-              <p className="text-xs text-brand-blue/50 truncate">
-                admin@amtemeterai.com
-              </p>
+              <p className="text-sm font-medium text-brand-blue truncate">{userName}</p>
+              <p className="text-xs text-brand-blue/50 truncate">{userEmail}</p>
             </div>
+            <button
+              onClick={handleLogout}
+              className="p-2 rounded-md text-brand-blue/50 hover:bg-brand-blue/5 hover:text-brand-red transition-colors"
+              title="Sign out"
+            >
+              <svg
+                className="w-4 h-4"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
+                />
+              </svg>
+            </button>
           </div>
         </div>
       </aside>

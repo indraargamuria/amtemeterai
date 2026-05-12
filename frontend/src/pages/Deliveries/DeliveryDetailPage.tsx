@@ -13,6 +13,7 @@ import {
   TableHeader,
   TableRow,
 } from "../../shared/components/ui/Table"
+import { useApi } from "../../shared/utils/api"
 
 interface DeliveryLine {
   deliveryLineNumber: string
@@ -42,8 +43,6 @@ interface DeliveryDetail {
   lines: DeliveryLine[]
 }
 
-const API_URL = import.meta.env.VITE_API_URL
-
 export function DeliveryDetailPage() {
   const { deliveryId } = useParams<{ deliveryId: string }>()
   const navigate = useNavigate()
@@ -53,12 +52,14 @@ export function DeliveryDetailPage() {
   const [qrCode, setQrCode] = useState<string | null>(null)
   const [copySuccess, setCopySuccess] = useState(false)
 
+  const api = useApi()
+
   useEffect(() => {
     const fetchDeliveryDetail = async () => {
       if (!deliveryId) return
 
       try {
-        const res = await fetch(`${API_URL}/api/deliveries/${deliveryId}`)
+        const res = await api.get(`/api/deliveries/${deliveryId}`)
         if (!res.ok) {
           throw new Error("Delivery not found")
         }

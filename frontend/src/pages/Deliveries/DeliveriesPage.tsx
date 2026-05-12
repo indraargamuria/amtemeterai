@@ -11,6 +11,7 @@ import {
   TableRow,
 } from "../../shared/components/ui/Table"
 import { Pagination } from "../../shared/components/ui/Pagination"
+import { useApi } from "../../shared/utils/api"
 
 interface DeliveryHeader {
   deliveryId: number
@@ -25,18 +26,21 @@ interface DeliveryHeader {
 
 const ITEMS_PER_PAGE = 10
 
-const API_URL = import.meta.env.VITE_API_URL
-
 export function DeliveriesPage() {
   const navigate = useNavigate()
   const [currentPage, setCurrentPage] = useState(1)
   const [deliveries, setDeliveries] = useState<DeliveryHeader[]>([])
   const [loading, setLoading] = useState(true)
 
+  const api = useApi()
+
   useEffect(() => {
     const fetchDeliveries = async () => {
       try {
-        const res = await fetch(`${API_URL}/api/deliveries`)
+        const res = await api.get("/api/deliveries")
+        if (!res.ok) {
+          throw new Error("Failed to fetch deliveries")
+        }
         const data = await res.json()
         setDeliveries(data)
       } catch (err) {
