@@ -18,7 +18,7 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
-    image: amtemeterai-frontend:v2
+    image: amtemeterai-frontend:v4
     container_name: amtemeterai-frontend
     restart: always
 
@@ -26,7 +26,7 @@ services:
     build:
       context: ./backend/amtemeterai.Api
       dockerfile: Dockerfile
-    image: amtemeterai-api:v2
+    image: amtemeterai-api:v4
     container_name: amtemeterai-api
     restart: always
     environment:
