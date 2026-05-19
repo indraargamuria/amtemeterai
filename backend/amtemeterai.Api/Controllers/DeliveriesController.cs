@@ -208,16 +208,20 @@ public class DeliveriesController : ControllerBase
     }
 
     // Public endpoint for delivery receive page - allows anonymous access after PIN verification
+
+    //2026-05-20 02:19:23
     [AllowAnonymous]
     [HttpGet("{token}")]
     public async Task<IActionResult> Get(Guid token)
     {
+        // 1. Fetch the delivery header and include lines safely
         var data = await _db.DeliveryHeaders
             .Include(x => x.Lines)
             .FirstOrDefaultAsync(x => x.ReceiverToken == token);
 
         if (data == null) return NotFound();
 
+        // 2. Map standard response parameters
         var result = new DeliveryResponseDto
         {
             DeliveryNumber = data.DeliveryNumber,
@@ -240,9 +244,35 @@ public class DeliveriesController : ControllerBase
                 PackUOM = l.PackUOM,
                 PackQuantityDelivered = l.PackQuantityDelivered,
                 PackQuantityReturned = l.PackQuantityReturned,
-                PackQuantityRejected = l.PackQuantityRejected
+                PackQuantityRejected = l.PackQuantityRejected,
+                LineComment = l.LineComment
             }).ToList()
         };
+
+        // 3. Look up related files straight from the Documents context table
+        var associatedDocs = await _db.Documents
+            .Where(d => d.DeliveryID == data.DeliveryID && d.Type == DocumentType.DeliveryPhoto)
+            .ToListAsync();
+
+        if (associatedDocs != null && associatedDocs.Any())
+        {
+            // Fetch your base URL configuration string dynamically
+            string baseUrl = _configuration["App:ApiBaseUrl"] ?? "http://localhost:8080";
+
+            foreach (var doc in associatedDocs)
+            {
+                // Point the downloadUrl directly to your operational local DownloadFile route
+                string localDownloadUrl = baseUrl + "/api/deliveries/files/download?key=" + Uri.EscapeDataString(doc.StorageKey);
+
+                result.Photos.Add(new DeliveryPhotoResponseDto
+                {
+                    FileName = doc.FileName,
+                    StorageKey = doc.StorageKey,
+                    DownloadUrl = localDownloadUrl,
+                    UploadedAt = doc.UploadedAt
+                });
+            }
+        }
 
         return Ok(result);
     }
@@ -360,10 +390,10 @@ public class DeliveriesController : ControllerBase
         await _db.SaveChangesAsync();
         return Ok();
     }
-    // Public endpoint for delivery receive (after PIN verification) - allows anonymous access
+    // Public endpoint for delivery receive - allows anonymous access & repetitive edits until invoiced
     [AllowAnonymous]
     [HttpPatch("{token}")]
-    public async Task<IActionResult> UpdateByToken(Guid token, [FromForm] DeliveryReceiveDto dto)
+    public async Task<IActionResult> UpdateByToken(Guid token, [FromForm] DeliveryEditConfirmationDto dto)
     {
         // 1. Locate the delivery target header via its secure token
         var data = await _db.DeliveryHeaders
@@ -372,21 +402,26 @@ public class DeliveriesController : ControllerBase
 
         if (data == null) return NotFound();
 
-        // 2. Process text payload field configurations
+        // 🛑 2. THE CRITICAL GUARD GATES: Block modification if already invoiced
+        if (data.Invoiced)
+        {
+            return BadRequest("This delivery record is locked because it has already been invoiced.");
+        }
+
+        // 3. Process text payload field configurations (overwrite/update safely)
         data.ReceiverName = dto.ReceiverName;
         data.ReceiverNotes = dto.ReceiverNotes;
-        data.Received = true;
+        data.Received = true; // Remains true once initially set
 
-        data.Latitude = dto.Latitude;
-        data.Longitude = dto.Longitude;
-
+        // Only update location telemetry if new coordinates are sent
         if (dto.Latitude.HasValue && dto.Longitude.HasValue)
         {
+            data.Latitude = dto.Latitude;
+            data.Longitude = dto.Longitude;
+
             try
             {
-                // Call your Geocoding Service (Implementation abstraction example below)
                 var geoData = await ReverseGeocodeAsync(dto.Latitude.Value, dto.Longitude.Value);
-                
                 if (geoData != null)
                 {
                     data.Province = geoData.Province;
@@ -397,12 +432,41 @@ public class DeliveriesController : ControllerBase
             }
             catch (Exception ex)
             {
-                // Log the geocoding failure but don't crash the delivery receipt submission
                 Console.WriteLine($"Geocoding failed: {ex.Message}");
             }
         }
 
-        // 3. Process nested lines securely and track fulfillment anomalies
+        // 🗑️ 4. NEW: Handle Document File Purges (MinIO + DB Sync Cleanup)
+        if (dto.KeysToDelete != null && dto.KeysToDelete.Any())
+        {
+            foreach (var storageKey in dto.KeysToDelete)
+            {
+                if (string.IsNullOrEmpty(storageKey)) continue;
+
+                // Find db record matching this specific key for this delivery
+                var existingDoc = await _db.Documents
+                    .FirstOrDefaultAsync(doc => doc.DeliveryID == data.DeliveryID && doc.StorageKey == storageKey);
+
+                if (existingDoc != null)
+                {
+                    try
+                    {
+                        // 1. Physically wipe the asset from MinIO bucket
+                        // (Adjust the method call below to match your exact IStorageService contract name, e.g., DeleteFileAsync)
+                        await _storageService.DeleteFileAsync(storageKey); 
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"MinIO file deletion skipped/failed for {storageKey}: {ex.Message}");
+                    }
+
+                    // 2. Clear trace record tracking row out of database
+                    _db.Documents.Remove(existingDoc);
+                }
+            }
+        }
+
+        // 5. Process lines securely and dynamically calculate variance thresholds
         bool hasDiscrepancy = false;
 
         if (data.Lines != null && dto.Lines != null && dto.Lines.Any())
@@ -412,18 +476,15 @@ public class DeliveriesController : ControllerBase
                 if (lineDto == null) continue;
 
                 var line = data.Lines.FirstOrDefault(x => x.DeliveryLineNumber == lineDto.DeliveryLineNumber);
-                
-                // CRITICAL GUARD: Skip if this specific line number wasn't found in the database
                 if (line == null) continue; 
 
+                // Overwrite old data with fresh corrections from the customer form
                 line.PackQuantityDelivered = lineDto.PackQuantityDelivered;
                 line.PackQuantityReturned = lineDto.PackQuantityReturned;
                 line.PackQuantityRejected = lineDto.PackQuantityRejected;
-                
-                // ADDED: Track individual line discrepancy items
                 line.LineComment = lineDto.LineComment;
 
-                // AUTO-VALUE TRACKING RULE: Check if items were sent back or rejected
+                // Re-check status metrics rules
                 if (lineDto.PackQuantityReturned > 0m || lineDto.PackQuantityRejected > 0m)
                 {
                     hasDiscrepancy = true;
@@ -431,20 +492,19 @@ public class DeliveriesController : ControllerBase
             }
         }
 
-        // 4. ADDED: Auto-assign nested model Enum statuses based on evaluation check
+        // 6. Auto-assign/reset status based on the latest edit quantities
         data.Status = hasDiscrepancy 
             ? DeliveryHeader.ReceiverStatus.PartialReceived 
             : DeliveryHeader.ReceiverStatus.FullyReceived;
 
-        // 5. Handle multiple Proof of Delivery files uploading to MinIO
-        if (dto.PhotoFiles != null && dto.PhotoFiles.Any())
+        // ➕ 7. Handle freshly appended Photo Upload sets to MinIO
+        if (dto.NewPhotoFiles != null && dto.NewPhotoFiles.Any())
         {
-            foreach (var file in dto.PhotoFiles)
+            foreach (var file in dto.NewPhotoFiles)
             {
                 if (file == null || file.Length == 0) continue;
 
                 string fileExtension = Path.GetExtension(file.FileName);
-                // Using Guid.NewGuid() ensures multiple files within the same Delivery ID don't overwrite each other
                 string storageKey = $"deliveries/{data.DeliveryID}/photos/{Guid.NewGuid()}{fileExtension}";
 
                 using (var stream = file.OpenReadStream())
@@ -467,20 +527,17 @@ public class DeliveriesController : ControllerBase
             }
         }
 
-        // 6. Commit text updates and file entity traces in one atomic database transaction
+        // 8. Commit updates atomically
         await _db.SaveChangesAsync();
 
-        // 7. Execute system logging metrics
+        // 9. Execute logging metrics
         var totalRejected = data.Lines?.Sum(l => l.PackQuantityRejected) ?? 0m;
-        var hasRejections = totalRejected > 0m;
         
         await LogActivity(
-            "DeliveryReceived",
+            "DeliveryConfirmationUpdated",
             data.DeliveryNumber,
-            hasRejections
-                ? $"Delivery {data.DeliveryNumber} confirmed by {data.ReceiverName} with {totalRejected} rejections"
-                : $"Delivery {data.DeliveryNumber} confirmed by {data.ReceiverName}",
-            hasRejections ? "Warning" : "Success"
+            $"Delivery {data.DeliveryNumber} confirmation entries modified/saved by {data.ReceiverName}. Current total rejections: {totalRejected}",
+            totalRejected > 0m ? "Warning" : "Info"
         );
 
         return Ok();

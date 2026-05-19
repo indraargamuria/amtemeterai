@@ -11,5 +11,7 @@ namespace amtemeterai.Api.Services
         Task<string> GetPresignedUrlAsync(string objectKey, double expiryMinutes = 60);
         // 💡 ADD THIS LINE RIGHT HERE:
         Task<Stream> GetFileStreamAsync(string storageKey);
+        // Inside IStorageService.cs
+        Task DeleteFileAsync(string storageKey);
     }
 }

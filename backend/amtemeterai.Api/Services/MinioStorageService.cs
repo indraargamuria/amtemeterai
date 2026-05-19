@@ -27,6 +27,29 @@ namespace amtemeterai.Api.Services
             _bucketName = minioConfig["BucketName"];
         }
 
+        public async Task DeleteFileAsync(string objectKey)
+        {
+            if (string.IsNullOrEmpty(objectKey)) return;
+
+            try
+            {
+                // 1. Initialize the S3-compatible delete parameters
+                var deleteRequest = new DeleteObjectRequest
+                {
+                    BucketName = _bucketName,
+                    Key = objectKey
+                };
+
+                // 2. Transmit the deletion command via the AWS S3 Client wrapper
+                await _s3Client.DeleteObjectAsync(deleteRequest);
+            }
+            catch (AmazonS3Exception ex)
+            {
+                Console.WriteLine($"[MinIO/S3 Error] Exception thrown during asset purge execution for key '{objectKey}': {ex.Message}");
+                throw;
+            }
+        }
+        
         public async Task<string> UploadFileAsync(string objectKey, Stream fileStream, string contentType)
         {
             var putRequest = new PutObjectRequest
