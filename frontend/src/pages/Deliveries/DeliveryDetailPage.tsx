@@ -142,22 +142,31 @@ export function DeliveryDetailPage() {
   }
 
   const getTypeBadge = (type: number | null | undefined) => {
-    const typeMap: Record<number, { label: string; variant: "default" | "outline" | "accent" }> = {
-      1: { label: "Regular", variant: "default" },
-      2: { label: "Express", variant: "accent" },
-      3: { label: "Special", variant: "outline" },
+    if (type === 1) {
+      return <Badge variant="bc">BC Compliance</Badge>
     }
-    return typeMap[type || 0] || { label: "Unknown", variant: "outline" }
+    if (type === 2) {
+      return <Badge variant="nonbc">Non-BC</Badge>
+    }
+    return <Badge variant="outline">-</Badge>
   }
 
   const getStatusBadge = (status: number | null | undefined) => {
-    const statusMap: Record<number, { label: string; variant: "default" | "outline" | "accent" }> = {
-      1: { label: "Draft", variant: "outline" },
-      2: { label: "In Transit", variant: "accent" },
-      3: { label: "Delivered", variant: "default" },
-      4: { label: "Cancelled", variant: "outline" },
+    if (status === 2) {
+      return (
+        <Badge variant="warning" className="text-amber-700 border-amber/20">
+          <span className="mr-1">⚠</span>Partial / Discrepancy
+        </Badge>
+      )
     }
-    return statusMap[status || 0] || { label: "Unknown", variant: "outline" }
+    if (status === 1) {
+      return (
+        <Badge variant="success" className="text-emerald-700 border-emerald/20">
+          <span className="mr-1">✓</span>Fully Received
+        </Badge>
+      )
+    }
+    return <Badge variant="info" className="text-brand-blue/70 border-brand-blue/10">Pending</Badge>
   }
 
   if (loading) {
@@ -184,214 +193,318 @@ export function DeliveryDetailPage() {
   }
 
   return (
-    <div className="space-y-8">
-      {/* Page Header with Back Button */}
-      <div className="flex items-center justify-between">
+    <div className="space-y-6">
+      {/* Page Header with Badges */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div className="space-y-1">
-          <h1 className="text-2xl font-semibold text-brand-blue tracking-tight">
-            Delivery Details
-          </h1>
-          <p className="text-sm text-brand-blue/60">
-            View complete delivery information and line items
+          <div className="flex items-center gap-3">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => navigate("/deliveries")}
+              className="px-2"
+            >
+              ←
+            </Button>
+            <h1 className="text-2xl font-semibold text-brand-blue tracking-tight">
+              {delivery.deliveryNumber}
+            </h1>
+          </div>
+          <p className="text-sm text-brand-blue/60 ml-8">
+            {formatDate(delivery.deliveryDate)}
           </p>
         </div>
-        <Button variant="outline" onClick={() => navigate("/deliveries")}>
-          ← Back to Deliveries
-        </Button>
+        <div className="flex items-center gap-2">
+          {getTypeBadge(delivery.type)}
+          {delivery.invoiced ? (
+            <Badge variant="outline" className="border-brand-blue/30 text-brand-blue/70">
+              Invoiced
+            </Badge>
+          ) : (
+            <Badge variant="outline" className="border-dashed border-slate-300 text-slate-400">
+              Uninvoiced
+            </Badge>
+          )}
+        </div>
       </div>
 
-      {/* Delivery Header Card */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg font-semibold text-brand-blue tracking-tight">
-            {delivery.deliveryNumber}
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Left Column */}
-            <div className="space-y-4">
+      {/* Split Panel Layout */}
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+        {/* LEFT PANEL (Metadata & Line Items 40%) */}
+        <div className="lg:col-span-2 space-y-6">
+          {/* Core Dispatch Information */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base font-semibold text-brand-blue tracking-tight">
+                Core Dispatch Information
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
               <div className="space-y-1">
                 <p className="text-xs font-medium text-brand-blue/50 uppercase tracking-wider">
-                  Delivery Date
+                  Customer
                 </p>
-                <p className="text-sm text-brand-blue/80">{formatDate(delivery.deliveryDate)}</p>
+                <div className="flex items-center gap-2">
+                  <Badge variant="badge" className="text-brand-blue/70 font-normal text-xs">
+                    {delivery.customerCode}
+                  </Badge>
+                  <span className="text-sm text-brand-blue/80">{delivery.customerName}</span>
+                </div>
               </div>
 
               <div className="space-y-1">
                 <p className="text-xs font-medium text-brand-blue/50 uppercase tracking-wider">
-                  Customer Code
+                  Account Owner
                 </p>
                 <p className="text-sm text-brand-blue/80">
-                  {/* Customer info will be populated from API */}
-                  {delivery.customerCode}
+                  {delivery.plant && delivery.salesPersonName
+                    ? `${delivery.plant} (${delivery.salesPersonName})`
+                    : delivery.plant || delivery.salesPersonName || "-"}
                 </p>
+                {delivery.salesPersonEmail && (
+                  <p className="text-xs text-brand-blue/60 mt-0.5">{delivery.salesPersonEmail}</p>
+                )}
               </div>
 
               <div className="space-y-1">
                 <p className="text-xs font-medium text-brand-blue/50 uppercase tracking-wider">
-                  Customer Name
+                  Drop Zone
                 </p>
                 <p className="text-sm text-brand-blue/80">
-                  {/* Customer info will be populated from API */}
-                  {delivery.customerName}
+                  {delivery.district && delivery.cityRegency
+                    ? `Kec. ${delivery.district}, ${delivery.cityRegency}`
+                    : delivery.cityRegency || delivery.district || "-"}
                 </p>
+                {delivery.formattedAddress && (
+                  <p className="text-xs text-brand-blue/60 mt-0.5">{delivery.formattedAddress}</p>
+                )}
               </div>
 
-              <div className="space-y-1">
-                <p className="text-xs font-medium text-brand-blue/50 uppercase tracking-wider">
-                  Remarks
-                </p>
-                <p className="text-sm text-brand-blue/80">
-                  {delivery.deliveryRemarks || "-"}
-                </p>
-              </div>
-
-              {delivery.plant && (
+              {delivery.deliveryRemarks && (
                 <div className="space-y-1">
                   <p className="text-xs font-medium text-brand-blue/50 uppercase tracking-wider">
-                    Plant
+                    Remarks
                   </p>
-                  <p className="text-sm text-brand-blue/80">{delivery.plant}</p>
+                  <p className="text-sm text-brand-blue/80">{delivery.deliveryRemarks}</p>
                 </div>
               )}
 
-              {(delivery.salesPersonName || delivery.salesPersonEmail) && (
-                <div className="space-y-2">
-                  {delivery.salesPersonName && (
+              {delivery.received && (
+                <div className="space-y-3 pt-3 border-t border-brand-blue/10">
+                  <div className="space-y-1">
+                    <p className="text-xs font-medium text-brand-blue/50 uppercase tracking-wider">
+                      Fulfillment Status
+                    </p>
+                    {getStatusBadge(delivery.status)}
+                  </div>
+                  {delivery.receiverName && (
                     <div className="space-y-1">
                       <p className="text-xs font-medium text-brand-blue/50 uppercase tracking-wider">
-                        Sales Person
+                        Received By
                       </p>
-                      <p className="text-sm text-brand-blue/80">{delivery.salesPersonName}</p>
+                      <p className="text-sm text-brand-blue/80">{delivery.receiverName}</p>
                     </div>
                   )}
-                  {delivery.salesPersonEmail && (
+                  {delivery.receiverNotes && (
                     <div className="space-y-1">
                       <p className="text-xs font-medium text-brand-blue/50 uppercase tracking-wider">
-                        Sales Person Email
+                        Receiver Notes
                       </p>
-                      <p className="text-sm text-brand-blue/80">{delivery.salesPersonEmail}</p>
+                      <p className="text-sm text-brand-blue/80">{delivery.receiverNotes}</p>
                     </div>
                   )}
                 </div>
               )}
-            </div>
+            </CardContent>
+          </Card>
 
-            {/* Right Column - Status */}
-            <div className="space-y-4">
-              {delivery.type !== null && delivery.type !== undefined && (
-                <div className="space-y-1">
-                  <p className="text-xs font-medium text-brand-blue/50 uppercase tracking-wider">
-                    Delivery Type
-                  </p>
-                  <Badge variant={getTypeBadge(delivery.type).variant}>
-                    {getTypeBadge(delivery.type).label}
-                  </Badge>
-                </div>
-              )}
+          {/* Itemized Fulfillment Table */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base font-semibold text-brand-blue tracking-tight">
+                Itemized Fulfillment
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="font-medium text-brand-blue/50 uppercase text-xs tracking-wider">
+                      SKU
+                    </TableHead>
+                    <TableHead className="font-medium text-brand-blue/50 uppercase text-xs tracking-wider text-right">
+                      Delivered
+                    </TableHead>
+                    <TableHead className="font-medium text-brand-blue/50 uppercase text-xs tracking-wider text-right">
+                      Rejected
+                    </TableHead>
+                    <TableHead className="font-medium text-brand-blue/50 uppercase text-xs tracking-wider">
+                      Notes
+                    </TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {delivery.lines.length === 0 ? (
+                    <TableRow>
+                      <TableCell
+                        colSpan={4}
+                        className="text-center text-brand-blue/60 py-4"
+                      >
+                        No items found
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    delivery.lines.map((line) => (
+                      <TableRow key={line.deliveryLineNumber}>
+                        <TableCell className="font-medium text-brand-blue">
+                          <div>
+                            <p className="text-sm">{line.deliveryItemCode}</p>
+                            <p className="text-xs text-brand-blue/60">{line.deliveryItemDescription}</p>
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-right text-brand-blue/80">
+                          {line.packQuantityDelivered} {line.packUOM}
+                        </TableCell>
+                        <TableCell className="text-right text-brand-blue/80">
+                          {line.packQuantityRejected} {line.packUOM}
+                        </TableCell>
+                        <TableCell className="text-brand-blue/70 max-w-[120px]">
+                          <p className="text-xs truncate">{line.lineComment || "-"}</p>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        </div>
 
-              {delivery.status !== null && delivery.status !== undefined && (
-                <div className="space-y-1">
-                  <p className="text-xs font-medium text-brand-blue/50 uppercase tracking-wider">
-                    Delivery Status
-                  </p>
-                  <Badge variant={getStatusBadge(delivery.status).variant}>
-                    {getStatusBadge(delivery.status).label}
-                  </Badge>
-                </div>
-              )}
-
-              <div className="space-y-1">
-                <p className="text-xs font-medium text-brand-blue/50 uppercase tracking-wider">
-                  Received Status
-                </p>
-                <Badge variant={delivery.received ? "default" : "accent"}>
-                  {delivery.received ? "Received" : "Not Received"}
-                </Badge>
-              </div>
-
-              <div className="space-y-1">
-                <p className="text-xs font-medium text-brand-blue/50 uppercase tracking-wider">
-                  Invoice Status
-                </p>
-                <Badge variant={delivery.invoiced ? "default" : "outline"}>
-                  {delivery.invoiced ? "Invoiced" : "Not Invoiced"}
-                </Badge>
-              </div>
-
-              {delivery.receiverName && (
-                <div className="space-y-1">
-                  <p className="text-xs font-medium text-brand-blue/50 uppercase tracking-wider">
-                    Receiver Name
-                  </p>
-                  <p className="text-sm text-brand-blue/80">{delivery.receiverName}</p>
-                </div>
-              )}
-
-              {delivery.receiverNotes && (
-                <div className="space-y-1">
-                  <p className="text-xs font-medium text-brand-blue/50 uppercase tracking-wider">
-                    Receiver Notes
-                  </p>
-                  <p className="text-sm text-brand-blue/80">{delivery.receiverNotes}</p>
-                </div>
-              )}
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Receiver Access Card */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg font-semibold text-brand-blue tracking-tight">
-            Receiver Access
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Left Column - Public URL */}
-            <div className="space-y-4">
-              <div className="space-y-1">
-                <p className="text-xs font-medium text-brand-blue/50 uppercase tracking-wider">
-                  Public Link
-                </p>
-                <div className="flex gap-2">
-                  <Input
-                    value={delivery.publicUrl}
-                    readOnly
-                    className="bg-brand-blue/5 text-sm"
+        {/* RIGHT PANEL (Visual Telemetry 60%) */}
+        <div className="lg:col-span-3 space-y-6">
+          {/* LIVE GOOGLE MAPS EMBED */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base font-semibold text-brand-blue tracking-tight">
+                Delivery Location
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="w-full h-80 rounded-xl overflow-hidden border border-brand-blue/10 shadow-sm relative">
+                {delivery.latitude && delivery.longitude ? (
+                  <iframe
+                    title="Delivery Drop Tracking Map"
+                    width="100%"
+                    height="100%"
+                    style={{ border: 0 }}
+                    loading="lazy"
+                    allowFullScreen
+                    referrerPolicy="no-referrer-when-downgrade"
+                    src={`https://www.google.com/maps?q=${delivery.latitude},${delivery.longitude}&z=15&output=embed`}
                   />
+                ) : (
+                  <div className="w-full h-full bg-brand-blue/5 flex items-center justify-center text-sm text-brand-blue/40">
+                    Awaiting GPS coordinate telemetry initialization from field...
+                  </div>
+                )}
+              </div>
+              {(delivery.latitude || delivery.longitude) && (
+                <div className="mt-3 flex justify-between items-center text-xs text-brand-blue/50">
+                  <span>
+                    Coordinates: {delivery.latitude?.toFixed(6) || "-"}, {delivery.longitude?.toFixed(6) || "-"}
+                  </span>
                   <Button
-                    variant="outline"
+                    variant="ghost"
                     size="sm"
-                    onClick={handleCopyUrl}
-                    className="whitespace-nowrap"
+                    onClick={() =>
+                      window.open(
+                        `https://www.google.com/maps?q=${delivery.latitude},${delivery.longitude}`,
+                        "_blank"
+                      )
+                    }
+                    className="text-xs h-7"
                   >
-                    {copySuccess ? "Copied!" : "Copy"}
+                    Open in Google Maps
                   </Button>
                 </div>
-              </div>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleOpenLink}
-                className="w-full"
-              >
-                Open Link in New Tab
-              </Button>
-            </div>
+              )}
+            </CardContent>
+          </Card>
 
-            {/* Right Column - QR Code */}
-            <div className="flex flex-col items-center justify-center space-y-4">
+          {/* Photographic Evidence */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base font-semibold text-brand-blue tracking-tight">
+                Photographic Evidence
+              </CardTitle>
+              {delivery.photos && delivery.photos.length > 0 && (
+                <CardDescription className="text-sm text-brand-blue/60">
+                  {delivery.photos.length} photo{delivery.photos.length !== 1 ? "s" : ""} uploaded
+                </CardDescription>
+              )}
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-2 gap-4">
+                {delivery.photos && delivery.photos.length > 0 ? (
+                  delivery.photos.map((photo, index) => (
+                    <div key={index} className="group relative rounded-lg overflow-hidden border border-brand-blue/10 bg-white">
+                      <img
+                        src={photo.downloadUrl}
+                        alt={photo.fileName || "Proof of Delivery Asset"}
+                        loading="lazy"
+                        className="w-full h-48 object-cover transition-transform group-hover:scale-[1.02]"
+                      />
+                      <div className="p-2 text-xs text-brand-blue/60 border-t border-brand-blue/5 bg-brand-blue/[0.01]">
+                        {photo.fileName}
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-sm text-brand-blue/40 italic col-span-2">
+                    No photographic evidence attached to this delivery record.
+                  </p>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Receiver Access */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base font-semibold text-brand-blue tracking-tight">
+                Receiver Access
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex gap-3">
+                <Input
+                  value={delivery.publicUrl}
+                  readOnly
+                  className="bg-brand-blue/5 text-sm flex-1"
+                />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleCopyUrl}
+                  className="whitespace-nowrap"
+                >
+                  {copySuccess ? "Copied!" : "Copy"}
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleOpenLink}
+                >
+                  Open
+                </Button>
+              </div>
               {qrCode && (
-                <>
-                  <div className="p-4 bg-white rounded-lg border border-brand-blue/10">
+                <div className="mt-4 flex flex-col items-center gap-2">
+                  <div className="p-3 bg-white rounded-lg border border-brand-blue/10">
                     <img
                       src={qrCode}
                       alt="Delivery QR Code"
-                      className="w-40 h-40"
+                      className="w-32 h-32"
                     />
                   </div>
                   <Button
@@ -402,222 +515,12 @@ export function DeliveryDetailPage() {
                   >
                     Download QR Code
                   </Button>
-                </>
-              )}
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Geographical Telemetry */}
-      {(delivery.latitude !== null && delivery.latitude !== undefined) ||
-      (delivery.longitude !== null && delivery.longitude !== undefined) ||
-      delivery.formattedAddress ? (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg font-semibold text-brand-blue tracking-tight">
-              Location Information
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="space-y-4">
-                {(delivery.latitude !== null && delivery.latitude !== undefined) ||
-                (delivery.longitude !== null && delivery.longitude !== undefined) ? (
-                  <>
-                    <div className="space-y-1">
-                      <p className="text-xs font-medium text-brand-blue/50 uppercase tracking-wider">
-                        GPS Coordinates
-                      </p>
-                      <p className="text-sm text-brand-blue/80">
-                        {delivery.latitude !== null && delivery.latitude !== undefined
-                          ? delivery.latitude.toFixed(6)
-                          : "-"}
-                        ,{" "}
-                        {delivery.longitude !== null && delivery.longitude !== undefined
-                          ? delivery.longitude.toFixed(6)
-                          : "-"}
-                      </p>
-                    </div>
-                    {(delivery.latitude && delivery.longitude) && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() =>
-                          window.open(
-                            `https://www.google.com/maps?q=${delivery.latitude},${delivery.longitude}`,
-                            "_blank"
-                          )
-                        }
-                        className="w-full"
-                      >
-                        Open in Google Maps
-                      </Button>
-                    )}
-                  </>
-                ) : (
-                  <p className="text-sm text-brand-blue/60">No GPS coordinates recorded</p>
-                )}
-              </div>
-
-              {delivery.formattedAddress && (
-                <div className="space-y-4">
-                  <div className="space-y-1">
-                    <p className="text-xs font-medium text-brand-blue/50 uppercase tracking-wider">
-                      Delivery Address
-                    </p>
-                    <p className="text-sm text-brand-blue/80">{delivery.formattedAddress}</p>
-                  </div>
-                  {delivery.district && (
-                    <div className="space-y-1">
-                      <p className="text-xs font-medium text-brand-blue/50 uppercase tracking-wider">
-                        District
-                      </p>
-                      <p className="text-sm text-brand-blue/80">{delivery.district}</p>
-                    </div>
-                  )}
-                  {delivery.cityRegency && (
-                    <div className="space-y-1">
-                      <p className="text-xs font-medium text-brand-blue/50 uppercase tracking-wider">
-                        City/Regency
-                      </p>
-                      <p className="text-sm text-brand-blue/80">{delivery.cityRegency}</p>
-                    </div>
-                  )}
-                  {delivery.province && (
-                    <div className="space-y-1">
-                      <p className="text-xs font-medium text-brand-blue/50 uppercase tracking-wider">
-                        Province
-                      </p>
-                      <p className="text-sm text-brand-blue/80">{delivery.province}</p>
-                    </div>
-                  )}
                 </div>
               )}
-            </div>
-          </CardContent>
-        </Card>
-      ) : null}
-
-      {/* Proof Photos */}
-      {delivery.photos && delivery.photos.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg font-semibold text-brand-blue tracking-tight">
-              Proof of Delivery Photos
-            </CardTitle>
-            <CardDescription className="text-sm text-brand-blue/60">
-              {delivery.photos.length} photo{delivery.photos.length !== 1 ? "s" : ""} uploaded
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-              {delivery.photos.map((photo, index) => (
-                <div key={index} className="group relative">
-                  <div className="aspect-square bg-brand-blue/5 rounded-lg overflow-hidden border border-brand-blue/10">
-                    <img
-                      src={photo.downloadUrl}
-                      alt={photo.fileName}
-                      className="w-full h-full object-cover cursor-pointer hover:scale-105 transition-transform"
-                      onClick={() => window.open(photo.downloadUrl, "_blank")}
-                    />
-                  </div>
-                  <p className="text-xs text-brand-blue/60 mt-2 truncate">{photo.fileName}</p>
-                  <p className="text-xs text-brand-blue/40">
-                    {new Date(photo.uploadedAt).toLocaleDateString()}
-                  </p>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Delivery Lines Table */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg font-semibold text-brand-blue tracking-tight">
-            Delivery Lines
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="font-medium text-brand-blue/50 uppercase text-xs tracking-wider">
-                  Line #
-                </TableHead>
-                <TableHead className="font-medium text-brand-blue/50 uppercase text-xs tracking-wider">
-                  Item Code
-                </TableHead>
-                <TableHead className="font-medium text-brand-blue/50 uppercase text-xs tracking-wider">
-                  Description
-                </TableHead>
-                <TableHead className="font-medium text-brand-blue/50 uppercase text-xs tracking-wider text-right">
-                  Sales Qty
-                </TableHead>
-                <TableHead className="font-medium text-brand-blue/50 uppercase text-xs tracking-wider text-right">
-                  Pack Qty
-                </TableHead>
-                <TableHead className="font-medium text-brand-blue/50 uppercase text-xs tracking-wider text-right">
-                  Delivered
-                </TableHead>
-                <TableHead className="font-medium text-brand-blue/50 uppercase text-xs tracking-wider text-right">
-                  Returned
-                </TableHead>
-                <TableHead className="font-medium text-brand-blue/50 uppercase text-xs tracking-wider text-right">
-                  Rejected
-                </TableHead>
-                <TableHead className="font-medium text-brand-blue/50 uppercase text-xs tracking-wider">
-                  Customer Remarks
-                </TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {delivery.lines.length === 0 ? (
-                <TableRow>
-                  <TableCell
-                    colSpan={9}
-                    className="text-center text-brand-blue/60 py-8"
-                  >
-                    No delivery lines found
-                  </TableCell>
-                </TableRow>
-              ) : (
-                delivery.lines.map((line, index) => (
-                  <TableRow key={`${line.deliveryLineNumber}-${index}`}>
-                    <TableCell className="font-medium text-brand-blue">
-                      {line.deliveryLineNumber}
-                    </TableCell>
-                    <TableCell className="text-brand-blue/70">
-                      {line.deliveryItemCode}
-                    </TableCell>
-                    <TableCell>{line.deliveryItemDescription}</TableCell>
-                    <TableCell className="text-right text-brand-blue/80">
-                      {line.salesQuantity.toLocaleString()} {line.salesUOM}
-                    </TableCell>
-                    <TableCell className="text-right text-brand-blue/80">
-                      {line.packQuantity.toLocaleString()} {line.packUOM}
-                    </TableCell>
-                    <TableCell className="text-right text-brand-blue/80">
-                      {line.packQuantityDelivered.toLocaleString()}
-                    </TableCell>
-                    <TableCell className="text-right text-brand-blue/80">
-                      {line.packQuantityReturned.toLocaleString()}
-                    </TableCell>
-                    <TableCell className="text-right text-brand-blue/80">
-                      {line.packQuantityRejected.toLocaleString()}
-                    </TableCell>
-                    <TableCell className="text-brand-blue/70 max-w-[200px]">
-                      {line.lineComment || "-"}
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
     </div>
   )
 }

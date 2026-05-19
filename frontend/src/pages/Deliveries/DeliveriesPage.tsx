@@ -202,6 +202,21 @@ export function DeliveriesPage() {
     )
   }
 
+  const getInvoicedBadge = (invoiced: boolean) => {
+    if (invoiced) {
+      return (
+        <Badge variant="outline" className="border-brand-blue/30 text-brand-blue/70">
+          Invoiced
+        </Badge>
+      )
+    }
+    return (
+      <Badge variant="outline" className="border-dashed border-slate-300 text-slate-400">
+        Uninvoiced
+      </Badge>
+    )
+  }
+
   const getRoutingString = (cityRegency: string | null | undefined, district: string | null | undefined) => {
     const parts: string[] = []
     if (district) parts.push(`Kec. ${district}`)
@@ -423,9 +438,12 @@ export function DeliveriesPage() {
                     {getComplianceBadge(delivery.type)}
                   </TableCell>
 
-                  {/* Fulfillment State Column */}
+                  {/* Fulfillment State Column with Invoiced Badge */}
                   <TableCell className="py-4">
-                    {getFulfillmentBadge(delivery.status, delivery.received)}
+                    <div className="flex flex-col gap-1.5">
+                      {getFulfillmentBadge(delivery.status, delivery.received)}
+                      {getInvoicedBadge(delivery.invoiced)}
+                    </div>
                   </TableCell>
 
                   {/* Proof Tracker Column */}
