@@ -3,7 +3,7 @@ import { useParams, useNavigate } from "react-router-dom"
 import QRCode from "qrcode"
 import { Button } from "../../shared/components/ui/Button"
 import { Badge } from "../../shared/components/ui/Badge"
-import { Card, CardContent, CardHeader, CardTitle } from "../../shared/components/ui/Card"
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "../../shared/components/ui/Card"
 import { Input } from "../../shared/components/ui/Input"
 import {
   Table,
@@ -26,9 +26,18 @@ interface DeliveryLine {
   packQuantityDelivered: number
   packQuantityReturned: number
   packQuantityRejected: number
+  lineComment?: string | null
+}
+
+interface DeliveryPhoto {
+  fileName: string
+  storageKey: string
+  downloadUrl: string
+  uploadedAt: string
 }
 
 interface DeliveryDetail {
+  deliveryID: number
   deliveryNumber: string
   deliveryDate: string
   deliveryRemarks: string | null
@@ -40,6 +49,18 @@ interface DeliveryDetail {
   received: boolean
   invoiced: boolean
   publicUrl: string
+  plant?: string | null
+  type?: number | null
+  status?: number | null
+  salesPersonName?: string | null
+  salesPersonEmail?: string | null
+  latitude?: number | null
+  longitude?: number | null
+  province?: string | null
+  cityRegency?: string | null
+  district?: string | null
+  formattedAddress?: string | null
+  photos?: DeliveryPhoto[]
   lines: DeliveryLine[]
 }
 
@@ -120,6 +141,25 @@ export function DeliveryDetailPage() {
     })
   }
 
+  const getTypeBadge = (type: number | null | undefined) => {
+    const typeMap: Record<number, { label: string; variant: "default" | "outline" | "accent" }> = {
+      1: { label: "Regular", variant: "default" },
+      2: { label: "Express", variant: "accent" },
+      3: { label: "Special", variant: "outline" },
+    }
+    return typeMap[type || 0] || { label: "Unknown", variant: "outline" }
+  }
+
+  const getStatusBadge = (status: number | null | undefined) => {
+    const statusMap: Record<number, { label: string; variant: "default" | "outline" | "accent" }> = {
+      1: { label: "Draft", variant: "outline" },
+      2: { label: "In Transit", variant: "accent" },
+      3: { label: "Delivered", variant: "default" },
+      4: { label: "Cancelled", variant: "outline" },
+    }
+    return statusMap[status || 0] || { label: "Unknown", variant: "outline" }
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -195,7 +235,6 @@ export function DeliveryDetailPage() {
                 <p className="text-sm text-brand-blue/80">
                   {/* Customer info will be populated from API */}
                   {delivery.customerName}
-                  
                 </p>
               </div>
 
@@ -207,10 +246,62 @@ export function DeliveryDetailPage() {
                   {delivery.deliveryRemarks || "-"}
                 </p>
               </div>
+
+              {delivery.plant && (
+                <div className="space-y-1">
+                  <p className="text-xs font-medium text-brand-blue/50 uppercase tracking-wider">
+                    Plant
+                  </p>
+                  <p className="text-sm text-brand-blue/80">{delivery.plant}</p>
+                </div>
+              )}
+
+              {(delivery.salesPersonName || delivery.salesPersonEmail) && (
+                <div className="space-y-2">
+                  {delivery.salesPersonName && (
+                    <div className="space-y-1">
+                      <p className="text-xs font-medium text-brand-blue/50 uppercase tracking-wider">
+                        Sales Person
+                      </p>
+                      <p className="text-sm text-brand-blue/80">{delivery.salesPersonName}</p>
+                    </div>
+                  )}
+                  {delivery.salesPersonEmail && (
+                    <div className="space-y-1">
+                      <p className="text-xs font-medium text-brand-blue/50 uppercase tracking-wider">
+                        Sales Person Email
+                      </p>
+                      <p className="text-sm text-brand-blue/80">{delivery.salesPersonEmail}</p>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Right Column - Status */}
             <div className="space-y-4">
+              {delivery.type !== null && delivery.type !== undefined && (
+                <div className="space-y-1">
+                  <p className="text-xs font-medium text-brand-blue/50 uppercase tracking-wider">
+                    Delivery Type
+                  </p>
+                  <Badge variant={getTypeBadge(delivery.type).variant}>
+                    {getTypeBadge(delivery.type).label}
+                  </Badge>
+                </div>
+              )}
+
+              {delivery.status !== null && delivery.status !== undefined && (
+                <div className="space-y-1">
+                  <p className="text-xs font-medium text-brand-blue/50 uppercase tracking-wider">
+                    Delivery Status
+                  </p>
+                  <Badge variant={getStatusBadge(delivery.status).variant}>
+                    {getStatusBadge(delivery.status).label}
+                  </Badge>
+                </div>
+              )}
+
               <div className="space-y-1">
                 <p className="text-xs font-medium text-brand-blue/50 uppercase tracking-wider">
                   Received Status
@@ -318,6 +409,130 @@ export function DeliveryDetailPage() {
         </CardContent>
       </Card>
 
+      {/* Geographical Telemetry */}
+      {(delivery.latitude !== null && delivery.latitude !== undefined) ||
+      (delivery.longitude !== null && delivery.longitude !== undefined) ||
+      delivery.formattedAddress ? (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg font-semibold text-brand-blue tracking-tight">
+              Location Information
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-4">
+                {(delivery.latitude !== null && delivery.latitude !== undefined) ||
+                (delivery.longitude !== null && delivery.longitude !== undefined) ? (
+                  <>
+                    <div className="space-y-1">
+                      <p className="text-xs font-medium text-brand-blue/50 uppercase tracking-wider">
+                        GPS Coordinates
+                      </p>
+                      <p className="text-sm text-brand-blue/80">
+                        {delivery.latitude !== null && delivery.latitude !== undefined
+                          ? delivery.latitude.toFixed(6)
+                          : "-"}
+                        ,{" "}
+                        {delivery.longitude !== null && delivery.longitude !== undefined
+                          ? delivery.longitude.toFixed(6)
+                          : "-"}
+                      </p>
+                    </div>
+                    {(delivery.latitude && delivery.longitude) && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() =>
+                          window.open(
+                            `https://www.google.com/maps?q=${delivery.latitude},${delivery.longitude}`,
+                            "_blank"
+                          )
+                        }
+                        className="w-full"
+                      >
+                        Open in Google Maps
+                      </Button>
+                    )}
+                  </>
+                ) : (
+                  <p className="text-sm text-brand-blue/60">No GPS coordinates recorded</p>
+                )}
+              </div>
+
+              {delivery.formattedAddress && (
+                <div className="space-y-4">
+                  <div className="space-y-1">
+                    <p className="text-xs font-medium text-brand-blue/50 uppercase tracking-wider">
+                      Delivery Address
+                    </p>
+                    <p className="text-sm text-brand-blue/80">{delivery.formattedAddress}</p>
+                  </div>
+                  {delivery.district && (
+                    <div className="space-y-1">
+                      <p className="text-xs font-medium text-brand-blue/50 uppercase tracking-wider">
+                        District
+                      </p>
+                      <p className="text-sm text-brand-blue/80">{delivery.district}</p>
+                    </div>
+                  )}
+                  {delivery.cityRegency && (
+                    <div className="space-y-1">
+                      <p className="text-xs font-medium text-brand-blue/50 uppercase tracking-wider">
+                        City/Regency
+                      </p>
+                      <p className="text-sm text-brand-blue/80">{delivery.cityRegency}</p>
+                    </div>
+                  )}
+                  {delivery.province && (
+                    <div className="space-y-1">
+                      <p className="text-xs font-medium text-brand-blue/50 uppercase tracking-wider">
+                        Province
+                      </p>
+                      <p className="text-sm text-brand-blue/80">{delivery.province}</p>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {/* Proof Photos */}
+      {delivery.photos && delivery.photos.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg font-semibold text-brand-blue tracking-tight">
+              Proof of Delivery Photos
+            </CardTitle>
+            <CardDescription className="text-sm text-brand-blue/60">
+              {delivery.photos.length} photo{delivery.photos.length !== 1 ? "s" : ""} uploaded
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+              {delivery.photos.map((photo, index) => (
+                <div key={index} className="group relative">
+                  <div className="aspect-square bg-brand-blue/5 rounded-lg overflow-hidden border border-brand-blue/10">
+                    <img
+                      src={photo.downloadUrl}
+                      alt={photo.fileName}
+                      className="w-full h-full object-cover cursor-pointer hover:scale-105 transition-transform"
+                      onClick={() => window.open(photo.downloadUrl, "_blank")}
+                    />
+                  </div>
+                  <p className="text-xs text-brand-blue/60 mt-2 truncate">{photo.fileName}</p>
+                  <p className="text-xs text-brand-blue/40">
+                    {new Date(photo.uploadedAt).toLocaleDateString()}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Delivery Lines Table */}
       <Card>
         <CardHeader>
@@ -353,13 +568,16 @@ export function DeliveryDetailPage() {
                 <TableHead className="font-medium text-brand-blue/50 uppercase text-xs tracking-wider text-right">
                   Rejected
                 </TableHead>
+                <TableHead className="font-medium text-brand-blue/50 uppercase text-xs tracking-wider">
+                  Customer Remarks
+                </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {delivery.lines.length === 0 ? (
                 <TableRow>
                   <TableCell
-                    colSpan={8}
+                    colSpan={9}
                     className="text-center text-brand-blue/60 py-8"
                   >
                     No delivery lines found
@@ -389,6 +607,9 @@ export function DeliveryDetailPage() {
                     </TableCell>
                     <TableCell className="text-right text-brand-blue/80">
                       {line.packQuantityRejected.toLocaleString()}
+                    </TableCell>
+                    <TableCell className="text-brand-blue/70 max-w-[200px]">
+                      {line.lineComment || "-"}
                     </TableCell>
                   </TableRow>
                 ))

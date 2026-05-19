@@ -29,16 +29,26 @@ var allowedOrigins = builder.Configuration.GetSection("Cors:Origins").Get<string
 // Program.cs
 builder.Services.AddSingleton<IStorageService, MinioStorageService>();
 
+// builder.Services.AddCors(options =>
+// {
+//     options.AddPolicy("AllowFrontend", policy =>
+//     {
+//         policy.WithOrigins(allowedOrigins!)
+//               .AllowAnyHeader()
+//               .AllowAnyMethod();
+//     });
+// });
+
 builder.Services.AddCors(options =>
 {
-    options.AddPolicy("AllowFrontend", policy =>
+    // Setting this as the Default Policy ensures it applies globally 
+    options.AddDefaultPolicy(policy =>
     {
         policy.WithOrigins(allowedOrigins!)
               .AllowAnyHeader()
               .AllowAnyMethod();
     });
 });
-
 // 2026-05-06 - Customer Source Configuration
 var customerSourceType = builder.Configuration["CustomerSource"] ?? "Dummy";
 
@@ -139,9 +149,15 @@ app.UseSwaggerUI(options =>
 
 // 2026-05-06 - Add Authentication & Authorization middleware
 app.UseAuthentication();
+// app.UseCors("AllowFrontend");
+
+app.UseRouting();
+
+app.UseCors(); // Automatically picks up the default policy configured above
+
+app.UseAuthorization();
 app.UseAuthorization();
 
-app.UseCors("AllowFrontend");
 
 app.MapControllers();
 

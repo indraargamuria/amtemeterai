@@ -107,7 +107,8 @@ public class DeliveriesController : ControllerBase
             return NotFound();
 
         // 2. Fetch all associated proof files from your Documents table
-        var baseApiUrl = _configuration["App:PublicBaseUrl"] ?? "http://localhost:8080";
+        // var baseApiUrl = _configuration["App:PublicBaseUrl"] ?? "http://localhost:8080";
+        var baseApiUrl = "http://localhost:8080";
         
         var photos = await _db.Documents
             .Where(doc => doc.DeliveryID == deliveryId && doc.Type == DocumentType.DeliveryPhoto)

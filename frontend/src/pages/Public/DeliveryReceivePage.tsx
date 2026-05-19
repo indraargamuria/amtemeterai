@@ -17,6 +17,7 @@ interface DeliveryLine {
   packQuantityDelivered: number
   packQuantityReturned: number
   packQuantityRejected: number
+  lineComment?: string | null
 }
 
 interface DeliveryDetail {
@@ -36,9 +37,11 @@ interface LineFormState {
   delivered: string
   returned: string
   rejected: string
+  lineComment: string
 }
 
 const API_URL = import.meta.env.VITE_API_URL
+const MAX_FILE_SIZE = 5 * 1024 * 1024 // 5MB in bytes
 
 export function DeliveryReceivePage() {
   const { token } = useParams<{ token: string }>()
@@ -51,6 +54,10 @@ export function DeliveryReceivePage() {
   const [receiverNotes, setReceiverNotes] = useState("")
   const [lines, setLines] = useState<LineFormState[]>([])
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({})
+  const [photoFiles, setPhotoFiles] = useState<File[]>([])
+  const [photoErrors, setPhotoErrors] = useState<string[]>([])
+  const [latitude, setLatitude] = useState<number | null>(null)
+  const [longitude, setLongitude] = useState<number | null>(null)
 
   // PIN Verification States
   const [isVerified, setIsVerified] = useState(false)
@@ -77,14 +84,6 @@ export function DeliveryReceivePage() {
         // Initialize form state
         setReceiverName(data.receiverName || "")
         setReceiverNotes(data.receiverNotes || "")
-        setLines(
-          data.lines.map((line) => ({
-            deliveryLineNumber: line.deliveryLineNumber,
-            delivered: line.packQuantityDelivered.toString(),
-            returned: line.packQuantityReturned.toString(),
-            rejected: line.packQuantityRejected.toString(),
-          }))
-        )
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to fetch delivery")
       } finally {
@@ -113,6 +112,38 @@ export function DeliveryReceivePage() {
       }
     }
   }, [token])
+
+  // Auto-capture GPS coordinates
+  useEffect(() => {
+    if ("geolocation" in navigator) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          setLatitude(position.coords.latitude)
+          setLongitude(position.coords.longitude)
+        },
+        (error) => {
+          // Silently fail - GPS is optional
+          console.warn("Geolocation not available or permission denied")
+        },
+        { enableHighAccuracy: true, timeout: 5000 }
+      )
+    }
+  }, [])
+
+  // Initialize line comments from API response
+  useEffect(() => {
+    if (delivery && !submitted) {
+      setLines(
+        delivery.lines.map((line) => ({
+          deliveryLineNumber: line.deliveryLineNumber,
+          delivered: line.packQuantityDelivered.toString(),
+          returned: line.packQuantityReturned.toString(),
+          rejected: line.packQuantityRejected.toString(),
+          lineComment: (line as any).lineComment || "",
+        }))
+      )
+    }
+  }, [delivery, submitted])
 
   const validateLines = (): boolean => {
     const errors: Record<string, string> = {}
@@ -151,55 +182,44 @@ export function DeliveryReceivePage() {
     setSubmitting(true)
 
     try {
-      const payload = {
-        receiverName: receiverName || null,
-        receiverNotes: receiverNotes || null,
-        lines: delivery.lines.map((line) => {
-          const lineState = lines.find((l) => l.deliveryLineNumber === line.deliveryLineNumber)
-          return {
-            deliveryLineNumber: line.deliveryLineNumber,
-            packQuantityDelivered: parseFloat(lineState?.delivered || "0"),
-            packQuantityReturned: parseFloat(lineState?.returned || "0"),
-            packQuantityRejected: parseFloat(lineState?.rejected || "0"),
-          }
-        }),
+      const formData = new FormData()
+
+      formData.append("ReceiverName", receiverName || "")
+      if (receiverNotes) {
+        formData.append("ReceiverNotes", receiverNotes)
       }
+      if (latitude !== null) {
+        formData.append("Latitude", latitude.toString())
+      }
+      if (longitude !== null) {
+        formData.append("Longitude", longitude.toString())
+      }
+
+      // Append photos
+      photoFiles.forEach((file) => {
+        formData.append("PhotoFiles", file)
+      })
+
+      // Append lines
+      delivery.lines.forEach((line, index) => {
+        const lineState = lines.find((l) => l.deliveryLineNumber === line.deliveryLineNumber)
+        formData.append(`Lines[${index}].DeliveryLineNumber`, line.deliveryLineNumber)
+        formData.append(`Lines[${index}].PackQuantityDelivered`, parseFloat(lineState?.delivered || "0").toString())
+        formData.append(`Lines[${index}].PackQuantityReturned`, parseFloat(lineState?.returned || "0").toString())
+        formData.append(`Lines[${index}].PackQuantityRejected`, parseFloat(lineState?.rejected || "0").toString())
+        if (lineState?.lineComment) {
+          formData.append(`Lines[${index}].LineComment`, lineState.lineComment)
+        }
+      })
 
       const res = await fetch(`${API_URL}/api/deliveries/${token}`, {
         method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(payload),
+        body: formData,
       })
 
       if (!res.ok) {
         throw new Error("Failed to update delivery")
       }
-
-      // Update delivery state locally (PATCH returns no content)
-      setDelivery((prev) => {
-        if (!prev) return prev
-
-        return {
-          ...prev,
-          received: true,
-          receiverName: receiverName || null,
-          receiverNotes: receiverNotes || null,
-          lines: prev.lines.map((line) => {
-            const lineState = lines.find(
-              (l) => l.deliveryLineNumber === line.deliveryLineNumber
-            )
-
-            return {
-              ...line,
-              packQuantityDelivered: parseFloat(lineState?.delivered || "0"),
-              packQuantityReturned: parseFloat(lineState?.returned || "0"),
-              packQuantityRejected: parseFloat(lineState?.rejected || "0"),
-            }
-          }),
-        }
-      })
 
       setSubmitted(true)
     } catch (err) {
@@ -247,7 +267,7 @@ export function DeliveryReceivePage() {
 
   const handleLineChange = (
     deliveryLineNumber: string,
-    field: "delivered" | "returned" | "rejected",
+    field: "delivered" | "returned" | "rejected" | "lineComment",
     value: string
   ) => {
     setLines((prev) =>
@@ -265,6 +285,40 @@ export function DeliveryReceivePage() {
         return newErrors
       })
     }
+  }
+
+  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || [])
+    const errors: string[] = []
+    const validFiles: File[] = []
+
+    files.forEach((file) => {
+      // Validate file type
+      if (
+!["image/jpeg", "image/jpg", "image/png"].includes(file.type)
+) {
+        errors.push(`${file.name}: Only JPG and PNG files are allowed`)
+        return
+      }
+
+      // Validate file size (max 5MB)
+      if (file.size > MAX_FILE_SIZE) {
+        errors.push(`${file.name}: File size exceeds 5MB limit`)
+        return
+      }
+
+      validFiles.push(file)
+    })
+
+    setPhotoErrors(errors)
+    setPhotoFiles((prev) => [...prev, ...validFiles])
+
+    // Clear input
+    e.target.value = ""
+  }
+
+  const removePhoto = (index: number) => {
+    setPhotoFiles((prev) => prev.filter((_, i) => i !== index))
   }
 
   const formatDate = (dateString: string) => {
@@ -545,6 +599,23 @@ export function DeliveryReceivePage() {
                       </div>
                     </div>
 
+                    <div className="space-y-1">
+                      <Label htmlFor={`comment-${line.deliveryLineNumber}`} className="text-xs text-brand-blue/60">
+                        Remarks (Optional)
+                      </Label>
+                      <Input
+                        id={`comment-${line.deliveryLineNumber}`}
+                        type="text"
+                        value={lineState?.lineComment || ""}
+                        onChange={(e) =>
+                          handleLineChange(line.deliveryLineNumber, "lineComment", e.target.value)
+                        }
+                        disabled={isAlreadyReceived || submitted || submitting}
+                        placeholder="Any remarks for this item"
+                        className="h-9"
+                      />
+                    </div>
+
                     {error && (
                       <p className="text-xs text-brand-red mt-1">{error}</p>
                     )}
@@ -588,6 +659,88 @@ export function DeliveryReceivePage() {
                     placeholder="Any additional notes"
                   />
                 </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Photo Upload */}
+          {!isAlreadyReceived && !submitted && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base font-semibold text-brand-blue tracking-tight">
+                  Proof of Delivery Photos
+                </CardTitle>
+                <CardDescription className="text-xs text-brand-blue/60">
+                  Upload up to 5 photos. Each photo must be JPG or PNG and under 5MB.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="photoUpload" className="text-sm text-brand-blue/70">
+                    Select Photos
+                  </Label>
+                  <Input
+                    id="photoUpload"
+                    type="file"
+                    accept="image/jpeg,image/jpg,image/png"
+                    multiple
+                    onChange={handlePhotoUpload}
+                    disabled={submitting || photoFiles.length >= 5}
+                  />
+                  <p className="text-xs text-brand-blue/50">
+                    {photoFiles.length}/5 photos selected
+                  </p>
+                </div>
+
+                {photoErrors.length > 0 && (
+                  <div className="space-y-1">
+                    {photoErrors.map((error, index) => (
+                      <p key={index} className="text-xs text-brand-red">{error}</p>
+                    ))}
+                  </div>
+                )}
+
+                {photoFiles.length > 0 && (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                    {photoFiles.map((file, index) => (
+                      <div key={index} className="relative group">
+                        <div className="aspect-square bg-brand-blue/5 rounded-lg overflow-hidden border border-brand-blue/10">
+                          <img
+                            src={URL.createObjectURL(file)}
+                            alt={file.name}
+                            className="w-full h-full object-cover"
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => removePhoto(index)}
+                          disabled={submitting}
+                          className="absolute -top-2 -right-2 w-6 h-6 bg-brand-red text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity disabled:opacity-100"
+                        >
+                          <svg
+                            className="w-4 h-4"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M6 18L18 6M6 6l12 12"
+                            />
+                          </svg>
+                        </button>
+                        <p className="text-xs text-brand-blue/60 mt-1 truncate">
+                          {file.name}
+                        </p>
+                        <p className="text-xs text-brand-blue/40">
+                          {(file.size / 1024 / 1024).toFixed(2)} MB
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </CardContent>
             </Card>
           )}
