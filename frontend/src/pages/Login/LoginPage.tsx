@@ -45,7 +45,7 @@ export function LoginPage() {
   return (
     <div className="min-h-screen flex bg-white">
       {/* Left Side - Login Form */}
-      <div className="w-full lg:w-1/2 flex items-center justify-center p-8 lg:p-16 bg-brand-blue/[0.02]">
+      <div className="w-full lg:w-1/2 flex items-center justify-center p-8 lg:p-16 bg-brand-blue/2">
         <div className="w-full max-w-md">
           {/* Logo */}
           <div className="mb-10">
