@@ -547,35 +547,48 @@ public class DeliveriesController : ControllerBase
             message = $"Successfully seeded {deliveries.Count} deliveries with {deliveries.Sum(d => d.Lines.Count)} total lines"
         });
     }
-    /// Connects to Google Maps API to extract Indonesian Administrative boundaries
-    /// </summary>
+
     private async Task<GeoLocationResult?> ReverseGeocodeAsync(double lat, double lng)
     {
         using var client = new HttpClient();
         string url = $"https://maps.googleapis.com/maps/api/geocode/json?latlng={lat},{lng}&key={_googleApiKey}";
-
+        // Temporary debug check inside ReverseGeocodeAsync
+        var jsonString = await client.GetStringAsync(url);
+        Console.WriteLine("=== RAW GOOGLE RESPONSE FOR LAPTOP ===");
+        Console.WriteLine(jsonString);
+        Console.WriteLine("======================================");
         var response = await client.GetFromJsonAsync<GoogleGeocodeResponse>(url);
         if (response?.Results == null || !response.Results.Any()) return null;
 
-        var firstResult = response.Results.First();
         var result = new GeoLocationResult
         {
-            FormattedAddress = firstResult.FormattedAddress
+            // Keep the most precise formatted address string
+            FormattedAddress = response.Results.First().FormattedAddress
         };
 
-        foreach (var component in firstResult.AddressComponents)
+        // 💡 THE FIX: Loop through the top few result objects to aggregate missing boundaries
+        foreach (var resultObject in response.Results.Take(3)) 
         {
-            // Province level mapping
-            if (component.Types.Contains("administrative_area_level_1"))
-                result.Province = component.LongName;
-            
-            // Kota or Kabupaten level mapping
-            if (component.Types.Contains("administrative_area_level_2"))
-                result.CityRegency = component.LongName;
+            foreach (var component in resultObject.AddressComponents)
+            {
+                // Only fill if not already found by a previous, more precise layer
+                if (string.IsNullOrEmpty(result.Province) && component.Types.Contains("administrative_area_level_1"))
+                    result.Province = component.LongName;
                 
-            // Kecamatan (District) level mapping
-            if (component.Types.Contains("administrative_area_level_3"))
-                result.District = component.LongName;
+                if (string.IsNullOrEmpty(result.CityRegency) && component.Types.Contains("administrative_area_level_2"))
+                    result.CityRegency = component.LongName;
+                    
+                if (string.IsNullOrEmpty(result.District) && component.Types.Contains("administrative_area_level_3"))
+                    result.District = component.LongName;
+            }
+
+            // If we've successfully filled all structural targets, break out early!
+            if (!string.IsNullOrEmpty(result.Province) && 
+                !string.IsNullOrEmpty(result.CityRegency) && 
+                !string.IsNullOrEmpty(result.District))
+            {
+                break;
+            }
         }
 
         return result;
