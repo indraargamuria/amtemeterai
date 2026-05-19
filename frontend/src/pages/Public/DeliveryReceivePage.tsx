@@ -359,7 +359,7 @@ export function DeliveryReceivePage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-brand-blue/[0.02] flex items-center justify-center p-4">
+      <div className="min-h-screen bg-brand-blue/2 flex items-center justify-center p-4">
         <p className="text-brand-blue/60">Loading delivery information...</p>
       </div>
     )
@@ -367,7 +367,7 @@ export function DeliveryReceivePage() {
 
   if (error || !delivery) {
     return (
-      <div className="min-h-screen bg-brand-blue/[0.02] flex items-center justify-center p-4">
+      <div className="min-h-screen bg-brand-blue/2 flex items-center justify-center p-4">
         <Card className="w-full max-w-xl">
           <CardContent className="py-12 text-center">
             <p className="text-brand-red font-medium mb-4">{error || "Delivery not found"}</p>
@@ -380,7 +380,7 @@ export function DeliveryReceivePage() {
 
   if (!isVerified) {
     return (
-      <div className="min-h-screen bg-brand-blue/[0.02] flex items-center justify-center p-4">
+      <div className="min-h-screen bg-brand-blue/2 flex items-center justify-center p-4">
         <Card className="w-full max-w-md">
           <CardHeader className="text-center">
             <div className="w-12 h-12 rounded-full bg-brand-blue/10 flex items-center justify-center mx-auto mb-4">
@@ -428,7 +428,7 @@ export function DeliveryReceivePage() {
   }
 
   return (
-    <div className="min-h-screen bg-brand-blue/[0.02] py-8 px-4">
+    <div className="min-h-screen bg-brand-blue/2 py-8 px-4">
       <div className="max-w-xl mx-auto space-y-6">
         
         {/* FINANCIAL LOCK BANNER */}

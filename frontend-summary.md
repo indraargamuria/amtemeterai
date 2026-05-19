@@ -2,7 +2,7 @@
 
 ## Overview
 
-The frontend is built with **React 19** and **Vite** using **TypeScript**. It provides a premium, enterprise SaaS interface for the e-Meterai delivery management system with a clean, modern design following strict color constraints. The application includes **JWT-based authentication** with protected routes and automatic token management.
+The frontend is built with **React 19** and **Vite** using **TypeScript**. It provides a premium, enterprise SaaS interface for the e-Meterai delivery management system with a clean, modern design following strict color constraints. The application includes **JWT-based authentication** with protected routes, GPS location capture, photo evidence management, and Google Maps integration.
 
 ---
 
@@ -19,7 +19,7 @@ The frontend is built with **React 19** and **Vite** using **TypeScript**. It pr
 | class-variance-authority | 0.7.1 | Component Variants |
 | clsx | 2.1.1 | Class Name Utilities |
 | tailwind-merge | 3.5.0 | Tailwind Class Merging |
-| lucide-react | 1.14.0 | Icons (used in Dashboard) |
+| lucide-react | 1.14.0 | Icons |
 | qrcode | 1.5.4 | QR Code Generation |
 
 ---
@@ -43,10 +43,11 @@ frontend/src/
 │   │   └── index.ts
 │   ├── Deliveries/
 │   │   ├── DeliveriesPage.tsx       # Deliveries Table + Status Badges
-│   │   ├── DeliveryDetailPage.tsx   # Delivery Details with QR Code
+│   │   ├── DeliveryDetailPage.tsx   # Delivery Details with QR Code, Photos, Maps
 │   │   └── index.ts
 │   └── Public/
-│       ├── DeliveryReceivePage.tsx  # Public Delivery Receive Form
+│       ├── DeliveryReceivePage.tsx  # Public Delivery Receive Form with Photos & GPS
+│       ├── Obsolete.tsx
 │       └── index.ts
 ├── shared/
 │   ├── contexts/
@@ -69,7 +70,10 @@ frontend/src/
 │       ├── api.ts                   # Authenticated API Helper Functions
 │       └── cn.ts                    # className Utility (clsx + tailwind-merge)
 ├── assets/                          # Static Assets
-│   └── amtlogo.png                  # Company Logo
+│   ├── amtlogo.png                  # Company Logo
+│   ├── amtlandscape.jpg             # Background image
+│   ├── hero.png
+│   └── react.svg, vite.svg
 ├── nginx.conf                       # Nginx configuration for SPA routing
 ├── Dockerfile                      # Docker build configuration
 └── package.json                     # Dependencies and scripts
@@ -103,8 +107,6 @@ Use these instead of adding new colors:
 
 ## Environment Configuration
 
-The frontend uses environment variables for API URL configuration based on the runtime environment:
-
 ### Development (`.env.development`)
 ```env
 VITE_API_URL=http://localhost:8080
@@ -121,8 +123,6 @@ const API_URL = import.meta.env.VITE_API_URL
 const res = await fetch(`${API_URL}/api/customers`)
 ```
 
-This allows seamless switching between local development and Docker environments.
-
 ---
 
 ## Authentication System
@@ -131,12 +131,11 @@ This allows seamless switching between local development and Docker environments
 The application uses **JWT (JSON Web Token)** authentication with React Context for state management. Protected routes require a valid JWT token, while public routes (like the delivery receive page) are accessible without authentication.
 
 ### Auth Context (`AuthContext.tsx`)
-Provides authentication state and methods:
 ```typescript
 interface AuthContextType {
-  user: User | null           // Current user info
-  token: string | null        // JWT token
-  loading: boolean            // Loading state
+  user: User | null
+  token: string | null
+  loading: boolean
   login: (email, password) => Promise<void>
   logout: () => void
   isAuthenticated: boolean
@@ -144,19 +143,16 @@ interface AuthContextType {
 ```
 
 ### Auth Provider (`AuthProvider`)
-Wraps the entire application and provides:
 - Automatic token persistence in `localStorage`
 - User state management
 - Session restoration on page reload
 
 ### Protected Route (`ProtectedRoute`)
-Component that wraps protected routes and:
 - Redirects to `/login` if not authenticated
 - Shows loading state while checking authentication
 - Only renders children when authenticated
 
 ### API Helper (`api.ts`)
-Provides authenticated API functions that automatically include the JWT token:
 ```typescript
 const api = useApi()
 const res = await api.get("/api/customers")
@@ -169,29 +165,12 @@ Features:
 ### Route Protection
 | Route | Protected | Description |
 |-------|-----------|-------------|
-| `/login` | No | Public login page (redirects to home if already authenticated) |
-| `/` | Yes | Dashboard (requires authentication) |
-| `/customers` | Yes | Customers page (requires authentication) |
-| `/deliveries` | Yes | Deliveries list (requires authentication) |
-| `/deliveries/:id` | Yes | Delivery details (requires authentication) |
+| `/login` | No | Public login page |
+| `/` | Yes | Dashboard |
+| `/customers` | Yes | Customers page |
+| `/deliveries` | Yes | Deliveries list |
+| `/deliveries/:deliveryId` | Yes | Delivery details |
 | `/receive/:token` | No | Public delivery receive (PIN-protected) |
-
-### Authentication Flow
-1. User navigates to a protected route
-2. `ProtectedRoute` checks authentication status
-3. If not authenticated, redirects to `/login`
-4. User submits login form
-5. Credentials sent to `POST /api/account/login`
-6. Server returns JWT token and user info
-7. Token stored in `localStorage` and state
-8. User redirected to originally requested route
-9. All subsequent API requests include the token
-
-### Logout
-- Click logout button in sidebar
-- `AuthContext.logout()` clears token and user
-- Redirects to `/login`
-- Protected routes now redirect to login
 
 ---
 
@@ -215,45 +194,22 @@ Features:
 
 **Layout:** Split Screen (50% left form, 50% right pattern on large screens)
 
-**Left Side (Form):**
-- Company logo (amtlogo.png, w-32)
+**Features:**
+- Company logo (amtlogo.png)
 - Title: "Welcome Back"
-- Subtitle: "Sign in to access your account"
-- Error message display (brand-red accent on failure)
-- Form fields:
-  - Email input (required, validated)
-  - Password input (required, masked)
-  - "Sign In" button (full width, blue, shows loading state)
-- Demo credentials hint for development
-
-**Right Side (Pattern):**
-- Solid blue background (`bg-brand-blue`)
-- Subtle diagonal dot pattern (5% opacity)
-- Decorative concentric circles
-- Small accent dots
-
-**State Management:**
-- `email`: string
-- `password`: string
-- `loading`: boolean (submitting state)
-- `error`: string | null (error message)
-
-**API Integration:**
-- Posts to `POST /api/account/login`
-- On success: stores JWT token and user info via `AuthContext`
-- On success: redirects to originally requested page or `/`
-- On failure: displays error message
-- Preserves redirect destination via `useLocation().state`
+- Email and password inputs
+- Error message display (brand-red accent)
+- "Sign In" button with loading state
+- Demo credentials hint
 
 **Demo Credentials:**
 - Email: admin@amtemeterai.com
 - Password: Admin@123
 
-**Styling:**
-- Background: `bg-brand-blue/[0.02]`
-- Premium rounded corners (`rounded-lg`)
-- Subtle shadows and transitions
-- Error messages use brand-red accent
+**API Integration:**
+- Posts to `POST /api/account/login`
+- Stores JWT token and user info via `AuthContext`
+- Redirects to originally requested page or `/`
 
 ---
 
@@ -261,26 +217,19 @@ Features:
 
 **Layout:** DashboardLayout with Sidebar
 
+**Features:**
+- KPI cards:
+  - Total Deliveries
+  - Pending Invoice
+  - Rejection Rate
+- Interactive area chart showing delivery trends (30-day)
+- Recent activity feed with severity indicators
+- ERP connectivity status indicator
+
 **Components:**
-- Page Header: Title + Description
-- Metrics Grid: 3 Cards with Icons
-- Recent Activity: List with Dot Indicators
-
-**Metrics Cards:**
-1. **Ongoing Deliveries** - Value: "24", Description: "Currently in transit"
-2. **Pending Invoice** - Value: "156", Description: "Delivered but not invoiced"
-3. **e-Meterai Quota** - Value: "8,432", Description: "Remaining stamps this month"
-
-Each card includes:
-- Icon in rounded container (`bg-brand-blue/5`)
-- Uppercase tracking-wider label
-- Large bold value
-- Description text
-
-**Recent Activity Section:**
-- Displays 3 mock activities
-- Each item: Dot indicator + text + timestamp
-- Hover effects on rows
+- Page Header with title and description
+- Metrics Grid with icons
+- Recent Activity list
 
 ---
 
@@ -288,34 +237,26 @@ Each card includes:
 
 **Layout:** DashboardLayout with Sidebar
 
-**Components:**
-- Page Header: Title + Description + "Sync Customers" button
-- Card with Table
-- Pagination
+**Features:**
+- Search/filter by name, code, email, or PIN
+- Sort functionality on all columns
+- Analytics cards showing:
+  - Total customers
+  - Verified domains
+  - Missing communications
+- "Sync Customers" button
+- Table with pagination
 
 **Table Columns:**
-| Column | Style |
-|--------|-------|
-| Customer Code | `font-medium text-brand-blue` |
-| Customer Name | Default |
-| Email | `text-brand-blue/70` |
-| Address | `text-brand-blue/70` |
-
-**Header Styling:**
-- Uppercase, tracking-wider
-- `text-brand-blue/50`
+- Customer Code
+- Customer Name
+- Email
+- Address
 
 **API Integration:**
-- Fetches customer data from `GET /api/customers` on mount
-- Uses environment variable `VITE_API_URL` for endpoint configuration
-- Displays `customerId`, `customerCode`, `customerName`, `customerEmail` from API response
-- Loading state with `loading` boolean
-
-**Pagination:**
-- 10 items per page (`ITEMS_PER_PAGE`)
-- Smart ellipsis display for 7+ pages
-- Previous/Next buttons
-- Page number buttons with active state
+- Fetches customer data from `GET /api/customers`
+- Syncs via `POST /api/customers/sync`
+- Uses authenticated API helper
 
 ---
 
@@ -323,33 +264,27 @@ Each card includes:
 
 **Layout:** DashboardLayout with Sidebar
 
-**Components:**
-- Page Header: Title + Description
-- Card with Table
-- Pagination
+**Features:**
+- Multi-column sorting (date, number, status)
+- Compliance type filters (BC, Non-BC, All)
+- Discrepancy-only filter
+- Photo proof indicators
+- Location-based routing information
+- Status badges with visual indicators
 
 **Table Columns:**
-| Column | Style |
-|--------|-------|
-| Delivery Code | `font-medium text-brand-blue` |
-| Customer Code | Default |
-| Status | Badge component (currently commented out) |
-| Date | `text-brand-blue/70` |
+- Delivery Code
+- Customer Code
+- Type (BC/Non-BC)
+- Status (Badge)
+- Date
+- Photos count
+- Location info (Province, City, District)
 
 **Status Badges:**
 - `OnGoing` → `default` variant (blue)
 - `Delivered` → `default` variant (blue)
 - `Pending` → `accent` variant (red)
-
-**API Integration:**
-- Fetches delivery data from `GET /api/deliveries` on mount
-- Uses environment variable `VITE_API_URL` for endpoint configuration
-- Displays `deliveryId`, `deliveryNumber`, `customerCode`, `deliveryDate`, `received`, `invoiced` from API response
-- Loading state with `loading` boolean
-
-**Pagination:**
-- 5 items per page (`ITEMS_PER_PAGE`)
-- Smart ellipsis display
 
 ---
 
@@ -359,54 +294,45 @@ Each card includes:
 
 **Components:**
 - Page Header: Title + Description + Back Button
-- Delivery Header Card: Delivery info with customer details
+- Delivery Info Card: Basic delivery info + status badge
 - Receiver Access Card: Public URL + QR Code
+- Photo Gallery Card: Photo evidence with preview modal
+- Location Map Card: Google Maps embed with delivery location
 - Delivery Lines Table: Detailed line items
 
 **Delivery Info Displayed:**
 - Delivery Number, Date, Remarks
 - Customer Code and Name
-- Received Status (Badge: "Received" / "Not Received")
-- Invoice Status (Badge: "Invoiced" / "Not Invoiced")
-- Receiver Name and Notes (if received)
+- Plant, Sales Person info
+- Delivery Type (BC/Non-BC)
+- Receiver Status (Fully/Partial Received)
+- GPS Coordinates (Latitude, Longitude)
+- Structured Address (Province, CityRegency, District, FormattedAddress)
+- Photos count
+- Received/Invoiced Status
 
 **Receiver Access Features:**
 - Public URL input field (read-only)
 - Copy URL button with success feedback
 - "Open Link in New Tab" button
 - QR Code display (200x200px, generated with qrcode library)
-- Download QR Code button (saves as PNG)
+- Download QR Code button
 
-**Delivery Lines Table Columns:**
-| Column | Style |
-|--------|-------|
-| Line # | `font-medium text-brand-blue` |
-| Item Code | `text-brand-blue/70` |
-| Description | Default |
-| Sales Qty | `text-right text-brand-blue/80` |
-| Pack Qty | `text-right text-brand-blue/80` |
-| Delivered | `text-right text-brand-blue/80` |
-| Returned | `text-right text-brand-blue/80` |
-| Rejected | `text-right text-brand-blue/80` |
+**Photo Gallery Features:**
+- Grid display of delivery photos
+- Click to enlarge in preview modal
+- Show photo metadata (filename, upload date)
+- Visual indicators for photo status
+
+**Location Map Features:**
+- Google Maps embed showing delivery location
+- Display coordinates
+- Link to open in Google Maps
+- Structured address display
 
 **API Integration:**
-- Fetches delivery data from `GET /api/deliveries/{deliveryId}` on mount
-- Uses `useParams` hook to get `deliveryId` from URL
-- Generates QR code in frontend using `qrcode` library
-- Error handling with back button navigation
-- Loading state display
-
-**QR Code Generation:**
-```typescript
-const qrDataUrl = await QRCode.toDataURL(publicUrl, {
-  width: 200,
-  margin: 1,
-  color: {
-    dark: "#1d2351",  // Brand blue
-    light: "#ffffff",
-  },
-})
-```
+- Fetches delivery data from `GET /api/deliveries/{deliveryId}`
+- Generates QR code client-side using `qrcode` library
 
 ---
 
@@ -414,62 +340,31 @@ const qrDataUrl = await QRCode.toDataURL(publicUrl, {
 
 **Layout:** Standalone (No sidebar, no layout wrapper)
 
-**Components:**
-- PIN Verification Card: Security PIN entry (shown before delivery details)
-- Page Header: Title + Description
-- Delivery Info Card: Basic delivery info + status badge
-- Delivery Items Card: Line items with quantity inputs
-- Receiver Information Card: Name and notes (if not received)
-- Success Message Card: Displayed after submission
-- Submit Button
-
 **States:**
-- Loading: Shows loading message
-- Error: Shows error message in centered card
-- Not Verified: Shows PIN verification card
-- Verified: Shows delivery details and form
-- Already Received: Shows delivery in read-only mode
-- Not Received: Shows form with editable inputs
-- Submitted: Shows success message
+- Loading
+- Error
+- Not Verified (PIN verification)
+- Verified (delivery details and form)
+- Already Received (read-only mode)
+- Not Received (editable form)
+- Submitted (success message)
 
 **PIN Verification:**
-**Components:**
 - Lock icon in centered circle
 - Title: "Delivery Verification"
-- Description: "Please enter the security PIN provided by the sender."
-- PIN Input (type="password", inputMode="numeric", maxLength=6)
-  - Centered text with wide letter spacing
-  - Auto-focused on mount
-  - Enter key submits
-- Error message (red background, displayed for invalid PIN)
+- PIN Input (password, numeric, maxLength=6)
+- Auto-focused on mount
+- Enter key submits
+- Error message display (red background)
 - "Access Delivery" button
-
-**States:**
-- `isVerified`: boolean (default: false)
-- `pinInput`: string
-- `verifying`: boolean (loading state)
-- `pinError`: string | null
-
-**Persistence:**
-- Verification status stored in `sessionStorage` as `verified-{token}`
-- Cleared when component unmounts or token changes
-
-**API Integration:**
-- Verifies PIN via `POST /api/deliveries/{token}/verify-pin`
-- Request body: `{ "pin": "123456" }`
-- Response: `200 OK` (success), `401 Unauthorized` (invalid PIN), `404 Not Found`
-
-**Security Features:**
-- Delivery details are not fetched until PIN is verified
-- PIN input is masked (type="password")
-- PIN verification is server-side
-- Verification persists only for current session
+- Verification persists in sessionStorage
 
 **Delivery Items Form:**
-Each line item has three quantity inputs:
+Each line item has:
 - Delivered (number, step 0.01)
 - Returned (number, step 0.01)
 - Rejected (number, step 0.01)
+- Remarks/Comment (text input)
 
 **Validation:**
 - Total (Delivered + Returned + Rejected) cannot exceed Pack Quantity
@@ -480,48 +375,59 @@ Each line item has three quantity inputs:
 **Receiver Information:**
 - Receiver Name (required text input)
 - Notes (optional text input)
-- Only shown for new (not received) deliveries
+
+**Photo Management (NEW):**
+- Max 5 photos per delivery
+- Max file size: 5MB
+- Supported formats: JPG, PNG
+- Hybrid display:
+  - **Legacy photos** - Already stored on server
+  - **Staged photos** - New uploads pending submission
+- Legacy photo actions:
+  - Toggle delete (🗑️ Wipe / ↩️ Keep)
+  - Visual dimming when marked for deletion
+  - "Legacy" badge
+- Staged photo actions:
+  - Remove from staged uploads
+  - Amber border styling
+  - "Staged" badge
+- Real-time photo count display
+
+**GPS Location Capture (NEW):**
+- Automatic geolocation on page load using browser Geolocation API
+- High accuracy mode enabled
+- 5-second timeout
+- Coordinates sent with form submission:
+  - Latitude
+  - Longitude
+- Backend performs reverse geocoding to address
 
 **API Integration:**
-- Fetches delivery data from `GET /api/deliveries/{token}` on mount
-- Submits delivery confirmation to `PATCH /api/deliveries/{token}`
-- Request body includes:
-  ```json
-  {
-    "receiverName": "John Doe",
-    "receiverNotes": "Received in good condition",
-    "lines": [
-      {
-        "deliveryLineNumber": "1",
-        "packQuantityDelivered": 10.00,
-        "packQuantityReturned": 0.00,
-        "packQuantityRejected": 0.00
-      }
-    ]
-  }
-  ```
-- Updates local state after successful submission
-- Error handling with user-friendly messages
+- Verifies PIN via `POST /api/deliveries/{token}/verify-pin`
+- Fetches delivery via `GET /api/deliveries/{token}`
+- Submits confirmation via `PATCH /api/deliveries/{token}` (multipart/form-data)
 
-**Form State:**
+**Form Submission Payload:**
 ```typescript
-interface LineFormState {
-  deliveryLineNumber: string
-  delivered: string
-  returned: string
-  rejected: string
-}
+formData.append("ReceiverName", ...)
+formData.append("ReceiverNotes", ...)
+formData.append("Latitude", ...)
+formData.append("Longitude", ...)
+photoFiles.forEach(file => formData.append("NewPhotoFiles", file))
+keysToDelete.forEach((key, index) => formData.append(`KeysToDelete[${index}]`, key))
+lines.forEach((line, index) => {
+  formData.append(`Lines[${index}].DeliveryLineNumber`, ...)
+  formData.append(`Lines[${index}].PackQuantityDelivered`, ...)
+  formData.append(`Lines[${index}].PackQuantityReturned`, ...)
+  formData.append(`Lines[${index}].PackQuantityRejected`, ...)
+  formData.append(`Lines[${index}].LineComment`, ...)
+})
 ```
 
-**UX Features:**
-- PIN verification gate before accessing delivery
-- Real-time validation as user types
-- Success checkmark animation
-- Disabled states for read-only view
-- Responsive design (max-width: xl)
-- Clear visual hierarchy
-- Enter key support for PIN submission
-- Session-based verification persistence
+**Financial Lock:**
+- Banner displayed when delivery is invoiced
+- Form inputs disabled for invoiced deliveries
+- Message: "This record has already been invoiced and cannot be modified."
 
 ---
 
@@ -560,55 +466,6 @@ interface LineFormState {
 
 ---
 
-## API Helper (`api.ts`)
-
-### Purpose
-Provides authenticated API calls with automatic JWT token injection.
-
-### Usage
-```typescript
-import { useApi } from "../utils/api"
-
-const api = useApi()
-
-// GET request
-const res = await api.get("/api/customers")
-
-// POST request
-const res = await api.post("/api/customers/sync", { data: "value" })
-
-// PATCH request
-const res = await api.patch("/api/deliveries/123", { received: true })
-
-// DELETE request
-const res = await api.delete("/api/items/123")
-
-// Custom fetch
-const res = await api.fetch("/api/customers", {
-  method: "POST",
-  body: JSON.stringify(customerData),
-})
-```
-
-### Features
-- Automatically adds `Authorization: Bearer {token}` header
-- Token retrieved from `localStorage` (`auth_token`)
-- Handles 401 responses by:
-  - Clearing token from localStorage
-  - Clearing user from localStorage
-  - Redirecting to `/login`
-
-### Custom Fetch
-```typescript
-const response = await createAuthenticatedFetch()
-const data = await response("/api/customers", {
-  method: "POST",
-  body: JSON.stringify(payload),
-})
-```
-
----
-
 ## UI Components
 
 ### Button
@@ -626,12 +483,6 @@ const data = await response("/api/customers", {
 | `sm` | h-9, text-xs |
 | `default` | h-10 |
 | `lg` | h-11 |
-
-**Features:**
-- `rounded-lg` corners
-- Focus ring with red accent
-- Smooth transitions (duration-200)
-- Disabled state handling
 
 ---
 
@@ -655,11 +506,6 @@ const data = await response("/api/customers", {
 | `outline` | `border brand-blue/20 text-brand-blue` |
 | `accent` | `bg-brand-red/10 text-brand-red` |
 
-**Features:**
-- `rounded-full`
-- `px-2.5 py-0.5`
-- `text-xs font-medium`
-
 ---
 
 ### Input
@@ -675,16 +521,6 @@ const data = await response("/api/customers", {
 
 ---
 
-### Label
-
-**Features:**
-- `text-sm font-medium`
-- Peer-disabled support
-- Proper htmlFor attribute for accessibility
-- Used with Input components for form labeling
-
----
-
 ### Table
 
 **Components:**
@@ -694,11 +530,6 @@ const data = await response("/api/customers", {
 - `TableRow` - Tr with hover state (`hover:bg-brand-blue/[0.02]`)
 - `TableHead` - Th (`h-12`, `px-4`, `text-left`, `align-middle`)
 - `TableCell` - Td (`p-4`, `align-middle`)
-
-**Features:**
-- Border-bottom on rows
-- Hover effect on rows
-- Selected state support
 
 ---
 
@@ -717,7 +548,6 @@ const data = await response("/api/customers", {
 - Smart ellipsis for 7+ pages
 - Active state: `bg-brand-blue text-white`
 - Disabled state: `text-brand-blue/30`
-- Hover state: `hover:bg-brand-blue/10`
 
 ---
 
@@ -763,8 +593,6 @@ cn("class1", condition && "class2", "class3")
 
 ### Root Scripts (Concurrent Development)
 
-The root `package.json` provides scripts to run both backend and frontend concurrently:
-
 | Command | Description |
 |---------|-------------|
 | `npm run dev` | Runs both backend and frontend concurrently |
@@ -787,14 +615,6 @@ The root `package.json` provides scripts to run both backend and frontend concur
 
 ---
 
-## Assets
-
-| File | Description |
-|------|-------------|
-| `amtlogo.png` | Company logo used in sidebar and login page |
-
----
-
 ## Key Features
 
 ### Premium UI Elements
@@ -803,6 +623,28 @@ The root `package.json` provides scripts to run both backend and frontend concur
 - Subtle hover effects on all interactive elements
 - Red accent only for focus states and highlights
 - Consistent opacity-based color system
+
+### Authentication & Security
+- JWT-based authentication
+- Protected routes with automatic redirects
+- Session persistence via localStorage
+- PIN-based verification for public delivery access
+- Financial lock for invoiced deliveries
+
+### Photo Evidence System
+- Multi-file upload with drag-and-drop support
+- Real-time preview of staged uploads
+- Hybrid photo management (server + client)
+- Visual status indicators (Legacy/Staged)
+- Delete/revert functionality
+- File validation (size limits, type restrictions)
+
+### GPS & Location Services
+- Automatic geolocation on page load
+- GPS coordinates sent with form submission
+- Google Maps integration for visualization
+- Structured address fields (Province, City, District)
+- Reverse geocoding by backend
 
 ### Accessibility
 - Proper semantic HTML
@@ -814,6 +656,7 @@ The root `package.json` provides scripts to run both backend and frontend concur
 - Split-screen login collapses on mobile
 - Table overflow handling
 - Responsive grid layouts
+- Mobile-first design
 
 ---
 
@@ -821,18 +664,16 @@ The root `package.json` provides scripts to run both backend and frontend concur
 
 | Page | API Integration | Authentication | Notes |
 |------|----------------|----------------|-------|
-| Login | ✅ Live API | No | Posts to `POST /api/account/login` |
-| Dashboard | Mock data | Yes (via ProtectedRoute) | Static metrics displayed |
-| Customers | ✅ Live API | Yes | Uses authenticated API helper |
-| Deliveries List | ✅ Live API | Yes | Uses authenticated API helper |
-| Delivery Detail | ✅ Live API | Yes | Uses authenticated API helper |
-| Public Receive | ✅ Live API | No | PIN verification via `POST /api/deliveries/{token}/verify-pin`, then fetches/updates via token endpoint |
+| Login | Live API | No | Posts to `POST /api/account/login` |
+| Dashboard | Mock data | Yes | Static metrics displayed |
+| Customers | Live API | Yes | Uses authenticated API helper |
+| Deliveries List | Live API | Yes | Uses authenticated API helper |
+| Delivery Detail | Live API | Yes | Uses authenticated API helper |
+| Public Receive | Live API | No | PIN verification, GPS, photo uploads |
 
 ---
 
 ## PIN Verification System
-
-The application implements a PIN-based security layer for public delivery confirmation pages.
 
 ### Overview
 - Receivers must enter correct PIN (from Customer.CustomerPin) before accessing delivery details
@@ -866,36 +707,11 @@ const handleVerifyPin = async () => {
 }
 ```
 
-**Backend (DeliveriesController.cs):**
-```csharp
-[HttpPost("{token}/verify-pin")]
-public async Task<IActionResult> VerifyPin(Guid token, [FromBody] PinRequestDto request)
-{
-    var delivery = await _db.DeliveryHeaders
-        .Include(d => d.Customer)
-        .FirstOrDefaultAsync(d => d.ReceiverToken == token);
-
-    if (delivery == null) return NotFound();
-
-    if (delivery.Customer.CustomerPin == request.Pin)
-        return Ok(new { valid = true });
-
-    return Unauthorized("Invalid PIN");
-}
-```
-
-### Security Considerations
+**Security Considerations:**
 - PIN is validated on the server, never exposed in frontend
 - Delivery details are not loaded until PIN is verified
 - Verification is session-based, cleared on component unmount
 - PIN input is masked (password type) with numeric input mode
-
-### UX Features
-- Auto-focus on PIN input
-- Enter key submits the form
-- Clear error messages in brand-red accent
-- Disabled button state while verifying
-- Persisted verification for navigation within session
 
 ---
 
@@ -922,32 +738,6 @@ const qrDataUrl = await QRCode.toDataURL(publicUrl, {
 })
 ```
 
-**Features:**
-- Generates Data URL (base64) for direct image display
-- Configurable size and colors
-- Used for sharing delivery links with customers
-
----
-
-## Public URL Handling
-
-The frontend generates public URLs for delivery receiving:
-
-**Format:**
-```
-{PUBLIC_BASE_URL}/receive/{receiverToken}
-```
-
-**Usage:**
-- Displayed in Delivery Detail page
-- Can be copied to clipboard
-- Opens in new tab for customer access
-- Embedded in QR code for easy scanning
-
-**Environment-Based:**
-- Development: `http://localhost:5173/receive/{token}`
-- Production: `http://192.168.110.183/receive/{token}` (configured via PUBLIC_BASE_URL)
-
 ---
 
 ## Form Handling Patterns
@@ -966,7 +756,6 @@ const validateLines = (): boolean => {
   const errors: Record<string, string> = {}
   let isValid = true
 
-  // Validation logic
   delivery.lines.forEach((line) => {
     const total = delivered + returned + rejected
     if (total > line.packQuantity) {
@@ -990,14 +779,11 @@ const handleSubmit = async (e: React.FormEvent) => {
   try {
     const res = await fetch(`${API_URL}/endpoint`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
+      body: formData,
     })
 
     if (!res.ok) throw new Error("Failed")
-
     setSubmitted(true)
-    // Update local state
   } catch (err) {
     setError(err.message)
   } finally {
@@ -1013,38 +799,27 @@ const handleSubmit = async (e: React.FormEvent) => {
 ### Frontend Dockerfile
 
 ```dockerfile
-# =========================
 # BUILD STAGE
-# =========================
 FROM node:20 AS build
 
 WORKDIR /app
 
 COPY package*.json ./
-
 RUN npm install
 
 COPY . .
-
 RUN npm run build
 
-# =========================
 # RUNTIME STAGE
-# =========================
 FROM nginx:alpine
 
-# Copy build output
 COPY --from=build /app/dist /usr/share/nginx/html
-
-# Copy nginx configuration for SPA routing
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 
 EXPOSE 80
 ```
 
 ### Frontend Nginx Configuration
-
-The frontend includes a custom `nginx.conf` for SPA routing:
 
 ```nginx
 server {
@@ -1053,11 +828,9 @@ server {
     location / {
         root /usr/share/nginx/html;
         index index.html index.htm;
-        # This line is the magic fix for SPA routing:
         try_files $uri $uri/ /index.html;
     }
 
-    # Optional: Handle static assets cache
     location ~* \.(?:ico|css|js|gif|jpe?g|png)$ {
         root /usr/share/nginx/html;
         expires 30d;
@@ -1065,8 +838,6 @@ server {
     }
 }
 ```
-
-**Key Feature:** The `try_files` directive ensures that client-side routing works correctly by redirecting all requests to `index.html` when the requested file doesn't exist.
 
 ---
 

@@ -201,9 +201,9 @@ export function DashboardPage() {
                   {logs.length > 0 ? (
                     <div className="divide-y divide-brand-blue/5">
                       {logs.map((log) => (
-                        <div key={log.logID} className="flex items-center justify-between p-4 hover:bg-brand-blue/[0.01] transition-colors">
+                        <div key={log.logID} className="flex items-center justify-between p-4 hover:bg-brand-blue/1 transition-colors">
                           <div className="flex items-center gap-3">
-                            <div className={`w-1.5 h-1.5 rounded-full ${getSeverityColor(log.severity)} flex-shrink-0`} />
+                            <div className={`w-1.5 h-1.5 rounded-full ${getSeverityColor(log.severity)} shrink-0`} />
                             <div>
                               <p className="text-sm font-semibold text-brand-blue">
                                 {resolveLogTitle(log)}

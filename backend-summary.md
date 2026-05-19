@@ -2,7 +2,7 @@
 
 ## Overview
 
-The backend is built with **ASP.NET Core 8.0** using **Entity Framework Core** with **PostgreSQL** database. It provides RESTful APIs for managing customers and deliveries in the e-Meterai delivery management system with **JWT Bearer Token Authentication**.
+The backend is built with **ASP.NET Core 8.0** using **Entity Framework Core** with **PostgreSQL** database. It provides RESTful APIs for managing customers and deliveries in the e-Meterai delivery management system with **JWT Bearer Token Authentication**. The system includes advanced features such as photo evidence management, GPS location tracking, document storage via MinIO, and activity logging.
 
 ---
 
@@ -20,6 +20,7 @@ The backend is built with **ASP.NET Core 8.0** using **Entity Framework Core** w
 | Npgsql | 8.0.0 | PostgreSQL Provider |
 | Swashbuckle.AspNetCore | 6.5.0 | Swagger/OpenAPI |
 | QRCoder | 1.5.1 | QR Code Generation |
+| AWSSDK.S3 | - | MinIO Storage Client |
 
 ---
 
@@ -65,37 +66,43 @@ backend/amtemeterai.Api/
 ├── Models/               # Domain Models
 │   ├── ApplicationUser.cs   # Identity User (extends IdentityUser)
 │   ├── Customer.cs
-│   ├── DeliveryHeader.cs
-│   └── DeliveryLine.cs
+│   ├── DeliveryHeader.cs   # Enhanced with GPS & location fields
+│   ├── DeliveryLine.cs     # Enhanced with LineComment field
+│   ├── Document.cs         # NEW: Unified document storage
+│   └── ActivityLog.cs      # NEW: Activity logging
 ├── Dtos/                 # Data Transfer Objects
-│   ├── AuthResponseDto.cs     # Login/Register response
-│   ├── LoginDto.cs            # Login request
-│   ├── RegisterDto.cs         # Register request
+│   ├── AuthResponseDto.cs
+│   ├── LoginDto.cs
+│   ├── RegisterDto.cs
 │   ├── CustomerResponseDto.cs
 │   ├── CustomerUpsertDto.cs
 │   ├── DeliveryCreateResponseDto.cs
 │   ├── DeliveryHeaderDto.cs
 │   ├── DeliveryLineDto.cs
 │   ├── DeliveryLineResponseDto.cs
+│   ├── DeliveryPhotoResponseDto.cs   # NEW: Photo response format
 │   ├── DeliveryReceiveDto.cs
 │   ├── DeliveryResponseDto.cs
 │   ├── DeliveryUpsertDto.cs
-│   └── PinRequestDto.cs
+│   ├── DeliveryEditConfirmationDto.cs # NEW: Delivery confirmation updates
+│   ├── PinRequestDto.cs
+│   ├── GeoLocationResult.cs           # NEW: GPS location result
+│   └── GoogleGeocodeResponse.cs       # NEW: Google Maps API response
 ├── Data/                 # Database Context
-│   ├── AppDbContext.cs           # Inherits from IdentityDbContext<ApplicationUser>
+│   ├── AppDbContext.cs
 │   └── AppDbContextFactory.cs
 ├── Services/             # Business Logic Layer
 │   ├── CustomerService.cs
 │   ├── ICustomerSource.cs
 │   ├── DummyCustomerSource.cs
-│   └── ErpCustomerSource.cs
+│   ├── ErpCustomerSource.cs
+│   ├── IStorageService.cs        # NEW: Storage interface
+│   └── MinioStorageService.cs    # NEW: MinIO implementation
 ├── Helpers/              # Helper Utilities
 │   └── QrCodeHelper.cs
+├── Config/               # Configuration Options
+│   └── SapOptions.cs
 ├── Migrations/           # Database Migrations
-│   ├── 20260430111946_InitialCreate.cs
-│   ├── 20260430120637_RemoveUnusedDeliveryID.cs
-│   └── 20260430153546_ChangeForeignKeyForDeliveryLine.cs
-├── Properties/           # .NET Project Properties
 └── Program.cs            # Application Entry Point
 ```
 
@@ -115,6 +122,7 @@ backend/amtemeterai.Api/
 
 **Relationships:**
 - One-to-Many with `DeliveryHeader` (Deliveries)
+- One-to-Many with `Document` (if applicable)
 
 ---
 
@@ -132,10 +140,28 @@ backend/amtemeterai.Api/
 | ReceiverNotes | string? | Receiver notes (nullable) |
 | Received | bool | Delivery received status |
 | Invoiced | bool | Invoice status |
+| Plant | string? | Plant/location identifier |
+| SalesPersonName | string? | Sales person name |
+| SalesPersonEmail | string? | Sales person email |
+| Type | DeliveryType (Enum) | Delivery type (BC=1, NonBC=2) |
+| Status | ReceiverStatus? (Enum) | Receiver status (FullyReceived=1, PartialReceived=2) |
+| Latitude | double? | GPS latitude coordinate |
+| Longitude | double? | GPS longitude coordinate |
+| Province | string? | Administrative province |
+| CityRegency | string? | Administrative city/regency |
+| District | string? | Administrative district |
+| FormattedAddress | string? | Full formatted address string |
 
 **Relationships:**
 - Many-to-One with `Customer`
 - One-to-Many with `DeliveryLine` (Lines)
+- One-to-Many with `Document` (Photos)
+
+**Enums:**
+```csharp
+public enum DeliveryType { BC = 1, NonBC = 2 }
+public enum ReceiverStatus { FullyReceived = 1, PartialReceived = 2 }
+```
 
 ---
 
@@ -155,9 +181,51 @@ backend/amtemeterai.Api/
 | PackQuantityDelivered | decimal | 18,2 | Delivered quantity |
 | PackQuantityReturned | decimal | 18,2 | Returned quantity |
 | PackQuantityRejected | decimal | 18,2 | Rejected quantity |
+| LineComment | string? | - | Line-specific comments |
 
 **Relationships:**
 - Many-to-One with `DeliveryHeader`
+
+---
+
+### Document (NEW)
+
+| Column | Type | Description |
+|--------|------|-------------|
+| DocumentID | int (PK) | Primary Key |
+| StorageKey | string | MinIO storage key path |
+| FileName | string | Original file name |
+| ContentType | string | MIME type (e.g., "image/jpeg") |
+| Type | DocumentType (Enum) | Document type (DeliveryPhoto=1, DeliveryPrintOut=2, InvoicePrintOut=3) |
+| UploadedAt | DateTime | Upload timestamp |
+| DeliveryID | int? (FK) | Optional link to Delivery |
+| InvoiceID | int? (FK) | Optional link to Invoice (future) |
+
+**Enums:**
+```csharp
+public enum DocumentType { DeliveryPhoto = 1, DeliveryPrintOut = 2, InvoicePrintOut = 3 }
+```
+
+**Storage Key Pattern:**
+```
+deliveries/{deliveryId}/photos/{guid}.{ext}
+```
+
+**Relationships:**
+- Many-to-One with `DeliveryHeader` (polymorphic, nullable)
+
+---
+
+### ActivityLog (NEW)
+
+| Column | Type | Description |
+|--------|------|-------------|
+| LogID | int (PK) | Primary Key |
+| Timestamp | DateTime | Event timestamp (UTC) |
+| EventType | string | Type of event (e.g., "DeliveryCreated") |
+| ReferenceID | string | Reference identifier (e.g., delivery number) |
+| Message | string | Event description |
+| Severity | string | Severity level (Info, Success, Warning) |
 
 ---
 
@@ -202,11 +270,6 @@ http://localhost/api/swagger
 
 **Response:** `200 OK` or `400 Bad Request` (validation errors)
 
-**Requirements:**
-- Email must be unique
-- Password must be at least 6 characters
-- FullName is required
-
 ---
 
 ### Login
@@ -232,12 +295,6 @@ http://localhost/api/swagger
 ```
 
 **Response:** `200 OK` or `401 Unauthorized` (invalid credentials)
-
-**JWT Token Usage:**
-Include the token in the Authorization header for subsequent requests:
-```
-Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
-```
 
 ---
 
@@ -306,11 +363,6 @@ Authorization: Bearer {token}
 
 **Response:** `200 OK`
 
-**Logic:**
-- If customer with `CustomerCode` doesn't exist → Create new customer
-  - Default `CustomerPin` is "123456" if not provided
-- If customer exists → Update `CustomerName`, `CustomerEmail`, and optionally `CustomerPin`
-
 ---
 
 ### Sync Customers
@@ -330,11 +382,6 @@ Authorization: Bearer {token}
 
 **Response:** `200 OK`
 
-**Logic:**
-- Fetches customers from `ICustomerSource` implementation
-- Upserts all customers using `CustomerService`
-- Returns count of inserted and updated customers
-
 ---
 
 ## Deliveries API
@@ -342,9 +389,10 @@ Authorization: Bearer {token}
 **Authentication:**
 - Most endpoints require authentication (`[Authorize]`)
 - Public endpoints (no auth required):
-  - `GET /api/deliveries/{token}` - Get delivery by receiver token (for public receive page)
+  - `GET /api/deliveries/{token}` - Get delivery by receiver token
   - `POST /api/deliveries/{token}/verify-pin` - Verify PIN for delivery access
-  - `PATCH /api/deliveries/{token}` - Update delivery by receiver token (after PIN verification)
+  - `PATCH /api/deliveries/{token}` - Update delivery by receiver token
+  - `GET /api/deliveries/files/download` - Download file from storage
 
 ### Get All Deliveries
 **Endpoint:** `GET /api/deliveries`
@@ -363,7 +411,16 @@ Authorization: Bearer {token}
     "customerName": "PT Maju Jaya Logistics",
     "received": false,
     "invoiced": false,
-    "publicUrl": "http://192.168.110.183/receive/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+    "publicUrl": "http://192.168.110.183/receive/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+    "plant": "JAKARTA",
+    "salesPersonName": "John Doe",
+    "salesPersonEmail": "john@example.com",
+    "cityRegency": "Jakarta Selatan",
+    "district": "Tebet",
+    "province": "DKI Jakarta",
+    "photosCount": 2,
+    "type": 1,
+    "status": null
   }
 ]
 ```
@@ -375,14 +432,12 @@ Authorization: Bearer {token}
 ### Get Delivery by ID
 **Endpoint:** `GET /api/deliveries/{deliveryId}`
 
-**Description:** Retrieves delivery details including lines by delivery ID.
-
-**URL Parameter:**
-- `deliveryId` (int) - The delivery ID
+**Description:** Retrieves delivery details including lines, photos, and location data.
 
 **Response Body:**
 ```json
 {
+  "deliveryID": 1,
   "deliveryNumber": "DLV1001",
   "deliveryDate": "2025-05-03T10:00:00",
   "deliveryRemarks": "Express delivery",
@@ -394,6 +449,25 @@ Authorization: Bearer {token}
   "received": false,
   "invoiced": false,
   "publicUrl": "http://192.168.110.183/receive/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+  "plant": "JAKARTA",
+  "salesPersonName": "John Doe",
+  "salesPersonEmail": "john@example.com",
+  "type": 1,
+  "status": null,
+  "latitude": -6.2088,
+  "longitude": 106.8456,
+  "province": "DKI Jakarta",
+  "cityRegency": "Jakarta Selatan",
+  "district": "Tebet",
+  "formattedAddress": "Tebet, South Jakarta City, Jakarta, Indonesia",
+  "photos": [
+    {
+      "fileName": "photo1.jpg",
+      "storageKey": "deliveries/1/photos/abc123.jpg",
+      "downloadUrl": "http://localhost:8080/api/deliveries/files/download?key=deliveries%2F1%2Fphotos%2Fabc123.jpg",
+      "uploadedAt": "2025-05-20T00:00:00Z"
+    }
+  ],
   "lines": [...]
 }
 ```
@@ -414,6 +488,10 @@ Authorization: Bearer {token}
   "deliveryNumber": "DLV1001",
   "deliveryDate": "2025-05-03T10:00:00",
   "deliveryRemarks": "Express delivery",
+  "plant": "JAKARTA",
+  "salesPersonName": "John Doe",
+  "salesPersonEmail": "john@example.com",
+  "type": 1,
   "lines": [
     {
       "deliveryLineNumber": "1",
@@ -437,13 +515,7 @@ Authorization: Bearer {token}
 }
 ```
 
-**Response:** `200 OK`, `400 Bad Request` (customer not found), or `409 Conflict` (delivery exists)
-
-**Logic:**
-- Validates customer exists by `CustomerCode`
-- Creates new `DeliveryHeader` with new `ReceiverToken` (Guid)
-- Creates all `DeliveryLine` records
-- Generates `PublicUrl` and `QrCodeBase64` for the delivery
+**Response:** `200 OK`, `400 Bad Request`, or `409 Conflict`
 
 ---
 
@@ -452,43 +524,16 @@ Authorization: Bearer {token}
 
 **Description:** Updates an existing delivery. Does NOT regenerate the ReceiverToken.
 
-**Request Body:**
-```json
-{
-  "customerCode": "CUST001",
-  "deliveryNumber": "DLV1001",
-  "deliveryDate": "2025-05-03T10:00:00",
-  "deliveryRemarks": "Express delivery",
-  "lines": [
-    {
-      "deliveryLineNumber": "1",
-      "deliveryItemCode": "ITEM001",
-      "deliveryItemDescription": "e-Meterai Roll",
-      "salesQuantity": 1000.00,
-      "salesUOM": "PCS",
-      "packQuantity": 10.00,
-      "packUOM": "ROLL"
-    }
-  ]
-}
-```
+**Request Body:** Same as Create Delivery
 
-**Response:** `200 OK` or `400 Bad Request` (if customer not found)
-
-**Logic:**
-- Validates customer exists by `CustomerCode`
-- If delivery doesn't exist → Returns `404 Not Found`
-- If delivery exists:
-  - Updates `DeliveryDate`, `DeliveryRemarks`
-  - **Does NOT** regenerate `ReceiverToken` (token must remain stable)
-  - **Replaces** all existing lines with new lines (delete old, insert new)
+**Response:** `200 OK` or `400 Bad Request`
 
 ---
 
-### Get Delivery by Token
+### Get Delivery by Token (Public)
 **Endpoint:** `GET /api/deliveries/{token}`
 
-**Description:** Retrieves delivery details using the receiver token.
+**Description:** Retrieves delivery details using the receiver token (public access).
 
 **URL Parameter:**
 - `token` (Guid) - The receiver token
@@ -504,6 +549,7 @@ Authorization: Bearer {token}
   "receiverNotes": "Received in good condition",
   "received": true,
   "invoiced": false,
+  "publicUrl": "http://192.168.110.183/receive/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
   "lines": [
     {
       "deliveryLineNumber": "1",
@@ -515,9 +561,11 @@ Authorization: Bearer {token}
       "packUOM": "ROLL",
       "packQuantityDelivered": 10.00,
       "packQuantityReturned": 0.00,
-      "packQuantityRejected": 0.00
+      "packQuantityRejected": 0.00,
+      "lineComment": "Good condition"
     }
-  ]
+  ],
+  "photos": [...]
 }
 ```
 
@@ -525,98 +573,51 @@ Authorization: Bearer {token}
 
 ---
 
-### Update Delivery by Token (Receive)
+### Update Delivery by Token (Public Receive)
 **Endpoint:** `PATCH /api/deliveries/{token}`
 
-**Description:** Updates delivery receipt information and line quantities.
+**Description:** Updates delivery receipt information, line quantities, photos, and GPS location.
 
 **URL Parameter:**
 - `token` (Guid) - The receiver token
 
-**Request Body:**
-```json
-{
-  "receiverName": "John Doe",
-  "receiverNotes": "Received in good condition",
-  "lines": [
-    {
-      "deliveryLineNumber": "1",
-      "packQuantityDelivered": 10.00,
-      "packQuantityReturned": 0.00,
-      "packQuantityRejected": 0.00
-    }
-  ]
-}
+**Request Body (multipart/form-data):**
+```
+ReceiverName: string
+ReceiverNotes: string?
+Latitude: double?
+Longitude: double?
+NewPhotoFiles: IFormFile[] (new photo uploads)
+KeysToDelete[]: string[] (storage keys to delete)
+Lines[0].DeliveryLineNumber: string
+Lines[0].PackQuantityDelivered: decimal
+Lines[0].PackQuantityReturned: decimal
+Lines[0].PackQuantityRejected: decimal
+Lines[0].LineComment: string?
 ```
 
-**Response:** `200 OK` or `404 Not Found`
+**Response:** `200 OK`, `400 Bad Request` (if invoiced), or `404 Not Found`
 
 **Logic:**
 - Finds delivery by `ReceiverToken`
+- **Guard:** Returns 400 if delivery is already invoiced (financial lock)
 - Updates `ReceiverName`, `ReceiverNotes`
 - Sets `Received` to `true`
-- Updates line quantities for matching `DeliveryLineNumber`
-
----
-
-### Seed Deliveries (Dev Only)
-**Endpoint:** `POST /api/deliveries/dev/seed-deliveries`
-
-**Description:** Seeds the database with 20 random deliveries for development testing. Only works in development environment.
-
-**Response Body:**
-```json
-{
-  "created": 20,
-  "status": "All deliveries are on-going (not delivered)",
-  "message": "Successfully seeded 20 deliveries with 85 total lines"
-}
-```
-
-**Response:** `200 OK` or `400 Bad Request` (not in dev or no customers)
-
-**Logic:**
-- Only works in development environment
-- Requires existing customers in database
-- Creates 20 random deliveries with:
-  - Random customer assignment
-  - Random delivery date within last 30 days
-  - 3-6 delivery lines per delivery
-  - All deliveries start as not received and not invoiced
-
----
-
-## Activity Logging
-
-**Response Body:**
-```json
-{
-  "created": 20,
-  "status": "All deliveries are on-going (not delivered)",
-  "message": "Successfully seeded 20 deliveries with 85 total lines"
-}
-```
-
-**Response:** `200 OK` or `400 Bad Request` (not in dev or no customers)
-
-**Logic:**
-- Only works in development environment
-- Requires existing customers in database
-- Creates 20 random deliveries with:
-  - Random customer assignment
-  - Random delivery date within last 30 days
-  - 3-6 delivery lines per delivery
-  - All deliveries start as not received and not invoiced
+- Updates line quantities and comments
+- Auto-calculates status based on quantities:
+  - Any returned/rejected → `PartialReceived`
+  - All delivered → `FullyReceived`
+- Updates GPS coordinates and reverse geocodes to get address
+- Uploads new photos to MinIO
+- Deletes specified photos from MinIO and database
+- Logs activity with severity based on rejection count
 
 ---
 
 ### Verify Delivery PIN
 **Endpoint:** `POST /api/deliveries/{token}/verify-pin`
 
-**Description:** Verifies the PIN for accessing a delivery. The delivery's customer PIN must match the provided PIN.
-
-**URL Parameter:**
-- `token` (Guid) - The receiver token
+**Description:** Verifies the PIN for accessing a delivery.
 
 **Request Body:**
 ```json
@@ -632,18 +633,40 @@ Authorization: Bearer {token}
 }
 ```
 
-**Response:** `200 OK`, `401 Unauthorized` (invalid PIN), or `404 Not Found` (delivery not found)
+**Response:** `200 OK`, `401 Unauthorized`, or `404 Not Found`
 
-**Logic:**
-- Finds delivery by `ReceiverToken`
-- Includes Customer entity to access `CustomerPin`
-- Compares provided PIN with `Customer.CustomerPin`
-- Returns success only if PINs match exactly
+---
 
-**Security Notes:**
-- PIN verification is performed on the server side
-- Delivery details are not returned by this endpoint (only validation status)
-- Customer PIN is never exposed to the client
+### Download File (Public)
+**Endpoint:** `GET /api/deliveries/files/download?key={storageKey}`
+
+**Description:** Downloads a file from MinIO storage by storage key.
+
+**Query Parameter:**
+- `key` (string) - The MinIO storage key
+
+**Response:**
+- `200 OK` with file stream (content-type: image/jpeg, image/png, or application/octet-stream)
+- `404 Not Found` if file not found
+- `500 Internal Server Error` on storage errors
+
+---
+
+### Seed Deliveries (Dev Only)
+**Endpoint:** `POST /api/deliveries/dev/seed-deliveries`
+
+**Description:** Seeds the database with 20 random deliveries for development testing.
+
+**Response Body:**
+```json
+{
+  "created": 20,
+  "status": "All deliveries are on-going (not delivered)",
+  "message": "Successfully seeded 20 deliveries with 85 total lines"
+}
+```
+
+**Response:** `200 OK` or `400 Bad Request`
 
 ---
 
@@ -669,38 +692,20 @@ Authorization: Bearer {token}
 | Received | bool |
 | Invoiced | bool |
 | PublicUrl | string |
-
-### CustomerUpsertDto
-| Property | Type | Required |
-|----------|------|----------|
-| CustomerCode | string | Yes |
-| CustomerName | string | Yes |
-| CustomerEmail | string? | No |
-| CustomerPin | string? | No |
-
-### DeliveryUpsertDto
-| Property | Type | Required |
-|----------|------|----------|
-| CustomerCode | string | Yes |
-| DeliveryNumber | string | Yes |
-| DeliveryDate | DateTime | Yes |
-| DeliveryRemarks | string? | No |
-| Lines | List<DeliveryLineDto> | Yes |
-
-### DeliveryLineDto
-| Property | Type | Required |
-|----------|------|----------|
-| DeliveryLineNumber | string | Yes |
-| DeliveryItemCode | string | Yes |
-| DeliveryItemDescription | string | Yes |
-| SalesQuantity | decimal | Yes |
-| SalesUOM | string | Yes |
-| PackQuantity | decimal | Yes |
-| PackUOM | string | Yes |
+| Plant | string? |
+| SalesPersonName | string? |
+| SalesPersonEmail | string? |
+| CityRegency | string? |
+| District | string? |
+| Province | string? |
+| PhotosCount | int |
+| Type | int? (DeliveryType enum cast) |
+| Status | int? (ReceiverStatus enum cast) |
 
 ### DeliveryResponseDto
 | Property | Type |
 |----------|------|
+| DeliveryID | int |
 | DeliveryNumber | string |
 | DeliveryDate | DateTime |
 | DeliveryRemarks | string? |
@@ -712,7 +717,27 @@ Authorization: Bearer {token}
 | Received | bool |
 | Invoiced | bool |
 | PublicUrl | string |
+| Plant | string? |
+| SalesPersonName | string? |
+| SalesPersonEmail | string? |
+| Type | int |
+| Status | int? |
+| Latitude | double? |
+| Longitude | double? |
+| Province | string? |
+| CityRegency | string? |
+| District | string? |
+| FormattedAddress | string? |
+| Photos | List<DeliveryPhotoResponseDto> |
 | Lines | List<DeliveryLineResponseDto> |
+
+### DeliveryPhotoResponseDto (NEW)
+| Property | Type |
+|----------|------|
+| FileName | string |
+| StorageKey | string |
+| DownloadUrl | string |
+| UploadedAt | DateTime |
 
 ### DeliveryLineResponseDto
 | Property | Type |
@@ -727,37 +752,69 @@ Authorization: Bearer {token}
 | PackQuantityDelivered | decimal |
 | PackQuantityReturned | decimal |
 | PackQuantityRejected | decimal |
+| LineComment | string? |
 
-### DeliveryReceiveDto
-| Property | Type | Required |
-|----------|------|----------|
-| ReceiverName | string? | No |
-| ReceiverNotes | string? | No |
-| Lines | List<DeliveryLineReceiveDto> | Yes |
+### DeliveryEditConfirmationDto (NEW)
+| Property | Type |
+|----------|------|
+| ReceiverName | string |
+| ReceiverNotes | string? |
+| Latitude | double? |
+| Longitude | double? |
+| Lines | List<DeliveryLineEditDto> |
+| NewPhotoFiles | List<IFormFile>? |
+| KeysToDelete | List<string> |
 
-### DeliveryLineReceiveDto
-| Property | Type | Required |
-|----------|------|----------|
-| DeliveryLineNumber | string | Yes |
-| PackQuantityDelivered | decimal | Yes |
-| PackQuantityReturned | decimal | Yes |
-| PackQuantityRejected | decimal | Yes |
+### DeliveryLineEditDto (NEW)
+| Property | Type |
+|----------|------|
+| DeliveryLineNumber | string |
+| PackQuantityDelivered | decimal |
+| PackQuantityReturned | decimal |
+| PackQuantityRejected | decimal |
+| LineComment | string? |
 
-### DeliveryCreateResponseDto
-| Property | Type | Description |
-|----------|------|-------------|
-| DeliveryNumber | string | The created delivery number |
-| PublicUrl | string | Public URL for receiver access |
-| QrCodeBase64 | string | Base64-encoded QR code image |
-
-### PinRequestDto
-| Property | Type | Required |
-|----------|------|----------|
-| Pin | string | Yes |
+### GeoLocationResult (NEW)
+| Property | Type |
+|----------|------|
+| Province | string? |
+| CityRegency | string? |
+| District | string? |
+| FormattedAddress | string? |
 
 ---
 
 ## Services Architecture
+
+### Storage Service Layer (NEW)
+
+#### `IStorageService` (Interface)
+Defines the contract for file storage operations using MinIO/S3-compatible storage:
+
+```csharp
+Task<string> UploadFileAsync(string objectKey, Stream fileStream, string contentType);
+Task<Stream> GetFileStreamAsync(string storageKey);
+Task<string> GetPresignedUrlAsync(string objectKey, double expiryMinutes = 60);
+Task DeleteFileAsync(string storageKey);
+```
+
+#### `MinioStorageService`
+Implementation using AWS S3 SDK for MinIO compatibility:
+- Uploads files to configured MinIO bucket
+- Streams files directly for download
+- Generates presigned URLs for secure access
+- Deletes files from storage
+- Handles file not found scenarios gracefully
+
+**Configuration (appsettings.json):**
+```json
+"Minio": {
+  "Endpoint": "minio:9000",
+  "AccessKey": "${MINIO_ACCESS_KEY}",
+  "SecretKey": "${MINIO_SECRET_KEY}",
+  "BucketName": "amtemeterai-documents"
+}
+```
 
 ### Customer Service Layer
 
@@ -766,28 +823,18 @@ The customer service follows a strategy pattern for customer data sources:
 #### `ICustomerSource` (Interface)
 Defines the contract for fetching customer data from external sources.
 
-```csharp
-Task<List<CustomerDto>> GetCustomersAsync();
-```
-
 #### `DummyCustomerSource`
 - Provides mock/dummy customer data for testing
-- Returns a list of sample customers with fixed data
 - Used for development and demonstration purposes
 
 #### `ErpCustomerSource`
 - Integrates with external ERP system
-- Fetches real customer data from ERP
 - Placeholder for actual ERP integration implementation
 
 #### `CustomerService`
 - Business logic for customer upsert operations
-- Method: `UpsertCustomersAsync(List<CustomerDto> customers)`
-- Returns: `(int inserted, int updated)` tuple
-- Logic:
-  - If customer code doesn't exist → Insert new customer
-  - If customer exists → Update name, email, and optionally PIN
-  - Default PIN: "123456"
+- Returns `(int inserted, int updated)` tuple
+- Default PIN: "123456"
 
 ### QR Code Helper
 
@@ -795,13 +842,69 @@ Task<List<CustomerDto>> GetCustomersAsync();
 - Static utility class for QR code generation
 - Method: `GenerateQrBase64(string text)`
 - Returns: Base64-encoded PNG image of QR code
-- Uses QRCoder library for generation
+
+---
+
+## GPS & Location Services (NEW)
+
+### Reverse Geocoding
+
+The system integrates with Google Maps Geocoding API to convert GPS coordinates to structured addresses:
+
+**Method:** `ReverseGeocodeAsync(double lat, double lng)`
+
+**Process:**
+1. Calls Google Maps Geocoding API with lat/lng coordinates
+2. Parses address components to extract:
+   - Province (administrative_area_level_1)
+   - CityRegency (administrative_area_level_2)
+   - District (administrative_area_level_3)
+   - FormattedAddress (full address string)
+3. Updates DeliveryHeader with structured location data
+
+**Configuration (appsettings.json):**
+```json
+"GoogleMaps": {
+  "ApiKey": "${GOOGLE_MAPS_API_KEY}"
+}
+```
+
+**API Endpoint:**
+```
+https://maps.googleapis.com/maps/api/geocode/json?latlng={lat},{lng}&key={apiKey}
+```
+
+---
+
+## Activity Logging (NEW)
+
+### Overview
+The system logs all significant activities for audit trails and monitoring.
+
+### Log Levels
+- **Info** - General information
+- **Success** - Successful operations
+- **Warning** - Operations with potential issues (e.g., deliveries with rejections)
+
+### Logged Events
+| Event Type | Description |
+|------------|-------------|
+| DeliveryCreated | When a new delivery is created |
+| DeliveryConfirmationUpdated | When delivery confirmation is modified |
+
+### Helper Method
+```csharp
+private async Task LogActivity(
+    string eventType,
+    string referenceId,
+    string message,
+    string severity = "Info"
+)
+```
 
 ---
 
 ## CORS Configuration
-
-The API is configured to allow CORS for frontend applications dynamically based on `appsettings.json`:
 
 ```json
 "Cors": {
@@ -811,8 +914,6 @@ The API is configured to allow CORS for frontend applications dynamically based 
   ]
 }
 ```
-
-This allows the frontend running on ports 5173 (Vite dev) or 3000 (Docker) to access the API.
 
 ---
 
@@ -836,6 +937,16 @@ postgres:
   volumes:
     - postgres_data:/var/lib/postgresql/data
 
+minio:
+  image: minio/minio
+  container_name: amtemeterai-minio
+  command: server /data --console-address ":9001"
+  environment:
+    MINIO_ROOT_USER: ${MINIO_ACCESS_KEY}
+    MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY}
+  volumes:
+    - minio_data:/data
+
 api:
   build: backend\amtemeterai.Api
   image: amtemeterai-api:v2
@@ -846,8 +957,15 @@ api:
     Jwt__Issuer: ${JWT_ISSUER}
     Jwt__Audience: ${JWT_AUDIENCE}
     App__PublicBaseUrl: ${PUBLIC_BASE_URL}
+    App__ApiBaseUrl: ${API_BASE_URL}
+    GoogleMaps__ApiKey: ${GOOGLE_MAPS_API_KEY}
+    Minio__Endpoint: minio:9000
+    Minio__AccessKey: ${MINIO_ACCESS_KEY}
+    Minio__SecretKey: ${MINIO_SECRET_KEY}
+    Minio__BucketName: amtemeterai-documents
   depends_on:
     - postgres
+    - minio
 ```
 
 ---
@@ -870,22 +988,21 @@ All decimal fields in `DeliveryLine` use precision 18,2:
 
 ## Migrations History
 
-1. **InitialCreate** (2026-04-30 11:19:46)
-   - Created Customer, DeliveryHeader, DeliveryLine tables
-   - Set up relationships and constraints
-
-2. **RemoveUnusedDeliveryID** (2026-04-30 12:06:37)
-   - Removed unused DeliveryID column from DeliveryLine
-
-3. **ChangeForeignKeyForDeliveryLine** (2026-04-30 15:35:46)
-   - Updated foreign key relationship for DeliveryLine
+Recent migrations include:
+1. **InitialCreate** - Created Customer, DeliveryHeader, DeliveryLine tables
+2. **RemoveUnusedDeliveryID** - Removed unused DeliveryID column from DeliveryLine
+3. **ChangeForeignKeyForDeliveryLine** - Updated foreign key relationship
+4. **ActivityLog** - Added ActivityLog table
+5. **AddDocumentsTable** - Added unified Documents table
+6. **AddGpsFieldsToDeliveries** - Added Latitude, Longitude, Province, CityRegency, District, FormattedAddress
+7. **AddSalesPersonTypeAndLineComment** - Added Plant, SalesPersonName, SalesPersonEmail, Type enums, Status enum, LineComment
 
 ---
 
 ## Key Business Logic
 
 ### Customer Sync
-- Fetches customers from configured `ICustomerSource` (Dummy or ERP)
+- Fetches customers from configured `ICustomerSource`
 - Upserts all customers using `CustomerService`
 - Returns counts of inserted and updated records
 
@@ -898,46 +1015,59 @@ All decimal fields in `DeliveryLine` use precision 18,2:
 - Requires valid `CustomerCode`
 - Creates new `DeliveryHeader` with new `ReceiverToken` (Guid)
 - Creates all `DeliveryLine` records
-- Generates `PublicUrl` and `QrCodeBase64` for delivery
-- `DeliveryNumber` must be unique (returns 409 Conflict if exists)
+- Generates `PublicUrl` and `QrCodeBase64`
+- `DeliveryNumber` must be unique
+- Logs activity on creation
 
 ### Delivery Update
 - Requires valid `CustomerCode` and existing `DeliveryNumber`
-- Updates `DeliveryDate`, `DeliveryRemarks`
-- **Does NOT** regenerate `ReceiverToken` (token must remain stable for QR codes to work)
+- Updates delivery header fields
+- **Does NOT** regenerate `ReceiverToken`
 - Replaces all delivery lines (delete + insert pattern)
 
-### Delivery Receipt
+### Delivery Confirmation (Public Token-Based)
 - Accessible only via `ReceiverToken`
+- **Guard:** Rejects updates if delivery is invoiced (financial lock)
 - Sets `Received = true` on update
-- Updates line quantities by matching `DeliveryLineNumber`
+- Updates line quantities and comments
+- Auto-calculates status:
+  - `PartialReceived` if any returned/rejected items
+  - `FullyReceived` otherwise
+- Updates GPS coordinates and reverse geocodes to address
+- Uploads new photos to MinIO storage
+- Deletes specified photos from both MinIO and database
+- Logs activity with severity based on rejection count
+
+### Photo Management
+- Photos stored in MinIO with structured key pattern
+- Maximum 5 photos per delivery (frontend-enforced)
+- Supports JPEG and PNG formats
+- Files downloaded via streaming endpoint
+- Photos linked via polymorphic Document relationship
 
 ### Public URL Generation
 - Format: `{App__PublicBaseUrl}/receive/{ReceiverToken}`
-- Default base URL: Configurable via `PUBLIC_BASE_URL` environment variable
-
-### Delivery Create
-- Requires valid `CustomerCode`
-- Creates new `DeliveryHeader` with new `ReceiverToken` (Guid)
-- Creates all `DeliveryLine` records
-- Generates `PublicUrl` and `QrCodeBase64` for delivery sharing
-- `DeliveryNumber` must be unique (returns 409 Conflict if exists)
-
-### Delivery Update
-- Requires valid `CustomerCode` and existing `DeliveryNumber`
-- Updates `DeliveryDate`, `DeliveryRemarks`
-- **Does NOT** regenerate `ReceiverToken` (token must remain stable for QR codes to work)
-- Replaces all delivery lines (delete + insert pattern)
-
-### Delivery Receipt
-- Accessible only via `ReceiverToken`
-- Sets `Received = true` on update
-- Updates line quantities by matching `DeliveryLineNumber`
-
-### Public URL Generation
-- Format: `{App__PublicBaseUrl}/receive/{ReceiverToken}`
-- Default base URL: Configurable via `PUBLIC_BASE_URL` environment variable
 - Example: `http://192.168.110.183/receive/{token}`
+
+---
+
+## Security Features
+
+### PIN Verification
+- Server-side PIN validation using `Customer.CustomerPin`
+- PIN never exposed in frontend responses
+- Delivery details not returned until PIN verified
+- Session-based verification persistence
+
+### Financial Lock
+- Deliveries cannot be modified after being invoiced
+- Guard implemented in `UpdateByToken` endpoint
+- Returns `400 Bad Request` if modification attempted
+
+### Activity Logging
+- All significant operations logged
+- Includes event type, reference ID, message, and severity
+- Supports audit trail and monitoring
 
 ---
 
@@ -947,20 +1077,12 @@ All decimal fields in `DeliveryLine` use precision 18,2:
 
 **Using Docker:**
 ```bash
-# Build and run all services
 docker-compose up -d
-
-# View logs
-docker-compose logs -f
-
-# Stop services
-docker-compose down
 ```
 
 **Manual:**
 ```bash
-# Start PostgreSQL
-# Update connection string in appsettings.json
+# Start PostgreSQL and MinIO
 dotnet run
 ```
 
@@ -981,17 +1103,15 @@ dotnet ef migrations add MigrationName
 | Code | Description |
 |------|-------------|
 | 200 OK | Request successful |
-| 400 Bad Request | Invalid request data or customer not found |
+| 400 Bad Request | Invalid request data, customer not found, or delivery invoiced |
 | 401 Unauthorized | Invalid credentials or PIN |
-| 404 Not Found | Resource not found (delivery token invalid) |
+| 404 Not Found | Resource not found |
 | 409 Conflict | Delivery number already exists |
+| 500 Internal Server Error | Storage or server errors |
 
 ---
 
 ## Swagger Configuration
 
-The API is configured to work behind Nginx reverse proxy:
-
 - Swagger JSON endpoint: `/api/swagger/v1/swagger.json`
 - Swagger UI: `/api/swagger`
-- This configuration ensures proper routing through the reverse proxy
