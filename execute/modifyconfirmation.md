@@ -36,7 +36,7 @@ Update your photo attachment sector using this responsive layout wrapper to comb
 
 <div className="space-y-4">
   <div className="flex items-center justify-between">
-    <h3 className="text-sm font-bold text-brand-blue uppercase tracking-wider text-brand-blue/60">Proof of Delivery Photos</h3>
+    <h3 className="text-sm font-bold uppercase tracking-wider text-brand-blue">Proof of Delivery Photos</h3>
     <label className="cursor-pointer bg-brand-blue/5 hover:bg-brand-blue/10 border border-brand-blue/10 text-brand-blue text-xs font-semibold py-1.5 px-3 rounded-lg transition-colors">
       ➕ Add Photo Asset
       <input

@@ -7,6 +7,7 @@ using amtemeterai.Api.Services;
 using amtemeterai.Api.Models;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
+using amtemeterai.Api.Config;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -15,6 +16,10 @@ var builder = WebApplication.CreateBuilder(args);
 //2026-04-30 18:30:44 - Arga - Add Db Context
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
+
+//2026-05-20 02:49:01
+builder.Services.Configure<SapOptions>(builder.Configuration.GetSection(SapOptions.Position));
+// builder.Services.AddHttpClient<ICustomerSource, ErpCustomerSource>();
 
 //2026-04-30 18:34:15 - Arga - Add Controller
 builder.Services.AddControllers();
@@ -50,6 +55,10 @@ builder.Services.AddCors(options =>
     });
 });
 // 2026-05-06 - Customer Source Configuration
+// 2026-05-06 - Customer Source Configuration
+builder.Services.Configure<SapOptions>(builder.Configuration.GetSection(SapOptions.Position));
+
+// Customer Source Configuration Toggles
 var customerSourceType = builder.Configuration["CustomerSource"] ?? "Dummy";
 
 if (customerSourceType == "Dummy")
@@ -58,9 +67,9 @@ if (customerSourceType == "Dummy")
 }
 else
 {
-    builder.Services.AddScoped<ICustomerSource, ErpCustomerSource>();
+    // Registers ErpCustomerSource and provides its HttpClient setup cleanly
+    builder.Services.AddHttpClient<ICustomerSource, ErpCustomerSource>();
 }
-
 builder.Services.AddScoped<CustomerService>();
 
 // 2026-05-06 - Add ASP.NET Core Identity

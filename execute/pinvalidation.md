@@ -76,7 +76,7 @@ Frontend: PIN Verification Card
 TypeScript
 if (!isVerified) {
   return (
-    <div className="min-h-screen bg-brand-blue/[0.02] flex items-center justify-center p-4">
+    <div className="min-h-screen bg-brand-blue/2 flex items-center justify-center p-4">
       <Card className="w-full max-w-md">
         <CardHeader>
           <CardTitle>Delivery Verification</CardTitle>

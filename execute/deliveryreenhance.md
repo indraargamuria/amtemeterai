@@ -63,7 +63,7 @@ Ensure this block sits completely outside of the upper split-panel `div` rows so
   
   <div className="rounded-xl border border-brand-blue/10 overflow-hidden bg-white shadow-sm w-full">
     <Table>
-      <TableHeader className="bg-brand-blue/[0.02]">
+      <TableHeader className="bg-brand-blue/2">
         <TableRow>
           <TableHead className="text-xs font-semibold uppercase tracking-wider text-brand-blue/60 w-[18%]">Item / SKU</TableHead>
           <TableHead className="text-xs font-semibold uppercase tracking-wider text-brand-blue/60 w-[32%]">Description</TableHead>
@@ -76,7 +76,7 @@ Ensure this block sits completely outside of the upper split-panel `div` rows so
       <TableBody>
         {delivery.items && delivery.items.length > 0 ? (
           delivery.items.map((line) => (
-            <TableRow key={line.lineId || line.id} className="hover:bg-brand-blue/[0.01] transition-colors">
+            <TableRow key={line.lineId || line.id} className="hover:bg-brand-blue/1 transition-colors">
               <TableCell className="py-3.5 font-semibold text-sm text-brand-blue">
                 {line.itemCode || line.sku}
               </TableCell>
@@ -131,7 +131,7 @@ TypeScript
             loading="lazy"
             className="w-full h-40 object-cover transition-transform group-hover:scale-[1.01]"
           />
-          <div className="p-2 text-xs text-brand-blue/60 border-t border-brand-blue/5 bg-brand-blue/[0.01] flex justify-between items-center">
+          <div className="p-2 text-xs text-brand-blue/60 border-t border-brand-blue/5 bg-brand-blue/1 flex justify-between items-center">
             <span className="truncate max-w-[80%] font-medium">{photo.fileName}</span>
             <span className="text-[10px] text-brand-blue/40 font-semibold bg-brand-blue/5 px-1.5 py-0.5 rounded">🔍 Preview</span>
           </div>

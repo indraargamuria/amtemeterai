@@ -95,7 +95,7 @@ Map and display structural images fetched dynamically via the storage array payl
           loading="lazy"
           className="w-full h-48 object-cover transition-transform group-hover:scale-[1.02]"
         />
-        <div className="p-2 text-xs text-brand-blue/60 border-t border-brand-blue/5 bg-brand-blue/[0.01]">
+        <div className="p-2 text-xs text-brand-blue/60 border-t border-brand-blue/5 bg-brand-blue/1">
           {photo.fileName}
         </div>
       </div>

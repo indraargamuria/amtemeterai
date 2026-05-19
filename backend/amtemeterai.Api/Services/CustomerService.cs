@@ -25,6 +25,7 @@ public class CustomerService
 
             if (existing == null)
             {
+                // Clean new insert execution lane
                 _context.Customers.Add(new Customer
                 {
                     CustomerCode = c.CustomerCode,
@@ -36,17 +37,46 @@ public class CustomerService
             }
             else
             {
-                existing.CustomerName = c.CustomerName;
-                existing.CustomerEmail = c.CustomerEmail;
-                if (!string.IsNullOrEmpty(c.CustomerPin))
+                // Evaluate explicit dirty changes flags across non-key columns
+                bool isDirty = false;
+
+                if (existing.CustomerName != c.CustomerName)
+                {
+                    existing.CustomerName = c.CustomerName;
+                    isDirty = true;
+                }
+
+                if (existing.CustomerEmail != c.CustomerEmail)
+                {
+                    existing.CustomerEmail = c.CustomerEmail;
+                    isDirty = true;
+                }
+
+                // Only evaluate if incoming value is targeted for modification updates
+                if (!string.IsNullOrEmpty(c.CustomerPin) && existing.CustomerPin != c.CustomerPin)
                 {
                     existing.CustomerPin = c.CustomerPin;
+                    isDirty = true;
                 }
-                updated++;
+
+                // Only save transaction increments if absolute data mutations were caught
+                if (isDirty)
+                {
+                    updated++;
+                }
+                else
+                {
+                    // Explicitly detach or leave EntityState as Unchanged, saving DB execution performance
+                    _context.Entry(existing).State = EntityState.Unchanged;
+                }
             }
         }
 
-        await _context.SaveChangesAsync();
+        // Only trip database infrastructure commit if updates or inserts occurred
+        if (inserted > 0 || updated > 0)
+        {
+            await _context.SaveChangesAsync();
+        }
 
         return (inserted, updated);
     }
