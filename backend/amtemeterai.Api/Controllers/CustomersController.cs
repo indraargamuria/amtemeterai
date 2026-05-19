@@ -51,7 +51,8 @@ public class CustomersController : ControllerBase
                 CustomerId = c.CustomerID,
                 CustomerCode = c.CustomerCode,
                 CustomerName = c.CustomerName,
-                CustomerEmail = c.CustomerEmail
+                CustomerEmail = c.CustomerEmail,
+                CustomerPin = c.CustomerPin
             })
             .ToListAsync();
 

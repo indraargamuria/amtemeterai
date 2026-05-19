@@ -435,7 +435,7 @@ export function DeliveryReceivePage() {
         {delivery.invoiced && (
           <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-center">
             <p className="text-sm font-semibold text-red-800">
-              ⚠️ Lockout Status Enabled: This record has already been invoiced and cannot be modified.
+              ⚠️ This record has already been invoiced and cannot be modified.
             </p>
           </div>
         )}
