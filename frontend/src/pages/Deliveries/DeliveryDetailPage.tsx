@@ -72,6 +72,7 @@ export function DeliveryDetailPage() {
   const [error, setError] = useState<string | null>(null)
   const [qrCode, setQrCode] = useState<string | null>(null)
   const [copySuccess, setCopySuccess] = useState(false)
+  const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null)
 
   const api = useApi()
 
@@ -193,7 +194,7 @@ export function DeliveryDetailPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       {/* Page Header with Badges */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div className="space-y-1">
@@ -228,9 +229,9 @@ export function DeliveryDetailPage() {
         </div>
       </div>
 
-      {/* Split Panel Layout */}
+      {/* TOP SECTION: SPLIT PANELS */}
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
-        {/* LEFT PANEL (Metadata & Line Items 40%) */}
+        {/* LEFT PANEL (Metadata 40%) */}
         <div className="lg:col-span-2 space-y-6">
           {/* Core Dispatch Information */}
           <Card>
@@ -317,65 +318,51 @@ export function DeliveryDetailPage() {
               )}
             </CardContent>
           </Card>
-
-          {/* Itemized Fulfillment Table */}
+          {/* Receiver Access */}
           <Card>
-            <CardHeader>
-              <CardTitle className="text-base font-semibold text-brand-blue tracking-tight">
-                Itemized Fulfillment
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="font-medium text-brand-blue/50 uppercase text-xs tracking-wider">
-                      SKU
-                    </TableHead>
-                    <TableHead className="font-medium text-brand-blue/50 uppercase text-xs tracking-wider text-right">
-                      Delivered
-                    </TableHead>
-                    <TableHead className="font-medium text-brand-blue/50 uppercase text-xs tracking-wider text-right">
-                      Rejected
-                    </TableHead>
-                    <TableHead className="font-medium text-brand-blue/50 uppercase text-xs tracking-wider">
-                      Notes
-                    </TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {delivery.lines.length === 0 ? (
-                    <TableRow>
-                      <TableCell
-                        colSpan={4}
-                        className="text-center text-brand-blue/60 py-4"
-                      >
-                        No items found
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    delivery.lines.map((line) => (
-                      <TableRow key={line.deliveryLineNumber}>
-                        <TableCell className="font-medium text-brand-blue">
-                          <div>
-                            <p className="text-sm">{line.deliveryItemCode}</p>
-                            <p className="text-xs text-brand-blue/60">{line.deliveryItemDescription}</p>
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-right text-brand-blue/80">
-                          {line.packQuantityDelivered} {line.packUOM}
-                        </TableCell>
-                        <TableCell className="text-right text-brand-blue/80">
-                          {line.packQuantityRejected} {line.packUOM}
-                        </TableCell>
-                        <TableCell className="text-brand-blue/70 max-w-[120px]">
-                          <p className="text-xs truncate">{line.lineComment || "-"}</p>
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
+            <CardContent className="pt-4">
+              <div className="flex gap-3">
+                <Input
+                  value={delivery.publicUrl}
+                  readOnly
+                  placeholder="Public delivery link"
+                  className="bg-brand-blue/5 text-sm flex-1"
+                />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleCopyUrl}
+                  className="whitespace-nowrap"
+                >
+                  {copySuccess ? "Copied!" : "Copy"}
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleOpenLink}
+                >
+                  Open
+                </Button>
+              </div>
+              {qrCode && (
+                <div className="mt-3 flex flex-col items-center gap-2">
+                  <div className="p-2 bg-white rounded-lg border border-brand-blue/10">
+                    <img
+                      src={qrCode}
+                      alt="Delivery QR Code"
+                      className="w-28 h-28"
+                    />
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleDownloadQr}
+                    className="text-xs"
+                  >
+                    Download QR
+                  </Button>
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>
@@ -390,7 +377,7 @@ export function DeliveryDetailPage() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="w-full h-80 rounded-xl overflow-hidden border border-brand-blue/10 shadow-sm relative">
+              <div className="w-full h-72 rounded-xl overflow-hidden border border-brand-blue/10 shadow-sm relative">
                 {delivery.latitude && delivery.longitude ? (
                   <iframe
                     title="Delivery Drop Tracking Map"
@@ -433,94 +420,157 @@ export function DeliveryDetailPage() {
 
           {/* Photographic Evidence */}
           <Card>
-            <CardHeader>
-              <CardTitle className="text-base font-semibold text-brand-blue tracking-tight">
-                Photographic Evidence
-              </CardTitle>
-              {delivery.photos && delivery.photos.length > 0 && (
-                <CardDescription className="text-sm text-brand-blue/60">
-                  {delivery.photos.length} photo{delivery.photos.length !== 1 ? "s" : ""} uploaded
-                </CardDescription>
-              )}
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-2 gap-4">
-                {delivery.photos && delivery.photos.length > 0 ? (
-                  delivery.photos.map((photo, index) => (
-                    <div key={index} className="group relative rounded-lg overflow-hidden border border-brand-blue/10 bg-white">
-                      <img
-                        src={photo.downloadUrl}
-                        alt={photo.fileName || "Proof of Delivery Asset"}
-                        loading="lazy"
-                        className="w-full h-48 object-cover transition-transform group-hover:scale-[1.02]"
-                      />
-                      <div className="p-2 text-xs text-brand-blue/60 border-t border-brand-blue/5 bg-brand-blue/[0.01]">
-                        {photo.fileName}
+            <CardContent className="pt-6">
+              <div className="space-y-3">
+                <h4 className="text-xs font-semibold uppercase tracking-wider text-brand-blue/50">
+                  Photographic Evidence
+                  {delivery.photos && delivery.photos.length > 0 && (
+                    <span className="ml-2 text-brand-blue/40 font-normal">
+                      ({delivery.photos.length})
+                    </span>
+                  )}
+                </h4>
+                <div className="grid grid-cols-2 gap-4">
+                  {delivery.photos && delivery.photos.length > 0 ? (
+                    delivery.photos.map((photo, index) => (
+                      <div
+                        key={index}
+                        onClick={() => setPreviewImageUrl(photo.downloadUrl)}
+                        className="group relative rounded-lg overflow-hidden border border-brand-blue/10 bg-white cursor-pointer hover:border-brand-blue/30 transition-all shadow-xs"
+                      >
+                        <img
+                          src={photo.downloadUrl}
+                          alt={photo.fileName || "Proof of Delivery"}
+                          loading="lazy"
+                          className="w-full h-40 object-cover transition-transform group-hover:scale-[1.01]"
+                        />
+                        <div className="p-2 text-xs text-brand-blue/60 border-t border-brand-blue/5 bg-brand-blue/[0.01] flex justify-between items-center">
+                          <span className="truncate max-w-[80%] font-medium">{photo.fileName}</span>
+                          <span className="text-[10px] text-brand-blue/40 font-semibold bg-brand-blue/5 px-1.5 py-0.5 rounded">
+                            🔍 Preview
+                          </span>
+                        </div>
                       </div>
-                    </div>
-                  ))
-                ) : (
-                  <p className="text-sm text-brand-blue/40 italic col-span-2">
-                    No photographic evidence attached to this delivery record.
-                  </p>
-                )}
+                    ))
+                  ) : (
+                    <p className="text-sm text-brand-blue/40 italic col-span-2 py-4">
+                      No photographic evidence attached to this delivery record.
+                    </p>
+                  )}
+                </div>
               </div>
             </CardContent>
           </Card>
 
-          {/* Receiver Access */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base font-semibold text-brand-blue tracking-tight">
-                Receiver Access
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex gap-3">
-                <Input
-                  value={delivery.publicUrl}
-                  readOnly
-                  className="bg-brand-blue/5 text-sm flex-1"
-                />
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleCopyUrl}
-                  className="whitespace-nowrap"
-                >
-                  {copySuccess ? "Copied!" : "Copy"}
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleOpenLink}
-                >
-                  Open
-                </Button>
-              </div>
-              {qrCode && (
-                <div className="mt-4 flex flex-col items-center gap-2">
-                  <div className="p-3 bg-white rounded-lg border border-brand-blue/10">
-                    <img
-                      src={qrCode}
-                      alt="Delivery QR Code"
-                      className="w-32 h-32"
-                    />
-                  </div>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={handleDownloadQr}
-                    className="text-xs"
-                  >
-                    Download QR Code
-                  </Button>
-                </div>
-              )}
-            </CardContent>
-          </Card>
         </div>
       </div>
+
+      {/* BOTTOM SECTION: UNIFORM FULL WIDTH (100%) */}
+      <div className="w-full">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-base font-bold text-brand-blue tracking-tight">Fulfillment Line Items</h3>
+          <span className="text-xs text-brand-blue/50 font-medium">
+            Showing {delivery.lines.length} items total
+          </span>
+        </div>
+
+        <div className="rounded-xl border border-brand-blue/10 overflow-hidden bg-white shadow-sm w-full">
+          <Table>
+            <TableHeader className="bg-brand-blue/[0.02]">
+              <TableRow>
+                <TableHead className="text-xs font-semibold uppercase tracking-wider text-brand-blue/60 w-[18%]">
+                  Item / SKU
+                </TableHead>
+                <TableHead className="text-xs font-semibold uppercase tracking-wider text-brand-blue/60 w-[32%]">
+                  Description
+                </TableHead>
+                <TableHead className="text-xs font-semibold uppercase tracking-wider text-brand-blue/60 text-right w-[12%]">
+                  Dispatched
+                </TableHead>
+                <TableHead className="text-xs font-semibold uppercase tracking-wider text-brand-blue/60 text-right w-[12%]">
+                  Received
+                </TableHead>
+                <TableHead className="text-xs font-semibold uppercase tracking-wider text-brand-blue/60 text-right w-[12%]">
+                  Rejected
+                </TableHead>
+                <TableHead className="text-xs font-semibold uppercase tracking-wider text-brand-blue/60 w-[14%]">
+                  Remarks / Variance
+                </TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {delivery.lines.length === 0 ? (
+                <TableRow>
+                  <TableCell
+                    colSpan={6}
+                    className="text-center py-12 text-sm text-brand-blue/40 italic"
+                  >
+                    No dynamic dispatch line items attached to this delivery record.
+                  </TableCell>
+                </TableRow>
+              ) : (
+                delivery.lines.map((line) => (
+                  <TableRow
+                    key={line.deliveryLineNumber}
+                    className="hover:bg-brand-blue/[0.01] transition-colors"
+                  >
+                    <TableCell className="py-3.5 font-semibold text-sm text-brand-blue">
+                      {line.deliveryItemCode}
+                    </TableCell>
+                    <TableCell className="py-3.5 text-sm text-brand-blue/80">
+                      {line.deliveryItemDescription || (
+                        <span className="text-brand-blue/30 italic">No description</span>
+                      )}
+                    </TableCell>
+                    <TableCell className="py-3.5 text-sm text-right font-medium text-brand-blue/70">
+                      {line.packQuantity} {line.packUOM}
+                    </TableCell>
+                    <TableCell className="py-3.5 text-sm text-right font-semibold text-emerald-600">
+                      {line.packQuantityDelivered} {line.packUOM}
+                    </TableCell>
+                    <TableCell className="py-3.5 text-sm text-right font-semibold">
+                      <span
+                        className={
+                          line.packQuantityRejected > 0
+                            ? "text-amber-600 font-bold bg-amber-50 px-2 py-0.5 rounded"
+                            : "text-brand-blue/30"
+                        }
+                      >
+                        {line.packQuantityRejected} {line.packUOM}
+                      </span>
+                    </TableCell>
+                    <TableCell className="py-3.5 text-xs text-brand-blue/60 font-medium">
+                      {line.lineComment || <span className="text-brand-blue/20">-</span>}
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </div>
+      </div>
+
+      {/* Light Overlay Popup Modal */}
+      {previewImageUrl && (
+        <div
+          className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 cursor-zoom-out"
+          onClick={() => setPreviewImageUrl(null)}
+        >
+          <div className="relative max-w-4xl max-h-[90vh] rounded-xl overflow-hidden shadow-2xl bg-slate-900 animate-in fade-in zoom-in-95 duration-150">
+            <img
+              src={previewImageUrl}
+              alt="High Definition Proof Preview"
+              className="max-w-full max-h-[85vh] object-contain block"
+            />
+            <button
+              className="absolute top-3 right-3 bg-black/40 text-white rounded-full p-2 hover:bg-black/60 transition-colors text-xs font-bold w-8 h-8 flex items-center justify-center"
+              onClick={() => setPreviewImageUrl(null)}
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
