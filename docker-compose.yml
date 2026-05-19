@@ -50,8 +50,36 @@ services:
       POSTGRES_USER: ${DB_USER}
       POSTGRES_PASSWORD: ${DB_PASSWORD}
       POSTGRES_DB: ${DB_NAME}
+    ports:
+      - "${DB_PORT}:5432"  # <-- ADD THIS LINE (Usually maps 5432:5432)
     volumes:
       - postgres_data:/var/lib/postgresql/data
+  minio:
+    image: minio/minio:RELEASE.2024-02-17T01-15-57Z
+    container_name: amtemeterai-minio
+    ports:
+      - "9000:9000"       # API Port
+      - "9001:9001"       # Web Console Port
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadminpassword}
+    volumes:
+      - minio_data:/data
+    command: server /data --console-address ":9001"
 
+  # Fix: Switched to stable latest tag for the configuration tool
+  createbuckets:
+    image: minio/mc:latest
+    container_name: amtemeterai-minio-init
+    depends_on:
+      - minio
+    entrypoint: >
+      /bin/sh -c "
+      until (/usr/bin/mc alias set myminio http://minio:9000 amtemeterai amtemeteraipassword); do echo 'Waiting for MinIO...'; sleep 1; done;
+      /usr/bin/mc mb --ignore-existing myminio/amtemeterai-documents;
+      /usr/bin/mc policy set download myminio/amtemeterai-documents;
+      exit 0;
+      "
 volumes:
   postgres_data:
+  minio_data:

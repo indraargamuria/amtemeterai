@@ -6,6 +6,8 @@ public class DeliveryReceiveDto
     public string? ReceiverNotes { get; set; }
 
     public List<DeliveryLineReceiveDto> Lines { get; set; } = new();
+    // NEW PROPERTY: Captures the binary photo stream from the HTTP multi-part form-data envelope
+    public IFormFile? PhotoFile { get; set; }
 }
 
 public class DeliveryLineReceiveDto

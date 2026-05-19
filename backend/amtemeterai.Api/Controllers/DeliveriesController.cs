@@ -5,6 +5,7 @@ using amtemeterai.Api.Data;
 using amtemeterai.Api.Dtos;
 using amtemeterai.Api.Models;
 using amtemeterai.Api.Helpers;
+using amtemeterai.Api.Services;
 
 namespace amtemeterai.Api.Controllers;
 
@@ -16,6 +17,7 @@ public class DeliveriesController : ControllerBase
     private readonly AppDbContext _db;
     private readonly IConfiguration _configuration;
     private readonly IWebHostEnvironment _env;
+    private readonly IStorageService _storageService; // <-- ADD THIS LINE
 
     // Helper method to log activity
     private async Task LogActivity(string eventType, string referenceId, string message, string severity = "Info")
@@ -34,11 +36,13 @@ public class DeliveriesController : ControllerBase
     public DeliveriesController(
         AppDbContext db,
         IConfiguration configuration,
-        IWebHostEnvironment env)
+        IWebHostEnvironment env,
+        IStorageService storageService)
     {
         _db = db;
         _configuration = configuration;
         _env = env;
+        _storageService = storageService;
     }
 
     private static string GetPublicUrl(Guid token, string? baseUrl = null)
@@ -270,35 +274,73 @@ public class DeliveriesController : ControllerBase
     // Public endpoint for delivery receive (after PIN verification) - allows anonymous access
     [AllowAnonymous]
     [HttpPatch("{token}")]
-    public async Task<IActionResult> UpdateByToken(Guid token, DeliveryReceiveDto dto)
+    public async Task<IActionResult> UpdateByToken(Guid token, [FromForm] DeliveryReceiveDto dto)
     {
+        // 1. Locate the delivery target header via its secure token
         var data = await _db.DeliveryHeaders
             .Include(x => x.Lines)
             .FirstOrDefaultAsync(x => x.ReceiverToken == token);
 
         if (data == null) return NotFound();
 
+        // 2. Process text payload field configurations
         data.ReceiverName = dto.ReceiverName;
         data.ReceiverNotes = dto.ReceiverNotes;
         data.Received = true;
 
-        foreach (var lineDto in dto.Lines)
+        // 3. Process nested lines securely
+        if (data.Lines != null && dto.Lines != null && dto.Lines.Any())
         {
-            var line = data.Lines.FirstOrDefault(x => x.DeliveryLineNumber == lineDto.DeliveryLineNumber);
-            if (line != null)
+            foreach (var lineDto in dto.Lines)
             {
+                if (lineDto == null) continue;
+
+                var line = data.Lines.FirstOrDefault(x => x.DeliveryLineNumber == lineDto.DeliveryLineNumber);
+                
+                // CRITICAL GUARD: Skip if this specific line number wasn't found in the database
+                if (line == null) continue; 
+
                 line.PackQuantityDelivered = lineDto.PackQuantityDelivered;
                 line.PackQuantityReturned = lineDto.PackQuantityReturned;
                 line.PackQuantityRejected = lineDto.PackQuantityRejected;
             }
         }
 
+        // 4. Handle Proof of Delivery file payload uploading to MinIO
+        if (dto.PhotoFile != null && dto.PhotoFile.Length > 0)
+        {
+            string fileExtension = Path.GetExtension(dto.PhotoFile.FileName);
+            // Constructing isolated structural tree path logic inside your amtemeterai bucket
+            string storageKey = $"deliveries/{data.DeliveryID}/photos/{Guid.NewGuid()}{fileExtension}";
+
+            // Stream file binary directly into your object container
+            using (var stream = dto.PhotoFile.OpenReadStream())
+            {
+                await _storageService.UploadFileAsync(storageKey, stream, dto.PhotoFile.ContentType);
+            }
+
+            // Create tracking entity trail linking your file metrics back to the Delivery ID reference
+            var documentRecord = new Document
+            {
+                DeliveryID = data.DeliveryID,
+                InvoiceID = null, // Left null explicitly for this transaction context
+                StorageKey = storageKey,
+                FileName = dto.PhotoFile.FileName,
+                ContentType = dto.PhotoFile.ContentType,
+                Type = DocumentType.DeliveryPhoto,
+                UploadedAt = DateTime.UtcNow
+            };
+
+            _db.Documents.Add(documentRecord);
+        }
+
+        // 5. Commit text updates and file entity traces in one atomic database transaction
         await _db.SaveChangesAsync();
 
-        // FIXED LINE BELOW: Removed ?? 0m
-        var totalRejected = data.Lines.Sum(l => l.PackQuantityRejected);
-        
+        // 6. Execute system logging metrics
+        var totalRejected = data.Lines?.Sum(l => l.PackQuantityRejected) ?? 0m;
         var hasRejections = totalRejected > 0m;
+        
         await LogActivity(
             "DeliveryReceived",
             data.DeliveryNumber,
@@ -310,7 +352,6 @@ public class DeliveriesController : ControllerBase
 
         return Ok();
     }
-
     // Public endpoint for PIN verification - allows anonymous access
     [AllowAnonymous]
     [HttpPost("{token}/verify-pin")]

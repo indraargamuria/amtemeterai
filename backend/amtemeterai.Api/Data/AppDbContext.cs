@@ -13,6 +13,9 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<DeliveryLine> DeliveryLines => Set<DeliveryLine>();
     public DbSet<ActivityLog> ActivityLogs => Set<ActivityLog>();
 
+    // 1. Add the new Unified Documents DbSet - 2026-05-19 11:08:58 - Arga
+    public DbSet<Document> Documents { get; set; }
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
@@ -59,5 +62,17 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
         // ActivityLog
         modelBuilder.Entity<ActivityLog>()
             .HasKey(x => x.LogID);
+            
+        // 2. Configure Delivery Relation with Cascade Delete
+        modelBuilder.Entity<Document>()
+            .HasOne(d => d.DeliveryHeader)
+            .WithMany() // Can be configured with an explicit Collection property later if desired
+            .HasForeignKey(d => d.DeliveryID)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        // 3. Prevent empty/null keys in Object Storage paths
+        modelBuilder.Entity<Document>()
+            .Property(d => d.StorageKey)
+            .IsRequired();
     }
 }

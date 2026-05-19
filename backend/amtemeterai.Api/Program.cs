@@ -26,6 +26,9 @@ builder.Services.AddSwaggerGen();
 // 2026-05-05 18:31:08 - Arga - Allow CORS Dinamically
 var allowedOrigins = builder.Configuration.GetSection("Cors:Origins").Get<string[]>();
 
+// Program.cs
+builder.Services.AddSingleton<IStorageService, MinioStorageService>();
+
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowFrontend", policy =>
