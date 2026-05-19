@@ -9,5 +9,7 @@ namespace amtemeterai.Api.Services
         
         // Changed to Task<string> and appended Async to the name
         Task<string> GetPresignedUrlAsync(string objectKey, double expiryMinutes = 60);
+        // 💡 ADD THIS LINE RIGHT HERE:
+        Task<Stream> GetFileStreamAsync(string storageKey);
     }
 }

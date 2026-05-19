@@ -176,7 +176,7 @@ public class DeliveriesController : ControllerBase
 
         return Ok(result);
     }
-[HttpPost]
+    [HttpPost]
     public async Task<ActionResult<DeliveryCreateResponseDto>> Create(DeliveryUpsertDto dto)
     {
         var customer = await _db.Customers
@@ -535,5 +535,36 @@ public class DeliveriesController : ControllerBase
         }
 
         return result;
+    }
+
+    [AllowAnonymous]
+    [HttpGet("files/download")] // Using a distinct path to avoid route conflicts!
+    public async Task<IActionResult> DownloadFile([FromQuery] string key)
+    {
+        if (string.IsNullOrEmpty(key)) 
+            return BadRequest("Storage key is required.");
+
+        try
+        {
+            // 1. Get the raw stream from MinIO using your storage service
+            Stream fileStream = await _storageService.GetFileStreamAsync(key);
+            
+            if (fileStream == null) 
+                return NotFound("File not found in object storage.");
+
+            // 2. Set the proper image content type headers so the browser renders it
+            string contentType = "application/octet-stream";
+            if (key.EndsWith(".jpg", StringComparison.OrdinalIgnoreCase) || key.EndsWith(".jpeg", StringComparison.OrdinalIgnoreCase))
+                contentType = "image/jpeg";
+            else if (key.EndsWith(".png", StringComparison.OrdinalIgnoreCase))
+                contentType = "image/png";
+
+            // 3. Stream it straight to the browser
+            return File(fileStream, contentType);
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, $"Internal storage error: {ex.Message}");
+        }
     }
 }

@@ -54,6 +54,8 @@ backend/.vs/
 backend/*.user
 backend/*.lock.json
 backend/appsettings.Development.json
+backend/amtemeterai.Api/appsettings.Development.json
+backend/amtemeterai.Api/appsettings.json
 
 # Rider / VS specific
 *.DotSettings.user
