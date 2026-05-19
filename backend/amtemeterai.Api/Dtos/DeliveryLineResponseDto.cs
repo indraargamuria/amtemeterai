@@ -15,4 +15,7 @@ public class DeliveryLineResponseDto
     public decimal PackQuantityDelivered { get; set; }
     public decimal PackQuantityReturned { get; set; }
     public decimal PackQuantityRejected { get; set; }
+
+    // --- Added: Line Discrepancy Comments --- 2026-05-19 21:17:31
+    public string? LineComment { get; set; }
 }

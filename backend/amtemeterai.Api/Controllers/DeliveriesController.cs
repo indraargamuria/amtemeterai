@@ -97,6 +97,7 @@ public class DeliveriesController : ControllerBase
     [HttpGet("{deliveryId:int}")]
     public async Task<ActionResult<DeliveryResponseDto>> GetDeliveryById(int deliveryId)
     {
+        // 1. Fetch core delivery header records along with customer information links
         var delivery = await _db.DeliveryHeaders
             .Include(d => d.Lines)
             .Include(d => d.Customer)
@@ -105,8 +106,25 @@ public class DeliveriesController : ControllerBase
         if (delivery == null)
             return NotFound();
 
+        // 2. Fetch all associated proof files from your Documents table
+        var baseApiUrl = _configuration["App:PublicBaseUrl"] ?? "http://localhost:8080";
+        
+        var photos = await _db.Documents
+            .Where(doc => doc.DeliveryID == deliveryId && doc.Type == DocumentType.DeliveryPhoto)
+            .Select(doc => new DeliveryPhotoResponseDto
+            {
+                FileName = doc.FileName,
+                StorageKey = doc.StorageKey,
+                // Automatically structure the stream path so React can read it natively
+                DownloadUrl = $"{baseApiUrl.TrimEnd('/')}/api/deliveries/files/download?key={Uri.EscapeDataString(doc.StorageKey)}",
+                UploadedAt = doc.UploadedAt
+            })
+            .ToListAsync();
+
+        // 3. Assemble the unified data response payload
         var response = new DeliveryResponseDto
         {
+            DeliveryID = delivery.DeliveryID,
             DeliveryNumber = delivery.DeliveryNumber,
             DeliveryDate = delivery.DeliveryDate,
             DeliveryRemarks = delivery.DeliveryRemarks,
@@ -119,6 +137,27 @@ public class DeliveriesController : ControllerBase
             Invoiced = delivery.Invoiced,
             PublicUrl = GetPublicUrl(delivery.ReceiverToken, _configuration["App:PublicBaseUrl"]),
 
+            // Map new configuration parameters
+            Plant = delivery.Plant,
+            SalesPersonName = delivery.SalesPersonName,
+            SalesPersonEmail = delivery.SalesPersonEmail,
+            
+            // Map safe primitive integers from internal model enums
+            Type = (int)delivery.Type,
+            Status = delivery.Status.HasValue ? (int)delivery.Status.Value : null,
+
+            // Map location telemetry tracking structures
+            Latitude = delivery.Latitude,
+            Longitude = delivery.Longitude,
+            Province = delivery.Province,
+            CityRegency = delivery.CityRegency,
+            District = delivery.District,
+            FormattedAddress = delivery.FormattedAddress,
+
+            // Bind the active file attachment array
+            Photos = photos,
+
+            // Map the individual line elements
             Lines = delivery.Lines.Select(l => new DeliveryLineResponseDto
             {
                 DeliveryLineNumber = l.DeliveryLineNumber,
@@ -128,9 +167,13 @@ public class DeliveriesController : ControllerBase
                 SalesUOM = l.SalesUOM,
                 PackQuantity = l.PackQuantity,
                 PackUOM = l.PackUOM,
+                
                 PackQuantityDelivered = l.PackQuantityDelivered,
                 PackQuantityReturned = l.PackQuantityReturned,
-                PackQuantityRejected = l.PackQuantityRejected
+                PackQuantityRejected = l.PackQuantityRejected,
+                
+                // Bind new user feedback field
+                LineComment = l.LineComment
             }).ToList()
         };
 
