@@ -306,32 +306,35 @@ public class DeliveriesController : ControllerBase
             }
         }
 
-        // 4. Handle Proof of Delivery file payload uploading to MinIO
-        if (dto.PhotoFile != null && dto.PhotoFile.Length > 0)
+        // 4. Handle multiple Proof of Delivery files uploading to MinIO
+        if (dto.PhotoFiles != null && dto.PhotoFiles.Any())
         {
-            string fileExtension = Path.GetExtension(dto.PhotoFile.FileName);
-            // Constructing isolated structural tree path logic inside your amtemeterai bucket
-            string storageKey = $"deliveries/{data.DeliveryID}/photos/{Guid.NewGuid()}{fileExtension}";
-
-            // Stream file binary directly into your object container
-            using (var stream = dto.PhotoFile.OpenReadStream())
+            foreach (var file in dto.PhotoFiles)
             {
-                await _storageService.UploadFileAsync(storageKey, stream, dto.PhotoFile.ContentType);
+                if (file == null || file.Length == 0) continue;
+
+                string fileExtension = Path.GetExtension(file.FileName);
+                // Using Guid.NewGuid() ensures multiple files within the same Delivery ID don't overwrite each other
+                string storageKey = $"deliveries/{data.DeliveryID}/photos/{Guid.NewGuid()}{fileExtension}";
+
+                using (var stream = file.OpenReadStream())
+                {
+                    await _storageService.UploadFileAsync(storageKey, stream, file.ContentType);
+                }
+
+                var documentRecord = new Document
+                {
+                    DeliveryID = data.DeliveryID,
+                    InvoiceID = null,
+                    StorageKey = storageKey,
+                    FileName = file.FileName,
+                    ContentType = file.ContentType,
+                    Type = DocumentType.DeliveryPhoto,
+                    UploadedAt = DateTime.UtcNow
+                };
+
+                _db.Documents.Add(documentRecord);
             }
-
-            // Create tracking entity trail linking your file metrics back to the Delivery ID reference
-            var documentRecord = new Document
-            {
-                DeliveryID = data.DeliveryID,
-                InvoiceID = null, // Left null explicitly for this transaction context
-                StorageKey = storageKey,
-                FileName = dto.PhotoFile.FileName,
-                ContentType = dto.PhotoFile.ContentType,
-                Type = DocumentType.DeliveryPhoto,
-                UploadedAt = DateTime.UtcNow
-            };
-
-            _db.Documents.Add(documentRecord);
         }
 
         // 5. Commit text updates and file entity traces in one atomic database transaction
