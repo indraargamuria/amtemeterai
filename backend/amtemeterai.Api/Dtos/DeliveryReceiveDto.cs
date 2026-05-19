@@ -9,6 +9,10 @@ public class DeliveryReceiveDto
     
     //2026-05-19 14:00:55 - Arga - Multiple File
     public List<IFormFile>? PhotoFiles { get; set; } = new();
+
+    // New Location Inputs from Client Mobile App - 2026-05-19 16:14:16 - Arga
+    public double? Latitude { get; set; }
+    public double? Longitude { get; set; }
 }
 
 public class DeliveryLineReceiveDto

@@ -17,7 +17,8 @@ public class DeliveriesController : ControllerBase
     private readonly AppDbContext _db;
     private readonly IConfiguration _configuration;
     private readonly IWebHostEnvironment _env;
-    private readonly IStorageService _storageService; // <-- ADD THIS LINE
+    private readonly IStorageService _storageService;
+    private readonly string _googleApiKey;
 
     // Helper method to log activity
     private async Task LogActivity(string eventType, string referenceId, string message, string severity = "Info")
@@ -37,12 +38,14 @@ public class DeliveriesController : ControllerBase
         AppDbContext db,
         IConfiguration configuration,
         IWebHostEnvironment env,
-        IStorageService storageService)
+        IStorageService storageService,
+        IConfiguration config)
     {
         _db = db;
         _configuration = configuration;
         _env = env;
         _storageService = storageService;
+        _googleApiKey = config["GoogleMaps:ApiKey"] ?? string.Empty;
     }
 
     private static string GetPublicUrl(Guid token, string? baseUrl = null)
@@ -288,6 +291,32 @@ public class DeliveriesController : ControllerBase
         data.ReceiverNotes = dto.ReceiverNotes;
         data.Received = true;
 
+        
+        data.Latitude = dto.Latitude;
+        data.Longitude = dto.Longitude;
+
+        if (dto.Latitude.HasValue && dto.Longitude.HasValue)
+        {
+            try
+            {
+                // Call your Geocoding Service (Implementation abstraction example below)
+                var geoData = await ReverseGeocodeAsync(dto.Latitude.Value, dto.Longitude.Value);
+                
+                if (geoData != null)
+                {
+                    data.Province = geoData.Province;
+                    data.CityRegency = geoData.CityRegency;
+                    data.District = geoData.District;
+                    data.FormattedAddress = geoData.FormattedAddress;
+                }
+            }
+            catch (Exception ex)
+            {
+                // Log the geocoding failure but don't crash the delivery receipt submission
+                Console.WriteLine($"Geocoding failed: {ex.Message}");
+            }
+        }
+
         // 3. Process nested lines securely
         if (data.Lines != null && dto.Lines != null && dto.Lines.Any())
         {
@@ -336,6 +365,7 @@ public class DeliveriesController : ControllerBase
                 _db.Documents.Add(documentRecord);
             }
         }
+
 
         // 5. Commit text updates and file entity traces in one atomic database transaction
         await _db.SaveChangesAsync();
@@ -442,5 +472,38 @@ public class DeliveriesController : ControllerBase
             status = "All deliveries are on-going (not delivered)",
             message = $"Successfully seeded {deliveries.Count} deliveries with {deliveries.Sum(d => d.Lines.Count)} total lines"
         });
+    }
+    /// Connects to Google Maps API to extract Indonesian Administrative boundaries
+    /// </summary>
+    private async Task<GeoLocationResult?> ReverseGeocodeAsync(double lat, double lng)
+    {
+        using var client = new HttpClient();
+        string url = $"https://maps.googleapis.com/maps/api/geocode/json?latlng={lat},{lng}&key={_googleApiKey}";
+
+        var response = await client.GetFromJsonAsync<GoogleGeocodeResponse>(url);
+        if (response?.Results == null || !response.Results.Any()) return null;
+
+        var firstResult = response.Results.First();
+        var result = new GeoLocationResult
+        {
+            FormattedAddress = firstResult.FormattedAddress
+        };
+
+        foreach (var component in firstResult.AddressComponents)
+        {
+            // Province level mapping
+            if (component.Types.Contains("administrative_area_level_1"))
+                result.Province = component.LongName;
+            
+            // Kota or Kabupaten level mapping
+            if (component.Types.Contains("administrative_area_level_2"))
+                result.CityRegency = component.LongName;
+                
+            // Kecamatan (District) level mapping
+            if (component.Types.Contains("administrative_area_level_3"))
+                result.District = component.LongName;
+        }
+
+        return result;
     }
 }
