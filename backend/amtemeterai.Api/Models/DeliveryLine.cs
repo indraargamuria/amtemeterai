@@ -21,4 +21,5 @@ public class DeliveryLine
     public decimal PackQuantityDelivered { get; set; }
     public decimal PackQuantityReturned { get; set; }
     public decimal PackQuantityRejected { get; set; }
+    public string? LineComment { get; set; }
 }

@@ -11,4 +11,5 @@ public class DeliveryLineDto
 
     public decimal PackQuantity { get; set; }
     public string PackUOM { get; set; } = null!;
+    
 }

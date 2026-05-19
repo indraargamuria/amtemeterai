@@ -21,4 +21,7 @@ public class DeliveryLineReceiveDto
     public decimal PackQuantityDelivered { get; set; }
     public decimal PackQuantityReturned { get; set; }
     public decimal PackQuantityRejected { get; set; }
+    
+    // New Feedback Param - 2026-05-19 17:41:40
+    public string? LineComment { get; set; }
 }

@@ -8,5 +8,11 @@ public class DeliveryUpsertDto
     public DateTime DeliveryDate { get; set; }
     public string? DeliveryRemarks { get; set; }
 
+    // New Creation Context Parameters - 2026-05-19 17:41:33
+    public string? Plant { get; set; }
+    public int Type { get; set; } // 1 = BC, 2 = NonBC
+    public string? SalesPersonName { get; set; }
+    public string? SalesPersonEmail { get; set; }
+
     public List<DeliveryLineDto> Lines { get; set; } = new();
 }

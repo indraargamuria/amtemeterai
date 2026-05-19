@@ -176,8 +176,7 @@ public class DeliveriesController : ControllerBase
 
         return Ok(result);
     }
-
-    [HttpPost]
+[HttpPost]
     public async Task<ActionResult<DeliveryCreateResponseDto>> Create(DeliveryUpsertDto dto)
     {
         var customer = await _db.Customers
@@ -199,6 +198,15 @@ public class DeliveriesController : ControllerBase
             DeliveryNumber = dto.DeliveryNumber,
             DeliveryDate = dto.DeliveryDate,
             DeliveryRemarks = dto.DeliveryRemarks,
+            
+            // 1. ADDED: New Initialization Fields for Creation Context
+            Plant = dto.Plant,
+            SalesPersonName = dto.SalesPersonName,
+            SalesPersonEmail = dto.SalesPersonEmail,
+            
+            // 2. ADDED: Explicit Cast from primitive int DTO input to nested model enum
+            Type = (DeliveryHeader.DeliveryType)dto.Type,
+            
             ReceiverToken = Guid.NewGuid()
         };
 
@@ -255,6 +263,13 @@ public class DeliveriesController : ControllerBase
 
         existing.DeliveryDate = dto.DeliveryDate;
         existing.DeliveryRemarks = dto.DeliveryRemarks;
+        
+        // 3. ADDED: Update mapping context fields on sync changes
+        existing.Plant = dto.Plant;
+        existing.SalesPersonName = dto.SalesPersonName;
+        existing.SalesPersonEmail = dto.SalesPersonEmail;
+        existing.Type = (DeliveryHeader.DeliveryType)dto.Type;
+        
         // Do NOT regenerate ReceiverToken on update - token must be stable
 
         _db.DeliveryLines.RemoveRange(existing.Lines);
@@ -268,12 +283,13 @@ public class DeliveriesController : ControllerBase
             SalesUOM = l.SalesUOM,
             PackQuantity = l.PackQuantity,
             PackUOM = l.PackUOM
+            // Note: LineComment is left out here on purpose because it's only populated 
+            // later by the customer during driver handoff (UpdateByToken).
         }).ToList();
 
         await _db.SaveChangesAsync();
         return Ok();
     }
-
     // Public endpoint for delivery receive (after PIN verification) - allows anonymous access
     [AllowAnonymous]
     [HttpPatch("{token}")]
@@ -291,7 +307,6 @@ public class DeliveriesController : ControllerBase
         data.ReceiverNotes = dto.ReceiverNotes;
         data.Received = true;
 
-        
         data.Latitude = dto.Latitude;
         data.Longitude = dto.Longitude;
 
@@ -317,7 +332,9 @@ public class DeliveriesController : ControllerBase
             }
         }
 
-        // 3. Process nested lines securely
+        // 3. Process nested lines securely and track fulfillment anomalies
+        bool hasDiscrepancy = false;
+
         if (data.Lines != null && dto.Lines != null && dto.Lines.Any())
         {
             foreach (var lineDto in dto.Lines)
@@ -332,10 +349,24 @@ public class DeliveriesController : ControllerBase
                 line.PackQuantityDelivered = lineDto.PackQuantityDelivered;
                 line.PackQuantityReturned = lineDto.PackQuantityReturned;
                 line.PackQuantityRejected = lineDto.PackQuantityRejected;
+                
+                // ADDED: Track individual line discrepancy items
+                line.LineComment = lineDto.LineComment;
+
+                // AUTO-VALUE TRACKING RULE: Check if items were sent back or rejected
+                if (lineDto.PackQuantityReturned > 0m || lineDto.PackQuantityRejected > 0m)
+                {
+                    hasDiscrepancy = true;
+                }
             }
         }
 
-        // 4. Handle multiple Proof of Delivery files uploading to MinIO
+        // 4. ADDED: Auto-assign nested model Enum statuses based on evaluation check
+        data.Status = hasDiscrepancy 
+            ? DeliveryHeader.ReceiverStatus.PartialReceived 
+            : DeliveryHeader.ReceiverStatus.FullyReceived;
+
+        // 5. Handle multiple Proof of Delivery files uploading to MinIO
         if (dto.PhotoFiles != null && dto.PhotoFiles.Any())
         {
             foreach (var file in dto.PhotoFiles)
@@ -366,11 +397,10 @@ public class DeliveriesController : ControllerBase
             }
         }
 
-
-        // 5. Commit text updates and file entity traces in one atomic database transaction
+        // 6. Commit text updates and file entity traces in one atomic database transaction
         await _db.SaveChangesAsync();
 
-        // 6. Execute system logging metrics
+        // 7. Execute system logging metrics
         var totalRejected = data.Lines?.Sum(l => l.PackQuantityRejected) ?? 0m;
         var hasRejections = totalRejected > 0m;
         
