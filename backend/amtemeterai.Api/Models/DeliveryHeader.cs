@@ -2,6 +2,18 @@ namespace amtemeterai.Api.Models;
 
 public class DeliveryHeader
 {
+    // --- NESTED ENUMS DEFINITIONS ---
+    public enum DeliveryType
+    {
+        BC = 1,
+        NonBC = 2
+    }
+    public enum ReceiverStatus
+    {
+        FullyReceived = 1,
+        PartialReceived = 2
+    }
+
     public int DeliveryID { get; set; }
 
     public int CustomerID { get; set; }
@@ -19,7 +31,15 @@ public class DeliveryHeader
 
     public bool Received { get; set; }
     public bool Invoiced { get; set; }
-    
+
+    public string? Plant { get; set; }           
+    public string? SalesPersonName { get; set; }
+    public string? SalesPersonEmail { get; set; }
+
+    // Use the nested enum types directly
+    public DeliveryType Type { get; set; }            
+    public ReceiverStatus? Status { get; set; } // Changed name to 'Status' for clean reading: DeliveryHeader.Status
+
     // GPS Spatial Coordinates
     public double? Latitude { get; set; }
     public double? Longitude { get; set; }
