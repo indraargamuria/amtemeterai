@@ -73,7 +73,21 @@ public class DeliveriesController : ControllerBase
 
                 Received = d.Received,
                 Invoiced = d.Invoiced,
-                ReceiverToken = d.ReceiverToken
+                ReceiverToken = d.ReceiverToken,
+
+                Plant = d.Plant,
+                Type = d.Type,
+                Status = d.Status,
+                SalesPersonName = d.SalesPersonName,
+                SalesPersonEmail = d.SalesPersonEmail,
+                CityRegency = d.CityRegency,
+                District = d.District,
+                Province = d.Province,
+                
+                // 📸 FIX: Count only files matching the DeliveryPhoto enum criteria from Documents table
+                PhotosCount = _db.Documents.Count(p => 
+                    p.DeliveryID == d.DeliveryID && 
+                    p.Type == DocumentType.DeliveryPhoto)
             })
             .OrderByDescending(d => d.DeliveryDate)
             .ToListAsync();
@@ -88,7 +102,19 @@ public class DeliveriesController : ControllerBase
             CustomerName = d.CustomerName,
             Received = d.Received,
             Invoiced = d.Invoiced,
-            PublicUrl = $"{baseUrl}/receive/{d.ReceiverToken}"
+            PublicUrl = $"{baseUrl}/receive/{d.ReceiverToken}",
+
+            Plant = d.Plant,
+            SalesPersonName = d.SalesPersonName,
+            SalesPersonEmail = d.SalesPersonEmail,
+            CityRegency = d.CityRegency,
+            District = d.District,
+            Province = d.Province,
+            PhotosCount = d.PhotosCount,
+
+            // 🚀 FIX: Explicitly cast the strongly-typed Enums to nullable integers (int?)
+            Type = (int?)d.Type,
+            Status = (int?)d.Status
         }).ToList();
 
         return Ok(result);

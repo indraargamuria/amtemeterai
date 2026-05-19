@@ -10,6 +10,12 @@ const badgeVariants = cva(
         default: "bg-brand-blue/10 text-brand-blue",
         outline: "border border-brand-blue/20 text-brand-blue",
         accent: "bg-brand-red/10 text-brand-red",
+        success: "bg-emerald-10 text-emerald-700 border border-emerald/20",
+        warning: "bg-amber-10 text-amber-700 border border-amber/20",
+        info: "bg-brand-blue/5 text-brand-blue/70 border border-brand-blue/10",
+        bc: "bg-emerald-5 text-emerald-800 border border-emerald/15",
+        nonbc: "bg-slate-5 text-slate-600 border border-slate/15",
+        badge: "bg-brand-blue/10 text-brand-blue rounded-md px-2 py-0.5",
       },
     },
     defaultVariants: {
