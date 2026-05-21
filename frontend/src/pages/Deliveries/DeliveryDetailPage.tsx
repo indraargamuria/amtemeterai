@@ -3,7 +3,7 @@ import { useParams, useNavigate } from "react-router-dom"
 import QRCode from "qrcode"
 import { Button } from "../../shared/components/ui/Button"
 import { Badge } from "../../shared/components/ui/Badge"
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "../../shared/components/ui/Card"
+import { Card, CardContent, CardHeader, CardTitle } from "../../shared/components/ui/Card"
 import { Input } from "../../shared/components/ui/Input"
 import {
   Table,

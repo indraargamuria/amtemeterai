@@ -6,6 +6,7 @@ using amtemeterai.Api.Dtos;
 using amtemeterai.Api.Models;
 using amtemeterai.Api.Helpers;
 using amtemeterai.Api.Services;
+using amtemeterai.Api.Config;
 
 namespace amtemeterai.Api.Controllers;
 
@@ -19,6 +20,8 @@ public class DeliveriesController : ControllerBase
     private readonly IWebHostEnvironment _env;
     private readonly IStorageService _storageService;
     private readonly string _googleApiKey;
+    private readonly IHttpClientFactory _httpClientFactory; // 🚀 Added
+    private readonly SapOptions _sapOptions;               // 🚀 Added
 
     // Helper method to log activity
     private async Task LogActivity(string eventType, string referenceId, string message, string severity = "Info")
@@ -39,12 +42,16 @@ public class DeliveriesController : ControllerBase
         IConfiguration configuration,
         IWebHostEnvironment env,
         IStorageService storageService,
-        IConfiguration config)
+        IConfiguration config,
+        IHttpClientFactory httpClientFactory,              // 🚀 Added
+        Microsoft.Extensions.Options.IOptions<SapOptions> sapOptions)
     {
         _db = db;
         _configuration = configuration;
         _env = env;
         _storageService = storageService;
+        _httpClientFactory = httpClientFactory;
+        _sapOptions = sapOptions.Value;
         _googleApiKey = config["GoogleMaps:ApiKey"] ?? string.Empty;
     }
 
@@ -133,8 +140,8 @@ public class DeliveriesController : ControllerBase
             return NotFound();
 
         // 2. Fetch all associated proof files from your Documents table
-        // var baseApiUrl = _configuration["App:PublicBaseUrl"] ?? "http://localhost:8080";
-        var baseApiUrl = "http://localhost:8080";
+        var baseApiUrl = _configuration["App:ApiBaseUrl"] ?? "http://localhost:8080";
+        // var baseApiUrl = "http://192.168.0.191";
         
         var photos = await _db.Documents
             .Where(doc => doc.DeliveryID == deliveryId && doc.Type == DocumentType.DeliveryPhoto)
@@ -258,6 +265,7 @@ public class DeliveriesController : ControllerBase
         {
             // Fetch your base URL configuration string dynamically
             string baseUrl = _configuration["App:ApiBaseUrl"] ?? "http://localhost:8080";
+            // var baseUrl = "http://192.168.0.191";
 
             foreach (var doc in associatedDocs)
             {
@@ -525,9 +533,52 @@ public class DeliveriesController : ControllerBase
 
                 _db.Documents.Add(documentRecord);
             }
+        }// =========================================================
+        // 🚀 NEW: TRANSACTION INTEGRATION LAYER FOR SAP ERP
+        // =========================================================
+        try
+        {
+            var sapPayload = new SapDeliveryConfirmationPayload
+            {
+                CustomerCode = data.Customer?.CustomerCode ?? string.Empty,
+                DeliveryNumber = data.DeliveryNumber,
+                ReceiverName = data.ReceiverName ?? string.Empty,
+                ReceiverStatus = hasDiscrepancy ? "0" : "1", 
+                ReceiverNotes = data.ReceiverNotes ?? string.Empty,
+                Lines = data.Lines.Select(l => new SapDeliveryLinePayload
+                {
+                    DeliveryLineNumber = l.DeliveryLineNumber,
+                    DeliveredQuantity = l.PackQuantityDelivered,
+                    RejectedQuantity = l.PackQuantityRejected,
+                    ReturnedQuantity = l.PackQuantityReturned,
+                    LineComment = l.LineComment ?? "OK"
+                }).ToList()
+            };
+
+            // Pull standard client template configured via dynamic named factory inside Program.cs
+            var client = _httpClientFactory.CreateClient("SapClient");
+
+            // Point to your exact endpoint format path string: /sap/bc/zrest_doconfirm
+            string endpointPath = $"/sap/bc/zrest_doconfirm?sap-client={_sapOptions.Client}";
+
+            var response = await client.PostAsJsonAsync(endpointPath, sapPayload);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                string errorResponse = await response.Content.ReadAsStringAsync();
+                Console.WriteLine($"SAP error response content: {response.StatusCode} - {errorResponse}");
+                
+                // Fail-safe: Reject database commit if the core enterprise sync pipeline fails
+                return StatusCode(502, $"ERP Synchronization Error: Remote server returned status {response.StatusCode}");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Critical network exception thrown during SAP post sequence: {ex.Message}");
+            return StatusCode(500, $"Internal server error routing data to ERP infrastructure: {ex.Message}");
         }
 
-        // 8. Commit updates atomically
+        // 8. Commit updates atomically (Only executes if SAP synchronization was completely successful)
         await _db.SaveChangesAsync();
 
         // 9. Execute logging metrics
@@ -536,7 +587,7 @@ public class DeliveriesController : ControllerBase
         await LogActivity(
             "DeliveryConfirmationUpdated",
             data.DeliveryNumber,
-            $"Delivery {data.DeliveryNumber} confirmation entries modified/saved by {data.ReceiverName}. Current total rejections: {totalRejected}",
+            $"Delivery {data.DeliveryNumber} confirmed by {data.ReceiverName} and synced to SAP. Total rejections: {totalRejected}",
             totalRejected > 0m ? "Warning" : "Info"
         );
 
@@ -707,4 +758,5 @@ public class DeliveriesController : ControllerBase
             return StatusCode(500, $"Internal storage error: {ex.Message}");
         }
     }
+    
 }

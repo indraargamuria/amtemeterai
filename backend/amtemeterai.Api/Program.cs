@@ -72,6 +72,24 @@ else
 }
 builder.Services.AddScoped<CustomerService>();
 
+// Register the named HttpClient that your DeliveriesController uses to talk to SAP
+builder.Services.AddHttpClient("SapClient", (serviceProvider, client) =>
+{
+    // Extract the parsed credentials from DI
+    var sapOptions = serviceProvider.GetRequiredService<Microsoft.Extensions.Options.IOptions<SapOptions>>().Value;
+    
+    if (string.IsNullOrEmpty(sapOptions.BaseUrl))
+    {
+        throw new InvalidOperationException("SAP BaseUrl is missing from the configuration providers!");
+    }
+
+    // 🚀 FIX: Ensure BaseAddress is explicitly set using a valid Uri object
+    client.BaseAddress = new Uri(sapOptions.BaseUrl.TrimEnd('/'));
+    
+    // Add Authentication and Header constraints
+    client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Basic", sapOptions.BasicAuthToken);
+    client.DefaultRequestHeaders.Accept.Add(new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue("application/json"));
+});
 // 2026-05-06 - Add ASP.NET Core Identity
 builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
 {
