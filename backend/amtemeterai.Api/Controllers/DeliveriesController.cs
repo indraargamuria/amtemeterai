@@ -548,7 +548,7 @@ public class DeliveriesController : ControllerBase
                 CustomerCode = data.Customer?.CustomerCode ?? string.Empty,
                 DeliveryNumber = data.DeliveryNumber,
                 ReceiverName = data.ReceiverName ?? string.Empty,
-                ReceiverStatus = hasDiscrepancy ? "0" : "1", 
+                ReceiverStatus = data.Status, 
                 ReceiverNotes = data.ReceiverNotes ?? string.Empty,
                 Lines = data.Lines.Select(l => new SapDeliveryLinePayload
                 {
@@ -556,7 +556,7 @@ public class DeliveriesController : ControllerBase
                     DeliveredQuantity = l.PackQuantityDelivered,
                     RejectedQuantity = l.PackQuantityRejected,
                     ReturnedQuantity = l.PackQuantityReturned,
-                    LineComment = l.LineComment ?? "OK"
+                    LineComment = l.LineComment ?? ""
                 }).ToList()
             };
 
