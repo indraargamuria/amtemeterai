@@ -576,7 +576,7 @@ public class DeliveriesController : ControllerBase
                 // Fail-safe: Reject database commit if the core enterprise sync pipeline fails
 
                 // Activate this after fix discrepancy
-                // return StatusCode(502, $"ERP Synchronization Error: Remote server returned status {response.StatusCode}");
+                return StatusCode(502, $"ERP Synchronization Error: Remote server returned status {response.StatusCode}");
             }
         }
         catch (Exception ex)
