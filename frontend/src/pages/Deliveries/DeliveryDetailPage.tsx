@@ -321,7 +321,10 @@ export function DeliveryDetailPage() {
           {/* Receiver Access */}
           <Card>
             <CardContent className="pt-4">
-              <div className="flex gap-3">
+              <CardTitle className="text-base font-semibold text-brand-blue tracking-tight">
+                Delivery Confirmation Link for Buyer
+              </CardTitle>
+              <div className="flex gap-3 mt-3">
                 <Input
                   value={delivery.publicUrl}
                   readOnly
@@ -422,14 +425,9 @@ export function DeliveryDetailPage() {
           <Card>
             <CardContent className="pt-6">
               <div className="space-y-3">
-                <h4 className="text-xs font-semibold uppercase tracking-wider text-brand-blue/50">
-                  Photographic Evidence
-                  {delivery.photos && delivery.photos.length > 0 && (
-                    <span className="ml-2 text-brand-blue/40 font-normal">
-                      ({delivery.photos.length})
-                    </span>
-                  )}
-                </h4>
+                <CardTitle className="text-base font-semibold text-brand-blue tracking-tight">
+                  Proof of Delivery
+                </CardTitle>
                 <div className="grid grid-cols-2 gap-4">
                   {delivery.photos && delivery.photos.length > 0 ? (
                     delivery.photos.map((photo, index) => (
