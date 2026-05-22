@@ -60,8 +60,9 @@ export function DeliveryReceivePage() {
   const [submitting, setSubmitting] = useState(false)
   const [submitted, setSubmitted] = useState(false)
   
-  // 🚀 New state to manage the floating pop-up toast visibility
+  // 🚀 Toast Management States (Success & Error variants supported)
   const [showToast, setShowToast] = useState(false)
+  const [toastType, setToastType] = useState<"success" | "error">("success")
 
   const [receiverName, setReceiverName] = useState("")
   const [receiverNotes, setReceiverNotes] = useState("")
@@ -192,6 +193,13 @@ export function DeliveryReceivePage() {
     })
 
     setValidationErrors(errors)
+
+    // 🚀 Added Error Pop-up Trigger on Validation Over-Quota Exceeded Exceptions
+    if (!isValid) {
+      setToastType("error")
+      setShowToast(true)
+    }
+
     return isValid
   }
 
@@ -274,6 +282,7 @@ export function DeliveryReceivePage() {
 
       // Reset local submission state queues completely
       setSubmitted(true)
+      setToastType("success") // Ensure variant state path is correct
       setShowToast(true) // 🚀 Fire popup window on successful processing action
       setKeysToDelete([])
       setPhotoFiles([]) // Safely clears the staged upload block since they're now in part A
@@ -347,6 +356,35 @@ export function DeliveryReceivePage() {
     }
   }
 
+  // 🚀 Handles clearing input context if active value is zero
+  const handleInputFocus = (deliveryLineNumber: string, field: "delivered" | "returned" | "rejected") => {
+    setLines((prev) =>
+      prev.map((line) => {
+        if (line.deliveryLineNumber === deliveryLineNumber) {
+          const currentValue = line[field]
+          if (parseFloat(currentValue) === 0) {
+            return { ...line, [field]: "" }
+          }
+        }
+        return line
+      })
+    )
+  }
+
+  // 🚀 Restores zero fallback boundaries upon field blurring empty targets
+  const handleInputBlur = (deliveryLineNumber: string, field: "delivered" | "returned" | "rejected") => {
+    setLines((prev) =>
+      prev.map((line) => {
+        if (line.deliveryLineNumber === deliveryLineNumber) {
+          if (line[field].trim() === "") {
+            return { ...line, [field]: "0" }
+          }
+        }
+        return line
+      })
+    )
+  }
+
   const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || [])
     const errors: string[] = []
@@ -410,7 +448,7 @@ export function DeliveryReceivePage() {
           <CardHeader className="text-center">
             <div className="w-12 h-12 rounded-full bg-brand-blue/10 flex items-center justify-center mx-auto mb-4">
               <svg className="w-6 h-6 text-brand-blue" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2-0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
               </svg>
             </div>
             <CardTitle className="text-lg font-semibold text-brand-blue tracking-tight">Delivery Verification</CardTitle>
@@ -455,18 +493,28 @@ export function DeliveryReceivePage() {
   return (
     <div className="min-h-screen bg-brand-blue/2 py-8 px-4 relative">
       
-      {/* 🚀 FIXED RUNTIME FLOATING POPUP TOAST */}
+      {/* 🚀 FIXED RUNTIME FLOATING POPUP TOAST (Supports Success and Error Variants) */}
       {showToast && (
         <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 w-full max-w-sm px-4 animate-in fade-in slide-in-from-top-4 duration-300">
-          <div className="bg-white border border-brand-blue/20 rounded-xl shadow-xl p-4 flex items-start gap-3">
-            <div className="w-8 h-8 rounded-full bg-brand-blue/10 flex items-center justify-center shrink-0 text-brand-blue">
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-              </svg>
+          <div className={`bg-white border rounded-xl shadow-xl p-4 flex items-start gap-3 ${toastType === "error" ? "border-brand-red/30" : "border-brand-blue/20"}`}>
+            <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${toastType === "error" ? "bg-brand-red/10 text-brand-red" : "bg-brand-blue/10 text-brand-blue"}`}>
+              {toastType === "error" ? (
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+              ) : (
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+              )}
             </div>
             <div className="flex-1 space-y-0.5">
-              <h4 className="text-sm font-semibold text-brand-blue">Response Recorded</h4>
-              <p className="text-xs text-brand-blue/60">Your delivery confirmation response has been securely saved.</p>
+              <h4 className={`text-sm font-semibold ${toastType === "error" ? "text-brand-red" : "text-brand-blue"}`}>
+                {toastType === "error" ? "Validation Error" : "Response Recorded"}
+              </h4>
+              <p className="text-xs text-brand-blue/60">
+                {toastType === "error" ? "Total item quantities exceed your original order volume max constraints." : "Your delivery confirmation response has been securely saved."}
+              </p>
             </div>
             <button 
               onClick={() => setShowToast(false)}
@@ -564,8 +612,10 @@ export function DeliveryReceivePage() {
                           onKeyDown={(e) => {
                             if (e.key === "-") e.preventDefault()
                           }}
-                          value={lineState?.delivered || ""}
+                          value={lineState?.delivered ?? ""}
                           onChange={(e) => handleLineChange(line.deliveryLineNumber, "delivered", e.target.value)}
+                          onFocus={() => handleInputFocus(line.deliveryLineNumber, "delivered")}
+                          onBlur={() => handleInputBlur(line.deliveryLineNumber, "delivered")}
                           disabled={delivery.invoiced || submitted || submitting}
                           className="h-9"
                         />
@@ -579,8 +629,10 @@ export function DeliveryReceivePage() {
                           onKeyDown={(e) => {
                             if (e.key === "-") e.preventDefault()
                           }}
-                          value={lineState?.returned || ""}
+                          value={lineState?.returned ?? ""}
                           onChange={(e) => handleLineChange(line.deliveryLineNumber, "returned", e.target.value)}
+                          onFocus={() => handleInputFocus(line.deliveryLineNumber, "returned")}
+                          onBlur={() => handleInputBlur(line.deliveryLineNumber, "returned")}
                           disabled={delivery.invoiced || submitted || submitting}
                           className="h-9"
                         />
@@ -594,8 +646,10 @@ export function DeliveryReceivePage() {
                           onKeyDown={(e) => {
                             if (e.key === "-") e.preventDefault()
                           }}
-                          value={lineState?.rejected || ""}
+                          value={lineState?.rejected ?? ""}
                           onChange={(e) => handleLineChange(line.deliveryLineNumber, "rejected", e.target.value)}
+                          onFocus={() => handleInputFocus(line.deliveryLineNumber, "rejected")}
+                          onBlur={() => handleInputBlur(line.deliveryLineNumber, "rejected")}
                           disabled={delivery.invoiced || submitted || submitting}
                           className="h-9"
                         />

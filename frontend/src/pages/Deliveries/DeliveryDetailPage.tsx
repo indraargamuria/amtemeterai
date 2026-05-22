@@ -493,6 +493,9 @@ export function DeliveryDetailPage() {
                 <TableHead className="text-xs font-semibold uppercase tracking-wider text-brand-blue/60 text-right w-[12%]">
                   Rejected
                 </TableHead>
+                <TableHead className="text-xs font-semibold uppercase tracking-wider text-brand-blue/60 text-right w-[12%]">
+                  Returned
+                </TableHead>
                 <TableHead className="text-xs font-semibold uppercase tracking-wider text-brand-blue/60 w-[14%]">
                   Remarks / Variance
                 </TableHead>
@@ -537,6 +540,17 @@ export function DeliveryDetailPage() {
                         }
                       >
                         {line.packQuantityRejected} {line.packUOM}
+                      </span>
+                    </TableCell>
+                    <TableCell className="py-3.5 text-sm text-right font-semibold">
+                      <span
+                        className={
+                          line.packQuantityReturned > 0
+                            ? "text-amber-600 font-bold bg-amber-50 px-2 py-0.5 rounded"
+                            : "text-brand-blue/30"
+                        }
+                      >
+                        {line.packQuantityReturned} {line.packUOM}
                       </span>
                     </TableCell>
                     <TableCell className="py-3.5 text-xs text-brand-blue/60 font-medium">
