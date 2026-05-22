@@ -322,10 +322,19 @@ export function DeliveryReceivePage() {
     field: "delivered" | "returned" | "rejected" | "lineComment",
     value: string
   ) => {
+    // 🚀 SANITIZATION ENGAGED: Force-clamp numerical quantities to zero if drops below zero
+    let sanitizedValue = value
+    if (field !== "lineComment" && value !== "") {
+      const num = parseFloat(value)
+      if (num < 0) {
+        sanitizedValue = "0"
+      }
+    }
+
     setLines((prev) =>
       prev.map((line) =>
         line.deliveryLineNumber === deliveryLineNumber
-          ? { ...line, [field]: value }
+          ? { ...line, [field]: sanitizedValue }
           : line
       )
     )
@@ -552,6 +561,9 @@ export function DeliveryReceivePage() {
                           type="number"
                           step="0.01"
                           min="0"
+                          onKeyDown={(e) => {
+                            if (e.key === "-") e.preventDefault()
+                          }}
                           value={lineState?.delivered || ""}
                           onChange={(e) => handleLineChange(line.deliveryLineNumber, "delivered", e.target.value)}
                           disabled={delivery.invoiced || submitted || submitting}
@@ -564,6 +576,9 @@ export function DeliveryReceivePage() {
                           type="number"
                           step="0.01"
                           min="0"
+                          onKeyDown={(e) => {
+                            if (e.key === "-") e.preventDefault()
+                          }}
                           value={lineState?.returned || ""}
                           onChange={(e) => handleLineChange(line.deliveryLineNumber, "returned", e.target.value)}
                           disabled={delivery.invoiced || submitted || submitting}
@@ -576,6 +591,9 @@ export function DeliveryReceivePage() {
                           type="number"
                           step="0.01"
                           min="0"
+                          onKeyDown={(e) => {
+                            if (e.key === "-") e.preventDefault()
+                          }}
                           value={lineState?.rejected || ""}
                           onChange={(e) => handleLineChange(line.deliveryLineNumber, "rejected", e.target.value)}
                           disabled={delivery.invoiced || submitted || submitting}
@@ -627,7 +645,7 @@ export function DeliveryReceivePage() {
                   value={receiverNotes}
                   onChange={(e) => setReceiverNotes(e.target.value)}
                   disabled={delivery.invoiced || submitted || submitting}
-                  placeholder="General operational remarks"
+                  placeholder="General operational operational remarks"
                 />
               </div>
             </CardContent>
