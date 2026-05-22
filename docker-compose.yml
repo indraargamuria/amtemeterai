@@ -18,6 +18,9 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      args:
+        # 🚀 Pass the root .env variable value down into the Docker build scope
+        - VITE_APP_TITLE=${VITE_APP_TITLE}
     image: amtemeterai-frontend:v5
     container_name: amtemeterai-frontend
     restart: always

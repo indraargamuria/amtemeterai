@@ -59,6 +59,10 @@ export function DeliveryReceivePage() {
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [submitted, setSubmitted] = useState(false)
+  
+  // 🚀 New state to manage the floating pop-up toast visibility
+  const [showToast, setShowToast] = useState(false)
+
   const [receiverName, setReceiverName] = useState("")
   const [receiverNotes, setReceiverNotes] = useState("")
   const [lines, setLines] = useState<LineFormState[]>([])
@@ -156,6 +160,16 @@ export function DeliveryReceivePage() {
     }
   }, [delivery, submitted])
 
+  // Auto-dismiss the popup window after 5 seconds to reduce manual interaction load
+  useEffect(() => {
+    if (showToast) {
+      const timer = setTimeout(() => {
+        setShowToast(false)
+      }, 5000)
+      return () => clearTimeout(timer)
+    }
+  }, [showToast])
+
   const validateLines = (): boolean => {
     const errors: Record<string, string> = {}
     let isValid = true
@@ -206,7 +220,7 @@ export function DeliveryReceivePage() {
         formData.append("Longitude", longitude.toString())
       }
 
-            // 📸 Append fresh uploaded files using the exact key the backend expects
+      // 📸 Append fresh uploaded files using the exact key the backend expects
       photoFiles.forEach((file) => {
         formData.append("NewPhotoFiles", file);
       });
@@ -260,6 +274,7 @@ export function DeliveryReceivePage() {
 
       // Reset local submission state queues completely
       setSubmitted(true)
+      setShowToast(true) // 🚀 Fire popup window on successful processing action
       setKeysToDelete([])
       setPhotoFiles([]) // Safely clears the staged upload block since they're now in part A
     } catch (err) {
@@ -268,6 +283,7 @@ export function DeliveryReceivePage() {
       setSubmitting(false)
     }
   }
+
   const handleVerifyPin = async () => {
     if (!token || !pinInput) {
       setPinError("Please enter a PIN")
@@ -428,7 +444,34 @@ export function DeliveryReceivePage() {
   }
 
   return (
-    <div className="min-h-screen bg-brand-blue/2 py-8 px-4">
+    <div className="min-h-screen bg-brand-blue/2 py-8 px-4 relative">
+      
+      {/* 🚀 FIXED RUNTIME FLOATING POPUP TOAST */}
+      {showToast && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 w-full max-w-sm px-4 animate-in fade-in slide-in-from-top-4 duration-300">
+          <div className="bg-white border border-brand-blue/20 rounded-xl shadow-xl p-4 flex items-start gap-3">
+            <div className="w-8 h-8 rounded-full bg-brand-blue/10 flex items-center justify-center shrink-0 text-brand-blue">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              </svg>
+            </div>
+            <div className="flex-1 space-y-0.5">
+              <h4 className="text-sm font-semibold text-brand-blue">Response Recorded</h4>
+              <p className="text-xs text-brand-blue/60">Your delivery confirmation response has been securely saved.</p>
+            </div>
+            <button 
+              onClick={() => setShowToast(false)}
+              className="text-brand-blue/40 hover:text-brand-blue/70 transition-colors p-0.5"
+              type="button"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className="max-w-xl mx-auto space-y-6">
         
         {/* FINANCIAL LOCK BANNER */}

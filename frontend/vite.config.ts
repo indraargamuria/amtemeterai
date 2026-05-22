@@ -4,40 +4,41 @@ import fs from 'fs'
 import path from 'path'
 import dotenv from 'dotenv'
 
-// https://vite.dev/config/
 export default defineConfig(({ mode }) => {
-  // 1. Load standard internal frontend environment files
   const frontendEnv = loadEnv(mode, process.cwd(), 'VITE_')
+  const envTag = frontendEnv['VITE_APP_ENV_TAG'] || ''
 
-  // 2. Read your title from the root .env file sitting one level up
-  const rootEnvPath = path.resolve(__dirname, '../.env')
-  let appTitle = 'Amt eMeterai' // Fallback title just in case
+  let finalTitle = ''
 
-  if (fs.existsSync(rootEnvPath)) {
-    const parsedRoot = dotenv.parse(fs.readFileSync(rootEnvPath))
-    if (parsedRoot['VITE_APP_TITLE']) {
-      appTitle = parsedRoot['VITE_APP_TITLE']
+  if (mode === 'development') {
+    // 💻 LOCAL DEV: Read the root .env file directly for instant feedback
+    const rootEnvPath = path.resolve(__dirname, '../.env')
+    let baseTitle = 'OpexNOW'
+    
+    if (fs.existsSync(rootEnvPath)) {
+      const parsedRoot = dotenv.parse(fs.readFileSync(rootEnvPath))
+      baseTitle = parsedRoot['VITE_APP_TITLE'] || 'OpexNOW'
     }
+    finalTitle = envTag ? `${envTag} ${baseTitle}` : baseTitle
+  } else {
+    // 🐳 DOCKER/PRODUCTION BUILD: Inject the string placeholder for Nginx to swap later
+    // We append %VITE_APP_ENV_TAG% so Nginx can also swap the environment tag dynamically if needed!
+    finalTitle = '__WINDOW_TITLE_PLACEHOLDER__'
   }
 
   return {
     plugins: [
       react(),
-      // 🚀 THE FIX: This custom plugin swaps the HTML placeholder text at build/dev time
       {
         name: 'html-transform',
         transformIndexHtml(html) {
-          return html.replace(/%VITE_APP_TITLE%/g, appTitle)
+          return html.replace(/%VITE_APP_TITLE%/g, finalTitle)
         }
       }
     ],
-
-    // Exposes it to your React code if you ever need import.meta.env.VITE_APP_TITLE
     define: {
-      'import.meta.env.VITE_APP_TITLE': JSON.stringify(appTitle)
+      'import.meta.env.VITE_APP_TITLE': JSON.stringify(finalTitle)
     },
-
-    // 2026-05-05 18:38:06 - Arga - Set Port (Preserved exactly)
     server: {
       host: true,
       port: 5173,

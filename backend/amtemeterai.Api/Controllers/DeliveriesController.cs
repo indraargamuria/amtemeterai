@@ -7,6 +7,8 @@ using amtemeterai.Api.Models;
 using amtemeterai.Api.Helpers;
 using amtemeterai.Api.Services;
 using amtemeterai.Api.Config;
+using System; // For Console
+using System.Text.Json; // For JsonSerializer
 
 namespace amtemeterai.Api.Controllers;
 
@@ -559,7 +561,12 @@ public class DeliveriesController : ControllerBase
                     LineComment = l.LineComment ?? ""
                 }).ToList()
             };
+            var jsonOptions = new JsonSerializerOptions { WriteIndented = true };
+            string jsonString = JsonSerializer.Serialize(sapPayload, jsonOptions);
 
+            Console.WriteLine("=================== SAP PAYLOAD DEBUG ===================");
+            Console.WriteLine(jsonString);
+            Console.WriteLine("=========================================================");
             // Pull standard client template configured via dynamic named factory inside Program.cs
             var client = _httpClientFactory.CreateClient("SapClient");
 
