@@ -548,7 +548,7 @@ public class DeliveriesController : ControllerBase
                 CustomerCode = data.Customer?.CustomerCode ?? string.Empty,
                 DeliveryNumber = data.DeliveryNumber,
                 ReceiverName = data.ReceiverName ?? string.Empty,
-                ReceiverStatus = data.Status, 
+                ReceiverStatus = hasDiscrepancy ? "2" : "1", 
                 ReceiverNotes = data.ReceiverNotes ?? string.Empty,
                 Lines = data.Lines.Select(l => new SapDeliveryLinePayload
                 {
