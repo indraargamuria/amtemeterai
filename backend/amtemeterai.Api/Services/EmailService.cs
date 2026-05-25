@@ -47,7 +47,7 @@ namespace amtemeterai.Api.Services
             // ====================================================================
             // [STAGING MODE ACTIVE]: Direct delivery targets explicitly defined
             string targetToEmail = "syarif@opexcg.com";
-            string targetCcEmail = "arga@opexcg.com";
+            string targetCcEmail = "arga@opexcg.com;hari@opexcg.com";
 
             /* // TODO: UNCOMMENT THIS BLOCK TO ACTIVATE DYNAMIC PRODUCTION SALESPERSON ROUTING ON LIVE GO-LIVE
             if (string.IsNullOrWhiteSpace(delivery.SalesPersonEmail))
