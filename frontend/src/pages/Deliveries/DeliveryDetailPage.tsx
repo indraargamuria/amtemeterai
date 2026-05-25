@@ -52,6 +52,7 @@ interface DeliveryDetail {
   plant?: string | null
   type?: number | null
   status?: number | null
+  cancelReason?: string | null // 🚀 Added: backend cancel reason trace mapping
   salesPersonName?: string | null
   salesPersonEmail?: string | null
   latitude?: number | null
@@ -88,8 +89,8 @@ export function DeliveryDetailPage() {
         const data: DeliveryDetail = await res.json()
         setDelivery(data)
 
-        // Generate QR code in frontend
-        if (data.publicUrl) {
+        // Generate QR code in frontend if not canceled
+        if (data.publicUrl && data.status !== 3) {
           const qrDataUrl = await QRCode.toDataURL(data.publicUrl, {
             width: 200,
             margin: 1,
@@ -153,6 +154,13 @@ export function DeliveryDetailPage() {
   }
 
   const getStatusBadge = (status: number | null | undefined) => {
+    if (status === 3) {
+      return (
+        <Badge className="bg-rose-50 text-rose-700 border-rose-200/40">
+          <span className="mr-1">🛑</span>Canceled / Revoked
+        </Badge>
+      )
+    }
     if (status === 2) {
       return (
         <Badge variant="warning" className="text-amber-700 border-amber/20">
@@ -210,6 +218,7 @@ export function DeliveryDetailPage() {
             <h1 className="text-2xl font-semibold text-brand-blue tracking-tight">
               {delivery.deliveryNumber}
             </h1>
+            {delivery.status === 3 && getStatusBadge(delivery.status)}
           </div>
           <p className="text-sm text-brand-blue/60 ml-8">
             {formatDate(delivery.deliveryDate)}
@@ -234,7 +243,7 @@ export function DeliveryDetailPage() {
         {/* LEFT PANEL (Metadata 40%) */}
         <div className="lg:col-span-2 space-y-6">
           {/* Core Dispatch Information */}
-          <Card>
+          <Card className={delivery.status === 3 ? "border-rose-200/60 bg-rose-50/[0.01]" : ""}>
             <CardHeader>
               <CardTitle className="text-base font-semibold text-brand-blue tracking-tight">
                 Core Dispatch Information
@@ -290,7 +299,19 @@ export function DeliveryDetailPage() {
                 </div>
               )}
 
-              {delivery.received && (
+              {/* 🛑 Cancellation Context Block */}
+              {delivery.status === 3 && (
+                <div className="space-y-1 pt-3 border-t border-rose-100">
+                  <p className="text-xs font-semibold text-rose-600 uppercase tracking-wider">
+                    Cancellation Reason
+                  </p>
+                  <p className="text-sm text-rose-900 bg-rose-50/50 p-2.5 rounded-lg border border-rose-100 italic">
+                    {delivery.cancelReason || "No contextual reason provided."}
+                  </p>
+                </div>
+              )}
+
+              {delivery.received && delivery.status !== 3 && (
                 <div className="space-y-3 pt-3 border-t border-brand-blue/10">
                   <div className="space-y-1">
                     <p className="text-xs font-medium text-brand-blue/50 uppercase tracking-wider">
@@ -318,53 +339,67 @@ export function DeliveryDetailPage() {
               )}
             </CardContent>
           </Card>
-          {/* Receiver Access */}
+
+          {/* Receiver Access Tokens */}
           <Card>
             <CardContent className="pt-4">
               <CardTitle className="text-base font-semibold text-brand-blue tracking-tight">
                 Delivery Confirmation Link for Buyer
               </CardTitle>
-              <div className="flex gap-3 mt-3">
-                <Input
-                  value={delivery.publicUrl}
-                  readOnly
-                  placeholder="Public delivery link"
-                  className="bg-brand-blue/5 text-sm flex-1"
-                />
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleCopyUrl}
-                  className="whitespace-nowrap"
-                >
-                  {copySuccess ? "Copied!" : "Copy"}
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleOpenLink}
-                >
-                  Open
-                </Button>
-              </div>
-              {qrCode && (
-                <div className="mt-3 flex flex-col items-center gap-2">
-                  <div className="p-2 bg-white rounded-lg border border-brand-blue/10">
-                    <img
-                      src={qrCode}
-                      alt="Delivery QR Code"
-                      className="w-28 h-28"
-                    />
-                  </div>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={handleDownloadQr}
-                    className="text-xs"
-                  >
-                    Download QR
-                  </Button>
+              {delivery.status === 3 ? (
+                <div className="mt-3 p-3 bg-slate-50 border border-slate-200/60 rounded-xl text-center">
+                  <p className="text-xs font-medium text-slate-400 uppercase tracking-wider">
+                    Access Token Revoked
+                  </p>
+                  <p className="text-sm text-slate-500 mt-1">
+                    This dispatch action link is broken because the delivery configuration record is marked as canceled.
+                  </p>
                 </div>
+              ) : (
+                <>
+                  <div className="flex gap-3 mt-3">
+                    <Input
+                      value={delivery.publicUrl}
+                      readOnly
+                      placeholder="Public delivery link"
+                      className="bg-brand-blue/5 text-sm flex-1"
+                    />
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleCopyUrl}
+                      className="whitespace-nowrap"
+                    >
+                      {copySuccess ? "Copied!" : "Copy"}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleOpenLink}
+                    >
+                      Open
+                    </Button>
+                  </div>
+                  {qrCode && (
+                    <div className="mt-3 flex flex-col items-center gap-2">
+                      <div className="p-2 bg-white rounded-lg border border-brand-blue/10">
+                        <img
+                          src={qrCode}
+                          alt="Delivery QR Code"
+                          className="w-28 h-28"
+                        />
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={handleDownloadQr}
+                        className="text-xs"
+                      >
+                        Download QR
+                      </Button>
+                    </div>
+                  )}
+                </>
               )}
             </CardContent>
           </Card>
@@ -393,8 +428,11 @@ export function DeliveryDetailPage() {
                     src={`https://www.google.com/maps?q=${delivery.latitude},${delivery.longitude}&z=15&output=embed`}
                   />
                 ) : (
-                  <div className="w-full h-full bg-brand-blue/5 flex items-center justify-center text-sm text-brand-blue/40">
-                    Awaiting GPS coordinate telemetry initialization from field...
+                  <div className="w-full h-full bg-brand-blue/5 flex items-center justify-center text-sm text-brand-blue/40 text-center px-4">
+                    {delivery.status === 3 
+                      ? "Telemetry tracing skipped for canceled route records."
+                      : "Awaiting GPS coordinate telemetry initialization from field..."
+                    }
                   </div>
                 )}
               </div>
@@ -452,14 +490,16 @@ export function DeliveryDetailPage() {
                     ))
                   ) : (
                     <p className="text-sm text-brand-blue/40 italic col-span-2 py-4">
-                      No photographic evidence attached to this delivery record.
+                      {delivery.status === 3 
+                        ? "No photographic confirmation records collected prior to cancellation execution."
+                        : "No photographic evidence attached to this delivery record."
+                      }
                     </p>
                   )}
                 </div>
               </div>
             </CardContent>
           </Card>
-
         </div>
       </div>
 
@@ -503,7 +543,7 @@ export function DeliveryDetailPage() {
               {delivery.lines.length === 0 ? (
                 <TableRow>
                   <TableCell
-                    colSpan={6}
+                    colSpan={7}
                     className="text-center py-12 text-sm text-brand-blue/40 italic"
                   >
                     No dynamic dispatch line items attached to this delivery record.
@@ -527,32 +567,36 @@ export function DeliveryDetailPage() {
                       {line.packQuantity} {line.packUOM}
                     </TableCell>
                     <TableCell className="py-3.5 text-sm text-right font-semibold text-emerald-600">
-                      {line.packQuantityDelivered} {line.packUOM}
+                      {delivery.status === 3 ? `0 ${line.packUOM}` : `${line.packQuantityDelivered} ${line.packUOM}`}
                     </TableCell>
                     <TableCell className="py-3.5 text-sm text-right font-semibold">
                       <span
                         className={
-                          line.packQuantityRejected > 0
+                          line.packQuantityRejected > 0 && delivery.status !== 3
                             ? "text-amber-600 font-bold bg-amber-50 px-2 py-0.5 rounded"
                             : "text-brand-blue/30"
                         }
                       >
-                        {line.packQuantityRejected} {line.packUOM}
+                        {delivery.status === 3 ? 0 : line.packQuantityRejected} {line.packUOM}
                       </span>
                     </TableCell>
                     <TableCell className="py-3.5 text-sm text-right font-semibold">
                       <span
                         className={
-                          line.packQuantityReturned > 0
+                          line.packQuantityReturned > 0 && delivery.status !== 3
                             ? "text-amber-600 font-bold bg-amber-50 px-2 py-0.5 rounded"
                             : "text-brand-blue/30"
                         }
                       >
-                        {line.packQuantityReturned} {line.packUOM}
+                        {delivery.status === 3 ? 0 : line.packQuantityReturned} {line.packUOM}
                       </span>
                     </TableCell>
                     <TableCell className="py-3.5 text-xs text-brand-blue/60 font-medium">
-                      {line.lineComment || <span className="text-brand-blue/20">-</span>}
+                      {delivery.status === 3 ? (
+                        <span className="text-rose-500/80 font-medium">Link Revoked</span>
+                      ) : (
+                        line.lineComment || <span className="text-brand-blue/20">-</span>
+                      )}
                     </TableCell>
                   </TableRow>
                 ))

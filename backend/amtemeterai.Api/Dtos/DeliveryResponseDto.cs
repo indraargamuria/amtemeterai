@@ -35,6 +35,9 @@ public class DeliveryResponseDto
     public string? District { get; set; }
     public string? FormattedAddress { get; set; }
 
+    public bool IsCanceled { get; set; }
+    public string? CancelReason { get; set; }
+
     public List<DeliveryLineResponseDto> Lines { get; set; } = new();
     //2026-05-19 21:19:04
     public List<DeliveryPhotoResponseDto> Photos { get; set; } = new();

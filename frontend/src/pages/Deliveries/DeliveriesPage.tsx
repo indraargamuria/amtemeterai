@@ -32,11 +32,16 @@ interface DeliveryHeader {
   district?: string | null
   province?: string | null
   photosCount?: number
+  // 🚀 ADDED: Cancellation Tracking Fields
+  isCanceled?: boolean
+  cancelReason?: string | null
 }
 
 type SortField = "deliveryDate" | "deliveryNumber" | "status"
 type SortOrder = "asc" | "desc"
 type ComplianceFilter = "all" | "bc" | "nonbc"
+// 🚀 EXTENDED: Filter state to capture delivery pipeline exclusions
+type PipelineFilter = "all" | "active" | "canceled"
 
 const ITEMS_PER_PAGE = 10
 
@@ -49,6 +54,7 @@ export function DeliveriesPage() {
   const [sortField, setSortField] = useState<SortField>("deliveryDate")
   const [sortOrder, setSortOrder] = useState<SortOrder>("desc")
   const [complianceFilter, setComplianceFilter] = useState<ComplianceFilter>("all")
+  const [pipelineFilter, setPipelineFilter] = useState<PipelineFilter>("active") // Defaults to hiding noise from cancelled rows
   const [showDiscrepancyOnly, setShowDiscrepancyOnly] = useState(false)
 
   const api = useApi()
@@ -101,7 +107,8 @@ export function DeliveriesPage() {
           d.deliveryNumber.toLowerCase().includes(query) ||
           d.customerName.toLowerCase().includes(query) ||
           d.customerCode.toLowerCase().includes(query) ||
-          (d.salesPersonName?.toLowerCase().includes(query) ?? false)
+          (d.salesPersonName?.toLowerCase().includes(query) ?? false) ||
+          (d.cancelReason?.toLowerCase().includes(query) ?? false)
       )
     }
 
@@ -114,9 +121,16 @@ export function DeliveriesPage() {
       })
     }
 
+    // Apply pipeline status filter
+    if (pipelineFilter === "active") {
+      filtered = filtered.filter((d) => !d.isCanceled)
+    } else if (pipelineFilter === "canceled") {
+      filtered = filtered.filter((d) => d.isCanceled)
+    }
+
     // Apply discrepancy filter
     if (showDiscrepancyOnly) {
-      filtered = filtered.filter((d) => d.status === 2)
+      filtered = filtered.filter((d) => d.status === 2 && !d.isCanceled)
     }
 
     // Apply sorting
@@ -131,8 +145,10 @@ export function DeliveriesPage() {
           comparison = a.deliveryNumber.localeCompare(b.deliveryNumber)
           break
         case "status":
-          // Push discrepancies (status === 2) to top
-          comparison = (a.status ?? 0) - (b.status ?? 0)
+          // Push cancellation tracking downstream behind operational problems
+          const weightA = a.isCanceled ? 3 : (a.status === 2 ? 0 : 1)
+          const weightB = b.isCanceled ? 3 : (b.status === 2 ? 0 : 1)
+          comparison = weightA - weightB
           break
       }
 
@@ -140,7 +156,7 @@ export function DeliveriesPage() {
     })
 
     return filtered
-  }, [deliveries, searchQuery, sortField, sortOrder, complianceFilter, showDiscrepancyOnly])
+  }, [deliveries, searchQuery, sortField, sortOrder, complianceFilter, pipelineFilter, showDiscrepancyOnly])
 
   const totalPages = Math.ceil(filteredAndSortedDeliveries.length / ITEMS_PER_PAGE)
   const startIndex = (currentPage - 1) * ITEMS_PER_PAGE
@@ -149,10 +165,9 @@ export function DeliveriesPage() {
     startIndex + ITEMS_PER_PAGE
   )
 
-  // Reset to page 1 when filters change
   useEffect(() => {
     setCurrentPage(1)
-  }, [searchQuery, sortField, sortOrder, complianceFilter, showDiscrepancyOnly])
+  }, [searchQuery, sortField, sortOrder, complianceFilter, pipelineFilter, showDiscrepancyOnly])
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString)
@@ -173,7 +188,15 @@ export function DeliveriesPage() {
     return <Badge variant="outline">-</Badge>
   }
 
-  const getFulfillmentBadge = (status: number | null | undefined, received: boolean) => {
+  const getFulfillmentBadge = (status: number | null | undefined, received: boolean, isCanceled?: boolean) => {
+    // 🚀 ADDED: Intercept badge execution if cancellation takes state machine priority
+    if (isCanceled) {
+      return (
+        <Badge className="bg-rose-50 text-rose-700 border-rose-200">
+          <span className="mr-1">✕</span>Void / Cancelled
+        </Badge>
+      )
+    }
     if (!received) {
       return (
         <Badge variant="info" className="text-brand-blue/70 border-brand-blue/10">
@@ -188,13 +211,6 @@ export function DeliveriesPage() {
         </Badge>
       )
     }
-    if (status === 1) {
-      return (
-        <Badge variant="success" className="text-emerald-700 border-emerald/20">
-          <span className="mr-1">✓</span>Fully Received
-        </Badge>
-      )
-    }
     return (
       <Badge variant="success" className="text-emerald-700 border-emerald/20">
         <span className="mr-1">✓</span>Fully Received
@@ -202,7 +218,8 @@ export function DeliveriesPage() {
     )
   }
 
-  const getInvoicedBadge = (invoiced: boolean) => {
+  const getInvoicedBadge = (invoiced: boolean, isCanceled?: boolean) => {
+    if (isCanceled) return null // Hide invoicing metadata if shipment is dead void
     if (invoiced) {
       return (
         <Badge variant="outline" className="border-brand-blue/30 text-brand-blue/70">
@@ -231,10 +248,11 @@ export function DeliveriesPage() {
     return parts.length > 0 ? parts.join(" (") + (salesPersonName ? ")" : "") : "-"
   }
 
-  const getPhotoIndicator = (count: number | undefined) => {
+  const getPhotoIndicator = (count: number | undefined, isCanceled?: boolean) => {
+    if (isCanceled) return <span className="text-xs text-slate-300">-</span>
     if (!count || count === 0) {
       return (
-        <div className="flex items-center gap-1.5 text-brand-blue/30">
+        <div className="flex items-center gap-1.5 text-brand-blue/30 justify-center">
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -244,7 +262,7 @@ export function DeliveriesPage() {
       )
     }
     return (
-      <div className="flex items-center gap-1.5 text-brand-blue/80">
+      <div className="flex items-center gap-1.5 text-brand-blue/80 justify-center">
         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -287,7 +305,7 @@ export function DeliveriesPage() {
                   />
                 </svg>
                 <Input
-                  placeholder="Search by delivery number, customer, or salesperson..."
+                  placeholder="Search by delivery number, customer, salesperson, or cancellation reason..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="pl-10 bg-brand-blue/5"
@@ -334,15 +352,53 @@ export function DeliveriesPage() {
                 </div>
               </div>
 
+              {/* 🚀 ADDED: Pipeline Exception Filtering Segment */}
+              <div className="flex items-center gap-2 bg-brand-blue/5 rounded-lg px-3 py-2">
+                <span className="text-xs text-brand-blue/60 whitespace-nowrap">Status:</span>
+                <div className="flex gap-1">
+                  <button
+                    onClick={() => setPipelineFilter("active")}
+                    className={`px-2 py-1 text-xs rounded-md transition-colors ${
+                      pipelineFilter === "active"
+                        ? "bg-brand-blue text-white"
+                        : "text-brand-blue/70 hover:bg-brand-blue/10"
+                    }`}
+                  >
+                    Active
+                  </button>
+                  <button
+                    onClick={() => setPipelineFilter("canceled")}
+                    className={`px-2 py-1 text-xs rounded-md transition-colors ${
+                      pipelineFilter === "canceled"
+                        ? "bg-rose-600 text-white"
+                        : "text-brand-blue/70 hover:bg-brand-blue/10"
+                    }`}
+                  >
+                    Cancelled
+                  </button>
+                  <button
+                    onClick={() => setPipelineFilter("all")}
+                    className={`px-2 py-1 text-xs rounded-md transition-colors ${
+                      pipelineFilter === "all"
+                        ? "bg-slate-600 text-white"
+                        : "text-brand-blue/70 hover:bg-brand-blue/10"
+                    }`}
+                  >
+                    All
+                  </button>
+                </div>
+              </div>
+
               {/* Discrepancy Filter */}
               <label className="flex items-center gap-2 cursor-pointer bg-brand-blue/5 rounded-lg px-3 py-2">
                 <input
                   type="checkbox"
                   checked={showDiscrepancyOnly}
                   onChange={(e) => setShowDiscrepancyOnly(e.target.checked)}
-                  className="w-4 h-4 rounded border-brand-blue/20 text-brand-blue focus:ring-brand-red/50"
+                  disabled={pipelineFilter === "canceled"}
+                  className="w-4 h-4 rounded border-brand-blue/20 text-brand-blue focus:ring-brand-red/50 disabled:opacity-50"
                 />
-                <span className="text-xs text-brand-blue/70 whitespace-nowrap">
+                <span className={`text-xs text-brand-blue/70 whitespace-nowrap ${pipelineFilter === "canceled" ? "opacity-50" : ""}`}>
                   Discrepancies Only
                 </span>
               </label>
@@ -356,7 +412,6 @@ export function DeliveriesPage() {
         <Table>
           <TableHeader>
             <TableRow>
-              {/* Combined Delivery & Date Header with Sorting */}
               <TableHead
                 className="font-medium text-brand-blue/50 uppercase text-xs tracking-wider cursor-pointer hover:text-brand-blue/70 transition-colors"
                 onClick={() => handleSort("deliveryDate")}
@@ -378,7 +433,6 @@ export function DeliveriesPage() {
               <TableHead className="font-medium text-brand-blue/50 uppercase text-xs tracking-wider text-center">
                 Proof
               </TableHead>
-              {/* Renamed clear semantic columns */}
               <TableHead className="font-medium text-brand-blue/50 uppercase text-xs tracking-wider">
                 Drop Location
               </TableHead>
@@ -390,13 +444,13 @@ export function DeliveriesPage() {
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={8} className="text-center text-brand-blue/60 py-12">
+                <TableCell colSpan={7} className="text-center text-brand-blue/60 py-12">
                   Loading deliveries...
                 </TableCell>
               </TableRow>
             ) : filteredAndSortedDeliveries.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={8} className="text-center text-brand-blue/60 py-12">
+                <TableCell colSpan={7} className="text-center text-brand-blue/60 py-12">
                   {deliveries.length === 0
                     ? "No deliveries found"
                     : "No deliveries match your filter criteria"}
@@ -406,13 +460,17 @@ export function DeliveriesPage() {
               currentDeliveries.map((delivery) => (
                 <TableRow
                   key={delivery.deliveryId}
-                  className="cursor-pointer hover:bg-brand-blue/[0.02] transition-colors"
+                  className={`cursor-pointer transition-colors ${
+                    delivery.isCanceled 
+                      ? "bg-slate-50/60 opacity-75 hover:bg-slate-100/50" 
+                      : "hover:bg-brand-blue/[0.02]"
+                  }`}
                   onClick={() => handleRowClick(delivery.deliveryId)}
                 >
                   {/* Combined Delivery Column */}
                   <TableCell className="py-4">
                     <div className="space-y-0.5">
-                      <p className="text-sm font-semibold text-brand-blue">
+                      <p className={`text-sm font-semibold ${delivery.isCanceled ? "text-slate-500 line-through decoration-slate-400" : "text-brand-blue"}`}>
                         {delivery.deliveryNumber}
                       </p>
                       <p className="text-xs text-brand-blue/40">
@@ -424,10 +482,10 @@ export function DeliveriesPage() {
                   {/* Combined Customer Column */}
                   <TableCell className="py-4">
                     <div className="flex items-center gap-2">
-                      <Badge variant="badge" className="text-brand-blue/70 font-normal">
+                      <Badge variant="badge" className={`font-normal ${delivery.isCanceled ? "text-slate-400 bg-slate-100" : "text-brand-blue/70"}`}>
                         {delivery.customerCode}
                       </Badge>
-                      <span className="text-sm text-brand-blue/80">
+                      <span className={`text-sm ${delivery.isCanceled ? "text-slate-500" : "text-brand-blue/80"}`}>
                         {delivery.customerName}
                       </span>
                     </div>
@@ -438,33 +496,38 @@ export function DeliveriesPage() {
                     {getComplianceBadge(delivery.type)}
                   </TableCell>
 
-                  {/* Fulfillment State Column with Invoiced Badge */}
+                  {/* Fulfillment State Column with Invoiced Badge / Cancel Reason */}
                   <TableCell className="py-4">
                     <div className="flex flex-col gap-1.5">
-                      {getFulfillmentBadge(delivery.status, delivery.received)}
-                      {getInvoicedBadge(delivery.invoiced)}
+                      {getFulfillmentBadge(delivery.status, delivery.received, delivery.isCanceled)}
+                      {delivery.isCanceled ? (
+                        <p className="text-[11px] font-medium text-rose-600/80 max-w-[180px] truncate" title={delivery.cancelReason || "No custom reason specified"}>
+                          Reason: {delivery.cancelReason || "System/Manual Void"}
+                        </p>
+                      ) : (
+                        getInvoicedBadge(delivery.invoiced, delivery.isCanceled)
+                      )}
                     </div>
                   </TableCell>
 
                   {/* Proof Tracker Column */}
                   <TableCell className="py-4 text-center">
-                    {getPhotoIndicator(delivery.photosCount)}
+                    {getPhotoIndicator(delivery.photosCount, delivery.isCanceled)}
                   </TableCell>
 
                   {/* Geographical Routing Zone Column */}
                   <TableCell className="py-4">
-                    <p className="text-sm text-brand-blue/70">
+                    <p className={`text-sm ${delivery.isCanceled ? "text-slate-400" : "text-brand-blue/70"}`}>
                       {getRoutingString(delivery.cityRegency, delivery.district)}
                     </p>
                   </TableCell>
 
                   {/* Destination Owner Column */}
                   <TableCell className="py-4">
-                    <p className="text-sm text-brand-blue/70">
+                    <p className={`text-sm ${delivery.isCanceled ? "text-slate-400" : "text-brand-blue/70"}`}>
                       {getDestinationOwner(delivery.plant, delivery.salesPersonName)}
                     </p>
                   </TableCell>
-
                 </TableRow>
               ))
             )}

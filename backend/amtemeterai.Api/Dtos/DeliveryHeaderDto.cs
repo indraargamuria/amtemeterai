@@ -20,5 +20,8 @@ namespace amtemeterai.Api.Dtos
         public string? Province { get; set; }
         public int PhotosCount { get; set; }    // 🔴 Ensure this maps the dynamic count
         public string PublicUrl { get; set; } = null!;
+        
+        public bool IsCanceled { get; set; }
+        public string? CancelReason { get; set; }
     }
 }

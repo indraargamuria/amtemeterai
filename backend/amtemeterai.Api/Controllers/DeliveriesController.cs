@@ -101,7 +101,10 @@ public class DeliveriesController : ControllerBase
                 District = d.District,
                 Province = d.Province,
                 
-                // 📸 FIX: Count only files matching the DeliveryPhoto enum criteria from Documents table
+                // 🚀 ADDED: Fetch raw database fields for cancellation projection
+                CancelReason = d.CancelReason,
+                IsCanceled = d.Status == DeliveryHeader.ReceiverStatus.Canceled,
+                
                 PhotosCount = _db.Documents.Count(p => 
                     p.DeliveryID == d.DeliveryID && 
                     p.Type == DocumentType.DeliveryPhoto)
@@ -129,7 +132,10 @@ public class DeliveriesController : ControllerBase
             Province = d.Province,
             PhotosCount = d.PhotosCount,
 
-            // 🚀 FIX: Explicitly cast the strongly-typed Enums to nullable integers (int?)
+            // 🚀 ADDED: Map fields into the final returned API contract list
+            IsCanceled = d.IsCanceled,
+            CancelReason = d.CancelReason,
+
             Type = (int?)d.Type,
             Status = (int?)d.Status
         }).ToList();
@@ -151,7 +157,6 @@ public class DeliveriesController : ControllerBase
 
         // 2. Fetch all associated proof files from your Documents table
         var baseApiUrl = _configuration["App:ApiBaseUrl"] ?? "http://localhost:8080";
-        // var baseApiUrl = "http://192.168.0.191";
         
         var photos = await _db.Documents
             .Where(doc => doc.DeliveryID == deliveryId && doc.Type == DocumentType.DeliveryPhoto)
@@ -159,7 +164,6 @@ public class DeliveriesController : ControllerBase
             {
                 FileName = doc.FileName,
                 StorageKey = doc.StorageKey,
-                // Automatically structure the stream path so React can read it natively
                 DownloadUrl = $"{baseApiUrl.TrimEnd('/')}/api/deliveries/files/download?key={Uri.EscapeDataString(doc.StorageKey)}",
                 UploadedAt = doc.UploadedAt
             })
@@ -181,16 +185,17 @@ public class DeliveriesController : ControllerBase
             Invoiced = delivery.Invoiced,
             PublicUrl = GetPublicUrl(delivery.ReceiverToken, _configuration["App:PublicBaseUrl"]),
 
-            // Map new configuration parameters
             Plant = delivery.Plant,
             SalesPersonName = delivery.SalesPersonName,
             SalesPersonEmail = delivery.SalesPersonEmail,
             
-            // Map safe primitive integers from internal model enums
+            // 🚀 ADDED: Map cancellation tracking properties directly into the object schema
+            CancelReason = delivery.CancelReason,
+            IsCanceled = delivery.Status == DeliveryHeader.ReceiverStatus.Canceled,
+            
             Type = (int)delivery.Type,
             Status = delivery.Status.HasValue ? (int)delivery.Status.Value : null,
 
-            // Map location telemetry tracking structures
             Latitude = delivery.Latitude,
             Longitude = delivery.Longitude,
             Province = delivery.Province,
@@ -198,10 +203,8 @@ public class DeliveriesController : ControllerBase
             District = delivery.District,
             FormattedAddress = delivery.FormattedAddress,
 
-            // Bind the active file attachment array
             Photos = photos,
 
-            // Map the individual line elements
             Lines = delivery.Lines.Select(l => new DeliveryLineResponseDto
             {
                 DeliveryLineNumber = l.DeliveryLineNumber,
@@ -216,7 +219,6 @@ public class DeliveriesController : ControllerBase
                 PackQuantityReturned = l.PackQuantityReturned,
                 PackQuantityRejected = l.PackQuantityRejected,
                 
-                // Bind new user feedback field
                 LineComment = l.LineComment
             }).ToList()
         };
