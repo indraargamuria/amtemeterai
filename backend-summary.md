@@ -19,8 +19,8 @@ The backend is built with **ASP.NET Core 8.0** using **Entity Framework Core** w
 | PostgreSQL | 16 | Database |
 | Npgsql | 8.0.0 | PostgreSQL Provider |
 | Swashbuckle.AspNetCore | 6.5.0 | Swagger/OpenAPI |
-| QRCoder | 1.5.1 | QR Code Generation |
-| AWSSDK.S3 | - | MinIO Storage Client |
+| QRCoder | 1.8.0 | QR Code Generation |
+| AWSSDK.S3 | 4.0.23.3 | MinIO Storage Client (S3-compatible) |
 
 ---
 
@@ -61,6 +61,7 @@ The API uses **JWT (JSON Web Token)** Bearer authentication for securing endpoin
 backend/amtemeterai.Api/
 ├── Controllers/          # API Controllers
 │   ├── AccountController.cs    # Authentication endpoints
+│   ├── DashboardController.cs  # Dashboard stats, charts, and logs (requires auth)
 │   ├── CustomersController.cs  # Customer management (requires auth)
 │   └── DeliveriesController.cs # Delivery management (mixed auth)
 ├── Models/               # Domain Models
@@ -68,8 +69,8 @@ backend/amtemeterai.Api/
 │   ├── Customer.cs
 │   ├── DeliveryHeader.cs   # Enhanced with GPS & location fields
 │   ├── DeliveryLine.cs     # Enhanced with LineComment field
-│   ├── Document.cs         # NEW: Unified document storage
-│   └── ActivityLog.cs      # NEW: Activity logging
+│   ├── Document.cs         # Unified document storage
+│   └── ActivityLog.cs      # Activity logging
 ├── Dtos/                 # Data Transfer Objects
 │   ├── AuthResponseDto.cs
 │   ├── LoginDto.cs
@@ -84,10 +85,12 @@ backend/amtemeterai.Api/
 │   ├── DeliveryReceiveDto.cs
 │   ├── DeliveryResponseDto.cs
 │   ├── DeliveryUpsertDto.cs
-│   ├── DeliveryEditConfirmationDto.cs # NEW: Delivery confirmation updates
+│   ├── DeliveryEditConfirmationDto.cs # Delivery confirmation updates
 │   ├── PinRequestDto.cs
-│   ├── GeoLocationResult.cs           # NEW: GPS location result
-│   └── GoogleGeocodeResponse.cs       # NEW: Google Maps API response
+│   ├── GeoLocationResult.cs           # GPS location result
+│   ├── GoogleGeocodeResponse.cs       # Google Maps API response
+│   ├── DeliveryPhotoResponseDto.cs    # Photo response format
+│   └── SapDeliveryConfirmationDto.cs  # SAP ERP integration payloads
 ├── Data/                 # Database Context
 │   ├── AppDbContext.cs
 │   └── AppDbContextFactory.cs
@@ -97,11 +100,11 @@ backend/amtemeterai.Api/
 │   ├── DummyCustomerSource.cs
 │   ├── ErpCustomerSource.cs
 │   ├── IStorageService.cs        # NEW: Storage interface
-│   └── MinioStorageService.cs    # NEW: MinIO implementation
+│   └── MinioStorageService.cs    # MinIO implementation
 ├── Helpers/              # Helper Utilities
 │   └── QrCodeHelper.cs
 ├── Config/               # Configuration Options
-│   └── SapOptions.cs
+│   └── SapOptions.cs     # SAP ERP connection settings
 ├── Migrations/           # Database Migrations
 └── Program.cs            # Application Entry Point
 ```
@@ -239,6 +242,77 @@ http://localhost:8080
 ### Swagger UI
 ```
 http://localhost/api/swagger
+```
+
+---
+
+## Dashboard API
+
+**Note:** All Dashboard API endpoints require authentication (`[Authorize]`).
+
+### Get Dashboard Stats
+
+### Get Dashboard Stats
+**Endpoint:** `GET /api/dashboard/stats`
+
+**Description:** Returns aggregated KPI metrics for the dashboard.
+
+**Response Body:**
+```json
+{
+  "totalDeliveries": 45,
+  "pendingDeliveries": 12,
+  "pendingInvoice": 8,
+  "rejectionRate": 3.5
+}
+```
+
+**Metrics Calculated:**
+- `TotalDeliveries` - Count of all delivery records
+- `PendingDeliveries` - Count of deliveries not yet received
+- `PendingInvoice` - Count of received deliveries not yet invoiced
+- `RejectionRate` - Percentage of rejected items vs delivered items (1 decimal place)
+
+---
+
+### Get Delivery Charts Data
+**Endpoint:** `GET /api/dashboard/charts`
+
+**Description:** Returns delivery count data grouped by date for the last 30 days.
+
+**Response Body:**
+```json
+[
+  {
+    "date": "2025-04-22",
+    "count": 3
+  },
+  {
+    "date": "2025-04-23",
+    "count": 5
+  }
+]
+```
+
+---
+
+### Get Activity Logs
+**Endpoint:** `GET /api/dashboard/logs?count=20`
+
+**Description:** Returns recent activity log entries for monitoring.
+
+**Response Body:**
+```json
+[
+  {
+    "logID": 1,
+    "timestamp": "2025-05-20T10:30:00Z",
+    "eventType": "DeliveryConfirmationUpdated",
+    "referenceID": "DLV1001",
+    "message": "Delivery DLV1001 confirmed and synced to SAP.",
+    "severity": "Success"
+  }
+]
 ```
 
 ---
@@ -731,7 +805,7 @@ Lines[0].LineComment: string?
 | Photos | List<DeliveryPhotoResponseDto> |
 | Lines | List<DeliveryLineResponseDto> |
 
-### DeliveryPhotoResponseDto (NEW)
+### DeliveryPhotoResponseDto
 | Property | Type |
 |----------|------|
 | FileName | string |
@@ -754,7 +828,7 @@ Lines[0].LineComment: string?
 | PackQuantityRejected | decimal |
 | LineComment | string? |
 
-### DeliveryEditConfirmationDto (NEW)
+### DeliveryEditConfirmationDto
 | Property | Type |
 |----------|------|
 | ReceiverName | string |
@@ -765,7 +839,7 @@ Lines[0].LineComment: string?
 | NewPhotoFiles | List<IFormFile>? |
 | KeysToDelete | List<string> |
 
-### DeliveryLineEditDto (NEW)
+### DeliveryLineEditDto
 | Property | Type |
 |----------|------|
 | DeliveryLineNumber | string |
@@ -774,7 +848,7 @@ Lines[0].LineComment: string?
 | PackQuantityRejected | decimal |
 | LineComment | string? |
 
-### GeoLocationResult (NEW)
+### GeoLocationResult
 | Property | Type |
 |----------|------|
 | Province | string? |
@@ -782,11 +856,30 @@ Lines[0].LineComment: string?
 | District | string? |
 | FormattedAddress | string? |
 
+### SapDeliveryConfirmationPayload
+| Property | Type |
+|----------|------|
+| CustomerCode | string |
+| DeliveryNumber | string |
+| ReceiverName | string |
+| ReceiverStatus | string |
+| ReceiverNotes | string |
+| Lines | List<SapDeliveryLinePayload> |
+
+### SapDeliveryLinePayload
+| Property | Type |
+|----------|------|
+| DeliveryLineNumber | string |
+| DeliveredQuantity | decimal |
+| RejectedQuantity | decimal |
+| ReturnedQuantity | decimal |
+| LineComment | string |
+
 ---
 
 ## Services Architecture
 
-### Storage Service Layer (NEW)
+### Storage Service Layer
 
 #### `IStorageService` (Interface)
 Defines the contract for file storage operations using MinIO/S3-compatible storage:
@@ -845,7 +938,7 @@ Defines the contract for fetching customer data from external sources.
 
 ---
 
-## GPS & Location Services (NEW)
+## GPS & Location Services
 
 ### Reverse Geocoding
 
@@ -876,7 +969,79 @@ https://maps.googleapis.com/maps/api/geocode/json?latlng={lat},{lng}&key={apiKey
 
 ---
 
-## Activity Logging (NEW)
+## SAP ERP Integration
+
+### Overview
+The system integrates with SAP ERP for automatic delivery confirmation synchronization. When a delivery is received and confirmed by the customer, the confirmation data is automatically pushed to SAP via REST API.
+
+### Configuration (appsettings.json)
+```json
+"SapConfig": {
+  "BaseUrl": "https://your-sap-server.com",
+  "Client": "800",
+  "Username": "${SAP_USERNAME}",
+  "Password": "${SAP_PASSWORD}"
+}
+```
+
+### Integration Flow
+1. Customer confirms delivery via public receive page
+2. **Guard:** Delivery is not invoiced (financial lock)
+3. Photos uploaded to MinIO
+4. Delivery status calculated (FullyReceived/PartialReceived)
+5. **SAP Sync:** Payload sent to `/sap/bc/zrest_doconfirm?sap-client={client}`
+6. If SAP sync succeeds: database changes committed
+7. If SAP sync fails: transaction rolled back, 502 error returned
+
+### Authentication
+- Uses HTTP Basic Authentication
+- Credentials encoded in `SapOptions.BasicAuthToken`
+- Header: `Authorization: Basic {base64(username:password)}`
+
+### Payload Structure
+```json
+{
+  "customerCode": "CUST001",
+  "deliveryNumber": "DLV1001",
+  "receiverName": "John Doe",
+  "receiverStatus": "1",
+  "receiverNotes": "Received in good condition",
+  "lines": [
+    {
+      "deliveryLineNumber": "1",
+      "deliveredQuantity": 10.00,
+      "rejectedQuantity": 0.00,
+      "returnedQuantity": 0.00,
+      "lineComment": "Good condition"
+    }
+  ]
+}
+```
+
+**Receiver Status Mapping:**
+- `"1"` = FullyReceived (no discrepancies)
+- `"2"` = PartialReceived (has rejections, returns, or shortages)
+
+### HttpClient Configuration
+Named HttpClient configured in `Program.cs`:
+```csharp
+builder.Services.AddHttpClient("SapClient", (serviceProvider, client) =>
+{
+    var sapOptions = serviceProvider.GetRequiredService<IOptions<SapOptions>>().Value;
+    client.BaseAddress = new Uri(sapOptions.BaseUrl.TrimEnd('/'));
+    client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Basic", sapOptions.BasicAuthToken);
+    client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+});
+```
+
+### Error Handling
+- Non-200 responses from SAP → Returns 502 Bad Gateway
+- Network exceptions → Returns 500 Internal Server Error
+- Database changes are NOT committed if SAP sync fails
+
+---
+
+## Activity Logging
 
 ### Overview
 The system logs all significant activities for audit trails and monitoring.
@@ -890,7 +1055,13 @@ The system logs all significant activities for audit trails and monitoring.
 | Event Type | Description |
 |------------|-------------|
 | DeliveryCreated | When a new delivery is created |
-| DeliveryConfirmationUpdated | When delivery confirmation is modified |
+| DeliveryConfirmationUpdated | When delivery confirmation is synced to SAP |
+
+### Log Message Structure
+Activity logs include dynamic details based on the delivery outcome:
+- Base message: "Delivery {number} confirmed by {receiverName} and synced to SAP."
+- Details appended for discrepancies: rejected items, returned items, shortages
+- Example: "Delivery DLV1001 confirmed by John Doe and synced to SAP. Summary: 2 item(s) rejected, 1 item(s) short-delivered/unaccounted for."
 
 ### Helper Method
 ```csharp
@@ -1030,13 +1201,21 @@ Recent migrations include:
 - **Guard:** Rejects updates if delivery is invoiced (financial lock)
 - Sets `Received = true` on update
 - Updates line quantities and comments
+- **Discrepancy Detection:**
+  - Checks for rejected items (`PackQuantityRejected > 0`)
+  - Checks for returned items (`PackQuantityReturned > 0`)
+  - Checks for shortages (delivered + returned + rejected < original pack quantity)
 - Auto-calculates status:
-  - `PartialReceived` if any returned/rejected items
-  - `FullyReceived` otherwise
+  - `PartialReceived` if discrepancies detected
+  - `FullyReceived` if no discrepancies
 - Updates GPS coordinates and reverse geocodes to address
 - Uploads new photos to MinIO storage
 - Deletes specified photos from both MinIO and database
-- Logs activity with severity based on rejection count
+- **SAP Synchronization:**
+  - Pushes confirmation payload to `/sap/bc/zrest_doconfirm`
+  - Only commits database changes if SAP sync succeeds
+  - Returns 502/500 on SAP failures without committing
+- Logs activity with severity based on discrepancy presence
 
 ### Photo Management
 - Photos stored in MinIO with structured key pattern
@@ -1115,3 +1294,20 @@ dotnet ef migrations add MigrationName
 
 - Swagger JSON endpoint: `/api/swagger/v1/swagger.json`
 - Swagger UI: `/api/swagger`
+
+---
+
+## Root Scripts (Concurrent Development)
+
+The root `package.json` provides scripts for running both backend and frontend concurrently:
+
+| Command | Description |
+|---------|-------------|
+| `npm run dev` | Runs both backend and frontend concurrently |
+| `npm run dev:backend` | Runs backend only (`dotnet run`) |
+| `npm run dev:frontend` | Runs frontend only (`npm run dev` in frontend directory) |
+
+**Dependencies:**
+- `concurrently` - Runs multiple npm scripts in parallel
+
+---

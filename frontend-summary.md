@@ -21,6 +21,7 @@ The frontend is built with **React 19** and **Vite** using **TypeScript**. It pr
 | tailwind-merge | 3.5.0 | Tailwind Class Merging |
 | lucide-react | 1.14.0 | Icons |
 | qrcode | 1.5.4 | QR Code Generation |
+| recharts | 3.8.1 | Data Visualization & Charts |
 
 ---
 
@@ -221,15 +222,20 @@ Features:
 - KPI cards:
   - Total Deliveries
   - Pending Invoice
-  - Rejection Rate
+  - Rejection Rate (with alert styling when >5%)
 - Interactive area chart showing delivery trends (30-day)
 - Recent activity feed with severity indicators
 - ERP connectivity status indicator
 
+**API Integration:**
+- Fetches stats from `GET /api/dashboard/stats`
+- Fetches chart data from `GET /api/dashboard/charts`
+- Fetches activity logs from `GET /api/dashboard/logs`
+
 **Components:**
 - Page Header with title and description
-- Metrics Grid with icons
-- Recent Activity list
+- Metrics Grid with icons and conditional alert styling
+- Activity Log feed with color-coded severity indicators
 
 ---
 
@@ -376,7 +382,7 @@ Each line item has:
 - Receiver Name (required text input)
 - Notes (optional text input)
 
-**Photo Management (NEW):**
+**Photo Management:**
 - Max 5 photos per delivery
 - Max file size: 5MB
 - Supported formats: JPG, PNG
@@ -393,7 +399,7 @@ Each line item has:
   - "Staged" badge
 - Real-time photo count display
 
-**GPS Location Capture (NEW):**
+**GPS Location Capture:**
 - Automatic geolocation on page load using browser Geolocation API
 - High accuracy mode enabled
 - 5-second timeout
@@ -553,6 +559,38 @@ lines.forEach((line, index) => {
 
 ## Utilities
 
+### API Helper Functions (`api.ts`)
+
+Provides authenticated API calls with automatic JWT token handling and 401 error management.
+
+**Available Functions:**
+```typescript
+// Authenticated HTTP methods
+authGet(url: string)
+authPost(url: string, body?: any)
+authPatch(url: string, body?: any)
+authDelete(url: string)
+
+// Hook for accessing methods
+const api = useApi()
+await api.get("/api/customers")
+await api.post("/api/deliveries", data)
+```
+
+**Dashboard-Specific Functions:**
+```typescript
+getDashboardStats()      // Returns: { totalDeliveries, pendingDeliveries, pendingInvoice, rejectionRate }
+getDashboardCharts()     // Returns: Array<{ date: string, count: number }>
+getDashboardLogs(count?: number) // Returns: Array<ActivityLog>
+```
+
+**Automatic Token Management:**
+- Reads JWT from `localStorage.getItem("auth_token")`
+- Adds `Authorization: Bearer {token}` header
+- Clears tokens and redirects to `/login` on 401 responses
+
+---
+
 ### `cn()` - className Utility
 
 Combines `clsx` and `tailwind-merge` for intelligent class name merging.
@@ -665,7 +703,7 @@ cn("class1", condition && "class2", "class3")
 | Page | API Integration | Authentication | Notes |
 |------|----------------|----------------|-------|
 | Login | Live API | No | Posts to `POST /api/account/login` |
-| Dashboard | Mock data | Yes | Static metrics displayed |
+| Dashboard | Live API | Yes | Fetches stats, charts, and logs from `/api/dashboard/*` |
 | Customers | Live API | Yes | Uses authenticated API helper |
 | Deliveries List | Live API | Yes | Uses authenticated API helper |
 | Delivery Detail | Live API | Yes | Uses authenticated API helper |

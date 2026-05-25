@@ -24,6 +24,9 @@ public class DeliveriesController : ControllerBase
     private readonly string _googleApiKey;
     private readonly IHttpClientFactory _httpClientFactory; // 🚀 Added
     private readonly SapOptions _sapOptions;               // 🚀 Added
+    // 🚀 ADD THESE TWO FIELDS HERE:
+    private readonly IServiceProvider _serviceProvider;
+    private readonly ILogger<DeliveriesController> _logger;
 
     // Helper method to log activity
     private async Task LogActivity(string eventType, string referenceId, string message, string severity = "Info")
@@ -46,7 +49,9 @@ public class DeliveriesController : ControllerBase
         IStorageService storageService,
         IConfiguration config,
         IHttpClientFactory httpClientFactory,              // 🚀 Added
-        Microsoft.Extensions.Options.IOptions<SapOptions> sapOptions)
+        Microsoft.Extensions.Options.IOptions<SapOptions> sapOptions, // Use your existing options type name here
+        IServiceProvider serviceProvider, // 🚀 Inject here
+        ILogger<DeliveriesController> logger)
     {
         _db = db;
         _configuration = configuration;
@@ -55,6 +60,9 @@ public class DeliveriesController : ControllerBase
         _httpClientFactory = httpClientFactory;
         _sapOptions = sapOptions.Value;
         _googleApiKey = config["GoogleMaps:ApiKey"] ?? string.Empty;
+        // 🚀 ASSIGN THEM HERE:
+        _serviceProvider = serviceProvider;
+        _logger = logger;
     }
 
     private static string GetPublicUrl(Guid token, string? baseUrl = null)
@@ -594,6 +602,27 @@ public class DeliveriesController : ControllerBase
 
         // 8. Commit updates atomically (Only executes if SAP synchronization was completely successful)
         await _db.SaveChangesAsync();
+
+        // ====================================================================
+        // 🚀 AUTOMATED NOTIFICATION LAYER TRIGGER: Background Thread Allocation
+        // ====================================================================
+        var trackingId = data.DeliveryID;
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                using (var scope = _serviceProvider.CreateScope())
+                {
+                    var emailService = scope.ServiceProvider.GetRequiredService<IEmailService>();
+                    await emailService.SendDeliveryConfirmationEmailAsync(trackingId);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Background email alert process faulted unexpectedly for Delivery Record ID {Id}", trackingId);
+            }
+        });
+
 
         // 9. 🚀 DYNAMIC LOG METRICS WITH EXACT SHORTAGE QUANTITIES
         var totalRejected = data.Lines?.Sum(l => l.PackQuantityRejected) ?? 0m;
