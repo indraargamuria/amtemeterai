@@ -374,7 +374,7 @@ export function DeliveriesPage() {
                         : "text-brand-blue/70 hover:bg-brand-blue/10"
                     }`}
                   >
-                    Cancelled
+                    Canceled
                   </button>
                   <button
                     onClick={() => setPipelineFilter("all")}
