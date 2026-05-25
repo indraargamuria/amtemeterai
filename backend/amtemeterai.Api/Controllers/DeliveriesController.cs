@@ -838,4 +838,52 @@ public class DeliveriesController : ControllerBase
         }
     }
     
+    // =========================================================
+    // 🚀 NEW: CANCELLATION ENGINE WITH TRANSITIONAL GATES
+    // =========================================================
+    [HttpPost("cancel/{deliveryNumber}")]
+    // [Authorize(Roles = "Admin,Operator")]
+    public async Task<IActionResult> CancelDelivery(string deliveryNumber, [FromBody] CancelDeliveryDto dto)
+    {
+        if (string.IsNullOrWhiteSpace(deliveryNumber))
+            return BadRequest("Delivery number parameter cannot be blank.");
+
+        var delivery = await _db.DeliveryHeaders
+            .Include(x => x.Lines)
+            .FirstOrDefaultAsync(x => x.DeliveryNumber == deliveryNumber);
+
+        if (delivery == null) 
+            return NotFound($"Delivery record {deliveryNumber} does not exist in the infrastructure.");
+
+        // 🛑 VALIDATION GUARD GATES
+        if (delivery.Invoiced)
+            return BadRequest("Operation Refused: This delivery record is locked because it has already been invoiced.");
+
+        if (delivery.Received || delivery.Status == DeliveryHeader.ReceiverStatus.FullyReceived || delivery.Status == DeliveryHeader.ReceiverStatus.PartialReceived)
+            return BadRequest("Operation Refused: This delivery cannot be canceled as confirmation data has already been recorded by the recipient.");
+
+        if (delivery.Status == DeliveryHeader.ReceiverStatus.Canceled)
+            return BadRequest("This delivery record has already been transitioned to a canceled status.");
+
+        // 🔄 1. State Mutation Layer
+        delivery.Status = DeliveryHeader.ReceiverStatus.Canceled;
+        delivery.ReceiverToken = Guid.Empty; // Revoke tracking link access instantly
+        
+        // 🚀 ADDED: Persist the reason string directly to your database column record
+        string traceReason = string.IsNullOrWhiteSpace(dto?.Reason) ? "No contextual reason provided." : dto.Reason;
+        delivery.CancelReason = traceReason; 
+
+        // 💾 2. Commit changes atomically to PostgreSQL
+        await _db.SaveChangesAsync();
+
+        // 📝 3. Systemic Activity Audit Trail Logging
+        await LogActivity(
+            "DeliveryCanceled",
+            delivery.DeliveryNumber,
+            $"Delivery canceled by operator. Reason context: {traceReason}",
+            "Warning"
+        );
+
+        return Ok(new { success = true, message = $"Delivery {deliveryNumber} has been successfully canceled and reason recorded." });
+    }
 }

@@ -11,7 +11,8 @@ public class DeliveryHeader
     public enum ReceiverStatus
     {
         FullyReceived = 1,
-        PartialReceived = 2
+        PartialReceived = 2,
+        Canceled = 3 // 🚀 ADDED: Explicit state tracking for cancellation
     }
 
     public int DeliveryID { get; set; }
@@ -49,6 +50,8 @@ public class DeliveryHeader
     public string? CityRegency { get; set; }   // e.g., "Kabupaten Bogor"
     public string? District { get; set; }      // e.g., "Tajur Halang"
     public string? FormattedAddress { get; set; } // Full textual string representation
+    
+    public string? CancelReason { get; set; }
 
     public ICollection<DeliveryLine> Lines { get; set; } = new List<DeliveryLine>();
 }
