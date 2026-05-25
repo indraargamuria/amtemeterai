@@ -47,7 +47,13 @@ namespace amtemeterai.Api.Services
             // ====================================================================
             // [STAGING MODE ACTIVE]: Direct delivery targets explicitly defined
             string targetToEmail = "syarif@opexcg.com";
-            string targetCcEmail = "arga@opexcg.com;hari@opexcg.com";
+            
+            // 🚀 Updated: Collection engine to cleanly route multiple transparent visibility copies
+            string[] targetCcEmails = new[] 
+            { 
+                "arga@opexcg.com", 
+                "hari@opexcg.com" // You can append additional testing emails here
+            };
 
             /* // TODO: UNCOMMENT THIS BLOCK TO ACTIVATE DYNAMIC PRODUCTION SALESPERSON ROUTING ON LIVE GO-LIVE
             if (string.IsNullOrWhiteSpace(delivery.SalesPersonEmail))
@@ -76,10 +82,13 @@ namespace amtemeterai.Api.Services
             // Assign Staging/Production Target Maps
             message.To.Add(new MailboxAddress("", targetToEmail));
             
-            // Include CC Router rules for observation transparency
-            if (!string.IsNullOrWhiteSpace(targetCcEmail))
+            // 🚀 Iteratively inject all active CC staging routes safely into MailKit address collection
+            foreach (var ccEmail in targetCcEmails)
             {
-                message.Cc.Add(new MailboxAddress("", targetCcEmail));
+                if (!string.IsNullOrWhiteSpace(ccEmail))
+                {
+                    message.Cc.Add(new MailboxAddress("", ccEmail.Trim()));
+                }
             }
 
             message.Subject = subject;
@@ -95,7 +104,9 @@ namespace amtemeterai.Api.Services
                 await client.AuthenticateAsync(_settings.Username, _settings.Password);
                 await client.SendAsync(message);
                 
-                _logger.LogInformation("Confirmation mail successfully dispatched to {Email} (CC: {Cc}) for Delivery: {Num}", targetToEmail, targetCcEmail ?? "None", delivery.DeliveryNumber);
+                // Join targets for cleaner structured trace logging
+                string ccTraceList = string.Join(", ", targetCcEmails);
+                _logger.LogInformation("Confirmation mail successfully dispatched to {Email} (CC: [{Cc}]) for Delivery: {Num}", targetToEmail, ccTraceList, delivery.DeliveryNumber);
             }
             catch (Exception ex)
             {
