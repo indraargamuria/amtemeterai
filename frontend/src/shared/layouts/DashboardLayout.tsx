@@ -11,6 +11,7 @@ const menuItems = [
   { path: "/", label: "Dashboard" },
   { path: "/customers", label: "Customers" },
   { path: "/deliveries", label: "Deliveries" },
+  // { path: "/invoices", label: "Invoices" },
 ]
 
 export function DashboardLayout({ children }: DashboardLayoutProps) {

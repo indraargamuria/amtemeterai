@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom"
 import { Badge } from "../../shared/components/ui/Badge"
 import { Card, CardContent } from "../../shared/components/ui/Card"
 import { Input } from "../../shared/components/ui/Input"
+import { Button } from "../../shared/components/ui/Button"
 import {
   Table,
   TableBody,
@@ -12,7 +13,8 @@ import {
   TableRow,
 } from "../../shared/components/ui/Table"
 import { Pagination } from "../../shared/components/ui/Pagination"
-import { useApi } from "../../shared/utils/api"
+import { useApi, uploadDeliveryPrintout } from "../../shared/utils/api"
+import { cn } from "../../shared/utils/cn"
 
 interface DeliveryHeader {
   deliveryId: number
@@ -35,6 +37,8 @@ interface DeliveryHeader {
   // 🚀 ADDED: Cancellation Tracking Fields
   isCanceled?: boolean
   cancelReason?: string | null
+  // NEW: Printout document tracking
+  hasPrintoutDocument?: boolean
 }
 
 type SortField = "deliveryDate" | "deliveryNumber" | "status"
@@ -56,25 +60,46 @@ export function DeliveriesPage() {
   const [complianceFilter, setComplianceFilter] = useState<ComplianceFilter>("all")
   const [pipelineFilter, setPipelineFilter] = useState<PipelineFilter>("active") // Defaults to hiding noise from cancelled rows
   const [showDiscrepancyOnly, setShowDiscrepancyOnly] = useState(false)
+  const [uploading, setUploading] = useState<number | null>(null)
+  const [fileInput, setFileInput] = useState<HTMLInputElement | null>(null)
 
   const api = useApi()
 
-  useEffect(() => {
-    const fetchDeliveries = async () => {
-      try {
-        const res = await api.get("/api/deliveries")
-        if (!res.ok) {
-          throw new Error("Failed to fetch deliveries")
-        }
-        const data: DeliveryHeader[] = await res.json()
-        setDeliveries(data)
-      } catch (err) {
-        console.error("Failed to fetch deliveries", err)
-      } finally {
-        setLoading(false)
-      }
-    }
+  const handleFileUpload = async (deliveryId: number) => {
+    const file = fileInput?.files?.[0]
+    if (!file) return
 
+    try {
+      setUploading(deliveryId)
+      await uploadDeliveryPrintout(deliveryId, file)
+      // Refresh data
+      fetchDeliveries()
+    } catch (err) {
+      console.error("Failed to upload printout:", err)
+      alert("Failed to upload printout. Please try again.")
+    } finally {
+      setUploading(null)
+      if (fileInput) fileInput.value = ""
+    }
+  }
+
+  const fetchDeliveries = async () => {
+    try {
+      setLoading(true)
+      const res = await api.get("/api/deliveries")
+      if (!res.ok) {
+        throw new Error("Failed to fetch deliveries")
+      }
+      const data: DeliveryHeader[] = await res.json()
+      setDeliveries(data)
+    } catch (err) {
+      console.error("Failed to fetch deliveries", err)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
     fetchDeliveries()
   }, [])
 
@@ -439,18 +464,21 @@ export function DeliveriesPage() {
               <TableHead className="font-medium text-brand-blue/50 uppercase text-xs tracking-wider">
                 Account Owner
               </TableHead>
+              {/* <TableHead className="font-medium text-brand-blue/50 uppercase text-xs tracking-wider">
+                Actions
+              </TableHead> */}
             </TableRow>
           </TableHeader>
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={7} className="text-center text-brand-blue/60 py-12">
+                <TableCell colSpan={8} className="text-center text-brand-blue/60 py-12">
                   Loading deliveries...
                 </TableCell>
               </TableRow>
             ) : filteredAndSortedDeliveries.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7} className="text-center text-brand-blue/60 py-12">
+                <TableCell colSpan={8} className="text-center text-brand-blue/60 py-12">
                   {deliveries.length === 0
                     ? "No deliveries found"
                     : "No deliveries match your filter criteria"}
@@ -528,6 +556,36 @@ export function DeliveriesPage() {
                       {getDestinationOwner(delivery.plant, delivery.salesPersonName)}
                     </p>
                   </TableCell>
+
+                  {/* Actions Column */}
+                  {/* <TableCell className="py-4">
+                    {delivery.isCanceled ? (
+                      <span className="text-xs text-slate-400">-</span>
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <input
+                          ref={(el) => {
+                            if (el && fileInput === null) setFileInput(el)
+                          }}
+                          type="file"
+                          accept=".pdf,image/*"
+                          className="hidden"
+                          onChange={() => handleFileUpload(delivery.deliveryId)}
+                        />
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            fileInput?.click()
+                          }}
+                          disabled={uploading === delivery.deliveryId || delivery.invoiced}
+                        >
+                          {uploading === delivery.deliveryId ? "Uploading..." : delivery.hasPrintoutDocument ? "Reupload" : "Upload Printout"}
+                        </Button>
+                      </div>
+                    )}
+                  </TableCell> */}
                 </TableRow>
               ))
             )}

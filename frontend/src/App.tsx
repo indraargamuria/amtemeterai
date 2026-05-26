@@ -6,6 +6,7 @@ import { DashboardPage } from "./pages/Dashboard"
 import { CustomersPage } from "./pages/Customers"
 import { DeliveriesPage, DeliveryDetailPage } from "./pages/Deliveries"
 import { DeliveryReceivePage } from "./pages/Public"
+import { InvoicesPage } from "./pages/Invoices"
 import { DashboardLayout } from "./shared/layouts"
 
 function AppRoutes() {
@@ -56,6 +57,16 @@ function AppRoutes() {
           <ProtectedRoute>
             <DashboardLayout>
               <DeliveryDetailPage />
+            </DashboardLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/invoices"
+        element={
+          <ProtectedRoute>
+            <DashboardLayout>
+              <InvoicesPage />
             </DashboardLayout>
           </ProtectedRoute>
         }

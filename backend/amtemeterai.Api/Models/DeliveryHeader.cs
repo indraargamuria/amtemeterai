@@ -54,4 +54,5 @@ public class DeliveryHeader
     public string? CancelReason { get; set; }
 
     public ICollection<DeliveryLine> Lines { get; set; } = new List<DeliveryLine>();
+    public ICollection<Invoice> Invoices { get; set; } = new List<Invoice>();
 }

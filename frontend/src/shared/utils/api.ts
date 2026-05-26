@@ -111,3 +111,126 @@ export async function getDashboardLogs(count: number = 20) {
   if (!response.ok) throw new Error("Failed to fetch dashboard logs")
   return await response.json()
 }
+
+// =========================
+// Invoice API Functions
+// =========================
+
+export interface Invoice {
+  invoiceID: number
+  invoiceNumber: string
+  customerNumber: string
+  customerName?: string
+  invoiceAmount: number
+  invoicedDate: string
+  status: number
+  statusText: string
+  deliveryHeaderId?: number
+  deliveryNumber?: string
+  serialNumber?: string
+  stampingStatus: number
+  stampingStatusText: string
+  hasPrintoutDocument: boolean
+  stampedDocumentUrl?: string
+  createdAt: string
+}
+
+/**
+ * GET /api/invoices
+ * Returns all invoices
+ */
+export async function getInvoices(): Promise<Invoice[]> {
+  const response = await authGet("/api/invoices")
+  if (!response.ok) throw new Error("Failed to fetch invoices")
+  return await response.json()
+}
+
+/**
+ * GET /api/invoices/{id}
+ * Returns a specific invoice
+ */
+export async function getInvoiceById(id: number): Promise<Invoice> {
+  const response = await authGet(`/api/invoices/${id}`)
+  if (!response.ok) throw new Error("Failed to fetch invoice")
+  return await response.json()
+}
+
+/**
+ * POST /api/invoices
+ * Creates a new invoice
+ */
+export async function createInvoice(data: {
+  invoiceNumber: string
+  customerNumber: string
+  invoiceAmount: number
+  invoicedDate: string
+  deliveryHeaderId?: number
+}): Promise<Invoice> {
+  const response = await authPost("/api/invoices", data)
+  if (!response.ok) throw new Error("Failed to create invoice")
+  return await response.json()
+}
+
+/**
+ * POST /api/invoices/{id}/upload-printout
+ * Uploads an invoice printout document
+ */
+export async function uploadInvoicePrintout(
+  id: number,
+  file: File
+): Promise<{ documentId: number; fileName: string; storageKey: string; downloadUrl: string }> {
+  const token = localStorage.getItem("auth_token")
+  const formData = new FormData()
+  formData.append("file", file)
+
+  const response = await fetch(`${import.meta.env.VITE_API_URL}/api/invoices/${id}/upload-printout`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: formData,
+  })
+
+  if (!response.ok) throw new Error("Failed to upload printout")
+  return await response.json()
+}
+
+/**
+ * POST /api/invoices/{id}/stamp
+ * Triggers e-Meterai stamping for an invoice
+ */
+export async function stampInvoice(id: number): Promise<{
+  invoiceId: number
+  invoiceNumber: string
+  serialNumber: string
+  status: string
+  stampedDocumentUrl: string
+}> {
+  const response = await authPost(`/api/invoices/${id}/stamp`)
+  if (!response.ok) throw new Error("Failed to stamp invoice")
+  return await response.json()
+}
+
+/**
+ * POST /api/deliveries/{id}/upload-printout
+ * Uploads a delivery printout document
+ */
+export async function uploadDeliveryPrintout(
+  id: number,
+  file: File
+): Promise<{ documentId: number; fileName: string; storageKey: string; downloadUrl: string }> {
+  const token = localStorage.getItem("auth_token")
+  const formData = new FormData()
+  formData.append("file", file)
+
+  const response = await fetch(`${import.meta.env.VITE_API_URL}/api/deliveries/${id}/upload-printout`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: formData,
+  })
+
+  if (!response.ok) throw new Error("Failed to upload printout")
+  return await response.json()
+}

@@ -16,6 +16,9 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
     // 1. Add the new Unified Documents DbSet - 2026-05-19 11:08:58 - Arga
     public DbSet<Document> Documents { get; set; }
 
+    // Invoice Management
+    public DbSet<Invoice> Invoices => Set<Invoice>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
@@ -74,5 +77,48 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
         modelBuilder.Entity<Document>()
             .Property(d => d.StorageKey)
             .IsRequired();
+
+        // Invoice Entity Configuration
+        modelBuilder.Entity<Invoice>()
+            .HasKey(x => x.InvoiceID);
+
+        modelBuilder.Entity<Invoice>()
+            .Property(x => x.InvoiceNumber)
+            .IsRequired()
+            .HasMaxLength(50);
+
+        modelBuilder.Entity<Invoice>()
+            .HasIndex(x => x.InvoiceNumber)
+            .IsUnique();
+
+        modelBuilder.Entity<Invoice>()
+            .Property(x => x.CustomerNumber)
+            .IsRequired()
+            .HasMaxLength(50);
+
+        modelBuilder.Entity<Invoice>()
+            .Property(x => x.InvoiceAmount)
+            .HasPrecision(18, 2);
+
+        // Invoice <-> DeliveryHeader (optional 1:many, but treated as 1:1)
+        modelBuilder.Entity<Invoice>()
+            .HasOne(x => x.DeliveryHeader)
+            .WithMany(d => d.Invoices)
+            .HasForeignKey(x => x.DeliveryHeaderId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        // Invoice <-> StampedDocument
+        modelBuilder.Entity<Invoice>()
+            .HasOne(x => x.StampedDocument)
+            .WithMany()
+            .HasForeignKey(x => x.StampedDocumentId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        // Document <-> Invoice (for invoice printouts)
+        modelBuilder.Entity<Document>()
+            .HasOne(d => d.InvoiceHeader)
+            .WithMany(i => i.Documents)
+            .HasForeignKey(d => d.InvoiceID)
+            .OnDelete(DeleteBehavior.Cascade);
     }
 }

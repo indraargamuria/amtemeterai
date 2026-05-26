@@ -22,9 +22,8 @@ public class DeliveriesController : ControllerBase
     private readonly IWebHostEnvironment _env;
     private readonly IStorageService _storageService;
     private readonly string _googleApiKey;
-    private readonly IHttpClientFactory _httpClientFactory; // 🚀 Added
-    private readonly SapOptions _sapOptions;               // 🚀 Added
-    // 🚀 ADD THESE TWO FIELDS HERE:
+    private readonly IHttpClientFactory _httpClientFactory; 
+    private readonly SapOptions _sapOptions;               
     private readonly IServiceProvider _serviceProvider;
     private readonly ILogger<DeliveriesController> _logger;
 
@@ -48,9 +47,9 @@ public class DeliveriesController : ControllerBase
         IWebHostEnvironment env,
         IStorageService storageService,
         IConfiguration config,
-        IHttpClientFactory httpClientFactory,              // 🚀 Added
-        Microsoft.Extensions.Options.IOptions<SapOptions> sapOptions, // Use your existing options type name here
-        IServiceProvider serviceProvider, // 🚀 Inject here
+        IHttpClientFactory httpClientFactory,              
+        Microsoft.Extensions.Options.IOptions<SapOptions> sapOptions, 
+        IServiceProvider serviceProvider, 
         ILogger<DeliveriesController> logger)
     {
         _db = db;
@@ -60,7 +59,6 @@ public class DeliveriesController : ControllerBase
         _httpClientFactory = httpClientFactory;
         _sapOptions = sapOptions.Value;
         _googleApiKey = config["GoogleMaps:ApiKey"] ?? string.Empty;
-        // 🚀 ASSIGN THEM HERE:
         _serviceProvider = serviceProvider;
         _logger = logger;
     }
@@ -101,7 +99,6 @@ public class DeliveriesController : ControllerBase
                 District = d.District,
                 Province = d.Province,
                 
-                // 🚀 ADDED: Fetch raw database fields for cancellation projection
                 CancelReason = d.CancelReason,
                 IsCanceled = d.Status == DeliveryHeader.ReceiverStatus.Canceled,
                 
@@ -132,7 +129,6 @@ public class DeliveriesController : ControllerBase
             Province = d.Province,
             PhotosCount = d.PhotosCount,
 
-            // 🚀 ADDED: Map fields into the final returned API contract list
             IsCanceled = d.IsCanceled,
             CancelReason = d.CancelReason,
 
@@ -146,7 +142,6 @@ public class DeliveriesController : ControllerBase
     [HttpGet("{deliveryId:int}")]
     public async Task<ActionResult<DeliveryResponseDto>> GetDeliveryById(int deliveryId)
     {
-        // 1. Fetch core delivery header records along with customer information links
         var delivery = await _db.DeliveryHeaders
             .Include(d => d.Lines)
             .Include(d => d.Customer)
@@ -155,7 +150,6 @@ public class DeliveriesController : ControllerBase
         if (delivery == null)
             return NotFound();
 
-        // 2. Fetch all associated proof files from your Documents table
         var baseApiUrl = _configuration["App:ApiBaseUrl"] ?? "http://localhost:8080";
         
         var photos = await _db.Documents
@@ -169,7 +163,6 @@ public class DeliveriesController : ControllerBase
             })
             .ToListAsync();
 
-        // 3. Assemble the unified data response payload
         var response = new DeliveryResponseDto
         {
             DeliveryID = delivery.DeliveryID,
@@ -189,7 +182,6 @@ public class DeliveriesController : ControllerBase
             SalesPersonName = delivery.SalesPersonName,
             SalesPersonEmail = delivery.SalesPersonEmail,
             
-            // 🚀 ADDED: Map cancellation tracking properties directly into the object schema
             CancelReason = delivery.CancelReason,
             IsCanceled = delivery.Status == DeliveryHeader.ReceiverStatus.Canceled,
             
@@ -226,21 +218,16 @@ public class DeliveriesController : ControllerBase
         return Ok(response);
     }
 
-    // Public endpoint for delivery receive page - allows anonymous access after PIN verification
-
-    //2026-05-20 02:19:23
     [AllowAnonymous]
     [HttpGet("{token}")]
     public async Task<IActionResult> Get(Guid token)
     {
-        // 1. Fetch the delivery header and include lines safely
         var data = await _db.DeliveryHeaders
             .Include(x => x.Lines)
             .FirstOrDefaultAsync(x => x.ReceiverToken == token);
 
         if (data == null) return NotFound();
 
-        // 2. Map standard response parameters
         var result = new DeliveryResponseDto
         {
             DeliveryNumber = data.DeliveryNumber,
@@ -268,20 +255,16 @@ public class DeliveriesController : ControllerBase
             }).ToList()
         };
 
-        // 3. Look up related files straight from the Documents context table
         var associatedDocs = await _db.Documents
             .Where(d => d.DeliveryID == data.DeliveryID && d.Type == DocumentType.DeliveryPhoto)
             .ToListAsync();
 
         if (associatedDocs != null && associatedDocs.Any())
         {
-            // Fetch your base URL configuration string dynamically
             string baseUrl = _configuration["App:ApiBaseUrl"] ?? "http://localhost:8080";
-            // var baseUrl = "http://192.168.0.191";
 
             foreach (var doc in associatedDocs)
             {
-                // Point the downloadUrl directly to your operational local DownloadFile route
                 string localDownloadUrl = baseUrl + "/api/deliveries/files/download?key=" + Uri.EscapeDataString(doc.StorageKey);
 
                 result.Photos.Add(new DeliveryPhotoResponseDto
@@ -296,6 +279,7 @@ public class DeliveriesController : ControllerBase
 
         return Ok(result);
     }
+
     [HttpPost]
     public async Task<ActionResult<DeliveryCreateResponseDto>> Create(DeliveryUpsertDto dto)
     {
@@ -318,15 +302,10 @@ public class DeliveriesController : ControllerBase
             DeliveryNumber = dto.DeliveryNumber,
             DeliveryDate = dto.DeliveryDate,
             DeliveryRemarks = dto.DeliveryRemarks,
-            
-            // 1. ADDED: New Initialization Fields for Creation Context
             Plant = dto.Plant,
             SalesPersonName = dto.SalesPersonName,
             SalesPersonEmail = dto.SalesPersonEmail,
-            
-            // 2. ADDED: Explicit Cast from primitive int DTO input to nested model enum
             Type = (DeliveryHeader.DeliveryType)dto.Type,
-            
             ReceiverToken = Guid.NewGuid()
         };
 
@@ -344,7 +323,6 @@ public class DeliveriesController : ControllerBase
         _db.DeliveryHeaders.Add(header);
         await _db.SaveChangesAsync();
 
-        // Log delivery creation activity
         await LogActivity(
             "DeliveryCreated",
             header.DeliveryNumber,
@@ -383,15 +361,11 @@ public class DeliveriesController : ControllerBase
 
         existing.DeliveryDate = dto.DeliveryDate;
         existing.DeliveryRemarks = dto.DeliveryRemarks;
-        
-        // 3. ADDED: Update mapping context fields on sync changes
         existing.Plant = dto.Plant;
         existing.SalesPersonName = dto.SalesPersonName;
         existing.SalesPersonEmail = dto.SalesPersonEmail;
         existing.Type = (DeliveryHeader.DeliveryType)dto.Type;
         
-        // Do NOT regenerate ReceiverToken on update - token must be stable
-
         _db.DeliveryLines.RemoveRange(existing.Lines);
 
         existing.Lines = dto.Lines.Select(l => new DeliveryLine
@@ -403,37 +377,31 @@ public class DeliveriesController : ControllerBase
             SalesUOM = l.SalesUOM,
             PackQuantity = l.PackQuantity,
             PackUOM = l.PackUOM
-            // Note: LineComment is left out here on purpose because it's only populated 
-            // later by the customer during driver handoff (UpdateByToken).
         }).ToList();
 
         await _db.SaveChangesAsync();
         return Ok();
     }
-    // Public endpoint for delivery receive - allows anonymous access & repetitive edits until invoiced
+
     [AllowAnonymous]
     [HttpPatch("{token}")]
     public async Task<IActionResult> UpdateByToken(Guid token, [FromForm] DeliveryEditConfirmationDto dto)
     {
-        // 1. Locate the delivery target header via its secure token
         var data = await _db.DeliveryHeaders
             .Include(x => x.Lines)
             .FirstOrDefaultAsync(x => x.ReceiverToken == token);
 
         if (data == null) return NotFound();
 
-        // 🛑 2. THE CRITICAL GUARD GATES: Block modification if already invoiced
         if (data.Invoiced)
         {
             return BadRequest("This delivery record is locked because it has already been invoiced.");
         }
 
-        // 3. Process text payload field configurations (overwrite/update safely)
         data.ReceiverName = dto.ReceiverName;
         data.ReceiverNotes = dto.ReceiverNotes;
-        data.Received = true; // Remains true once initially set
+        data.Received = true; 
 
-        // Only update location telemetry if new coordinates are sent
         if (dto.Latitude.HasValue && dto.Longitude.HasValue)
         {
             data.Latitude = dto.Latitude;
@@ -456,14 +424,12 @@ public class DeliveriesController : ControllerBase
             }
         }
 
-        // 🗑️ 4. NEW: Handle Document File Purges (MinIO + DB Sync Cleanup)
         if (dto.KeysToDelete != null && dto.KeysToDelete.Any())
         {
             foreach (var storageKey in dto.KeysToDelete)
             {
                 if (string.IsNullOrEmpty(storageKey)) continue;
 
-                // Find db record matching this specific key for this delivery
                 var existingDoc = await _db.Documents
                     .FirstOrDefaultAsync(doc => doc.DeliveryID == data.DeliveryID && doc.StorageKey == storageKey);
 
@@ -471,8 +437,6 @@ public class DeliveriesController : ControllerBase
                 {
                     try
                     {
-                        // 1. Physically wipe the asset from MinIO bucket
-                        // (Adjust the method call below to match your exact IStorageService contract name, e.g., DeleteFileAsync)
                         await _storageService.DeleteFileAsync(storageKey); 
                     }
                     catch (Exception ex)
@@ -480,13 +444,11 @@ public class DeliveriesController : ControllerBase
                         Console.WriteLine($"MinIO file deletion skipped/failed for {storageKey}: {ex.Message}");
                     }
 
-                    // 2. Clear trace record tracking row out of database
                     _db.Documents.Remove(existingDoc);
                 }
             }
         }
 
-        // 5. Process lines securely and dynamically calculate variance thresholds
         bool hasDiscrepancy = false;
 
         if (data.Lines != null && dto.Lines != null && dto.Lines.Any())
@@ -498,31 +460,26 @@ public class DeliveriesController : ControllerBase
                 var line = data.Lines.FirstOrDefault(x => x.DeliveryLineNumber == lineDto.DeliveryLineNumber);
                 if (line == null) continue; 
 
-                // Overwrite old data with fresh corrections from the customer form
                 line.PackQuantityDelivered = lineDto.PackQuantityDelivered;
                 line.PackQuantityReturned = lineDto.PackQuantityReturned;
                 line.PackQuantityRejected = lineDto.PackQuantityRejected;
                 line.LineComment = lineDto.LineComment;
 
-                // 🚀 FIX: A discrepancy exists if there are explicit returns/rejections,
-                // OR if the total sum of delivered + returned + rejected quantities does not equal the original order PackQuantity.
                 decimal totalAccounted = line.PackQuantityDelivered + line.PackQuantityReturned + line.PackQuantityRejected;
 
                 if (line.PackQuantityReturned > 0m || 
                     line.PackQuantityRejected > 0m || 
-                    totalAccounted != line.PackQuantity) // Handles items lost or short-delivered
+                    totalAccounted != line.PackQuantity) 
                 {
                     hasDiscrepancy = true;
                 }
             }
         }
 
-        // 6. Auto-assign/reset status based on the latest edit quantities
         data.Status = hasDiscrepancy 
             ? DeliveryHeader.ReceiverStatus.PartialReceived 
             : DeliveryHeader.ReceiverStatus.FullyReceived;
 
-        // ➕ 7. Handle freshly appended Photo Upload sets to MinIO
         if (dto.NewPhotoFiles != null && dto.NewPhotoFiles.Any())
         {
             foreach (var file in dto.NewPhotoFiles)
@@ -550,9 +507,8 @@ public class DeliveriesController : ControllerBase
 
                 _db.Documents.Add(documentRecord);
             }
-        }// =========================================================
-        // 🚀 NEW: TRANSACTION INTEGRATION LAYER FOR SAP ERP
-        // =========================================================
+        }
+
         try
         {
             var sapPayload = new SapDeliveryConfirmationPayload
@@ -577,10 +533,8 @@ public class DeliveriesController : ControllerBase
             Console.WriteLine("=================== SAP PAYLOAD DEBUG ===================");
             Console.WriteLine(jsonString);
             Console.WriteLine("=========================================================");
-            // Pull standard client template configured via dynamic named factory inside Program.cs
+            
             var client = _httpClientFactory.CreateClient("SapClient");
-
-            // Point to your exact endpoint format path string: /sap/bc/zrest_doconfirm
             string endpointPath = $"/sap/bc/zrest_doconfirm?sap-client={_sapOptions.Client}";
 
             var response = await client.PostAsJsonAsync(endpointPath, sapPayload);
@@ -589,10 +543,6 @@ public class DeliveriesController : ControllerBase
             {
                 string errorResponse = await response.Content.ReadAsStringAsync();
                 Console.WriteLine($"SAP error response content: {response.StatusCode} - {errorResponse}");
-                
-                // Fail-safe: Reject database commit if the core enterprise sync pipeline fails
-
-                // Activate this after fix discrepancy
                 return StatusCode(502, $"ERP Synchronization Error: Remote server returned status {response.StatusCode}");
             }
         }
@@ -602,12 +552,8 @@ public class DeliveriesController : ControllerBase
             return StatusCode(500, $"Internal server error routing data to ERP infrastructure: {ex.Message}");
         }
 
-        // 8. Commit updates atomically (Only executes if SAP synchronization was completely successful)
         await _db.SaveChangesAsync();
 
-        // ====================================================================
-        // 🚀 AUTOMATED NOTIFICATION LAYER TRIGGER: Background Thread Allocation
-        // ====================================================================
         var trackingId = data.DeliveryID;
         _ = Task.Run(async () =>
         {
@@ -625,12 +571,9 @@ public class DeliveriesController : ControllerBase
             }
         });
 
-
-        // 9. 🚀 DYNAMIC LOG METRICS WITH EXACT SHORTAGE QUANTITIES
         var totalRejected = data.Lines?.Sum(l => l.PackQuantityRejected) ?? 0m;
         var totalReturned = data.Lines?.Sum(l => l.PackQuantityReturned) ?? 0m;
         
-        // Calculate exact total missing/shortage items across all lines
         decimal totalShortage = 0m;
         if (data.Lines != null)
         {
@@ -644,17 +587,13 @@ public class DeliveriesController : ControllerBase
             }
         }
 
-        // Base message structure
         string logMessage = $"Delivery {data.DeliveryNumber} confirmed by {data.ReceiverName} and synced to SAP.";
-        
-        // Dynamically build the details segments
         var details = new List<string>();
         
         if (totalRejected > 0m) details.Add($"{totalRejected:0} item(s) rejected");
         if (totalReturned > 0m) details.Add($"{totalReturned:0} item(s) returned");
         if (totalShortage > 0m) details.Add($"{totalShortage:0} item(s) short-delivered/unaccounted for");
 
-        // Combine segments into the final string
         if (details.Any())
         {
             logMessage += $" Summary: {string.Join(", ", details)}.";
@@ -664,7 +603,6 @@ public class DeliveriesController : ControllerBase
             logMessage += " Status: Fully cleared with zero variances.";
         }
 
-        // Broadcast to ActivityLog table and Terminal console
         await LogActivity(
             "DeliveryConfirmationUpdated",
             data.DeliveryNumber,
@@ -674,7 +612,7 @@ public class DeliveriesController : ControllerBase
 
         return Ok();
     }
-    // Public endpoint for PIN verification - allows anonymous access
+
     [AllowAnonymous]
     [HttpPost("{token}/verify-pin")]
     public async Task<IActionResult> VerifyPin(Guid token, [FromBody] PinRequestDto request)
@@ -767,7 +705,7 @@ public class DeliveriesController : ControllerBase
     {
         using var client = new HttpClient();
         string url = $"https://maps.googleapis.com/maps/api/geocode/json?latlng={lat},{lng}&key={_googleApiKey}";
-        // Temporary debug check inside ReverseGeocodeAsync
+        
         var jsonString = await client.GetStringAsync(url);
         Console.WriteLine("=== RAW GOOGLE RESPONSE FOR LAPTOP ===");
         Console.WriteLine(jsonString);
@@ -777,16 +715,13 @@ public class DeliveriesController : ControllerBase
 
         var result = new GeoLocationResult
         {
-            // Keep the most precise formatted address string
             FormattedAddress = response.Results.First().FormattedAddress
         };
 
-        // 💡 THE FIX: Loop through the top few result objects to aggregate missing boundaries
         foreach (var resultObject in response.Results.Take(3)) 
         {
             foreach (var component in resultObject.AddressComponents)
             {
-                // Only fill if not already found by a previous, more precise layer
                 if (string.IsNullOrEmpty(result.Province) && component.Types.Contains("administrative_area_level_1"))
                     result.Province = component.LongName;
                 
@@ -797,7 +732,6 @@ public class DeliveriesController : ControllerBase
                     result.District = component.LongName;
             }
 
-            // If we've successfully filled all structural targets, break out early!
             if (!string.IsNullOrEmpty(result.Province) && 
                 !string.IsNullOrEmpty(result.CityRegency) && 
                 !string.IsNullOrEmpty(result.District))
@@ -810,7 +744,7 @@ public class DeliveriesController : ControllerBase
     }
 
     [AllowAnonymous]
-    [HttpGet("files/download")] // Using a distinct path to avoid route conflicts!
+    [HttpGet("files/download")] 
     public async Task<IActionResult> DownloadFile([FromQuery] string key)
     {
         if (string.IsNullOrEmpty(key)) 
@@ -818,20 +752,17 @@ public class DeliveriesController : ControllerBase
 
         try
         {
-            // 1. Get the raw stream from MinIO using your storage service
             Stream fileStream = await _storageService.GetFileStreamAsync(key);
             
             if (fileStream == null) 
                 return NotFound("File not found in object storage.");
 
-            // 2. Set the proper image content type headers so the browser renders it
             string contentType = "application/octet-stream";
             if (key.EndsWith(".jpg", StringComparison.OrdinalIgnoreCase) || key.EndsWith(".jpeg", StringComparison.OrdinalIgnoreCase))
                 contentType = "image/jpeg";
             else if (key.EndsWith(".png", StringComparison.OrdinalIgnoreCase))
                 contentType = "image/png";
 
-            // 3. Stream it straight to the browser
             return File(fileStream, contentType);
         }
         catch (Exception ex)
@@ -840,11 +771,7 @@ public class DeliveriesController : ControllerBase
         }
     }
     
-    // =========================================================
-    // 🚀 NEW: CANCELLATION ENGINE WITH TRANSITIONAL GATES
-    // =========================================================
     [HttpPost("cancel/{deliveryNumber}")]
-    // [Authorize(Roles = "Admin,Operator")]
     public async Task<IActionResult> CancelDelivery(string deliveryNumber, [FromBody] CancelDeliveryDto dto)
     {
         if (string.IsNullOrWhiteSpace(deliveryNumber))
@@ -854,10 +781,9 @@ public class DeliveriesController : ControllerBase
             .Include(x => x.Lines)
             .FirstOrDefaultAsync(x => x.DeliveryNumber == deliveryNumber);
 
-        if (delivery == null) 
+        if (delivery == null)
             return NotFound($"Delivery record {deliveryNumber} does not exist in the infrastructure.");
 
-        // 🛑 VALIDATION GUARD GATES
         if (delivery.Invoiced)
             return BadRequest("Operation Refused: This delivery record is locked because it has already been invoiced.");
 
@@ -867,18 +793,14 @@ public class DeliveriesController : ControllerBase
         if (delivery.Status == DeliveryHeader.ReceiverStatus.Canceled)
             return BadRequest("This delivery record has already been transitioned to a canceled status.");
 
-        // 🔄 1. State Mutation Layer
         delivery.Status = DeliveryHeader.ReceiverStatus.Canceled;
-        delivery.ReceiverToken = Guid.Empty; // Revoke tracking link access instantly
-        
-        // 🚀 ADDED: Persist the reason string directly to your database column record
-        string traceReason = string.IsNullOrWhiteSpace(dto?.Reason) ? "No contextual reason provided." : dto.Reason;
-        delivery.CancelReason = traceReason; 
+        delivery.ReceiverToken = Guid.Empty; 
 
-        // 💾 2. Commit changes atomically to PostgreSQL
+        string traceReason = string.IsNullOrWhiteSpace(dto?.Reason) ? "No contextual reason provided." : dto.Reason;
+        delivery.CancelReason = traceReason;
+
         await _db.SaveChangesAsync();
 
-        // 📝 3. Systemic Activity Audit Trail Logging
         await LogActivity(
             "DeliveryCanceled",
             delivery.DeliveryNumber,
@@ -887,5 +809,82 @@ public class DeliveriesController : ControllerBase
         );
 
         return Ok(new { success = true, message = $"Delivery {deliveryNumber} has been successfully canceled and reason recorded." });
+    }
+
+    [HttpPost("{deliveryId:int}/upload-printout")]
+    [Authorize]
+    public async Task<IActionResult> UploadDeliveryPrintout(int deliveryId, IFormFile file)
+    {
+        if (file == null || file.Length == 0)
+            return BadRequest("File is required.");
+
+        var delivery = await _db.DeliveryHeaders
+            .FirstOrDefaultAsync(d => d.DeliveryID == deliveryId);
+
+        if (delivery == null)
+            return NotFound($"Delivery with ID {deliveryId} not found.");
+
+        string contentType = file.ContentType.ToLowerInvariant();
+        if (!contentType.StartsWith("application/pdf") &&
+            !contentType.StartsWith("image/") &&
+            !file.FileName.ToLowerInvariant().EndsWith(".pdf"))
+        {
+            return BadRequest("Only PDF and image files are allowed.");
+        }
+
+        try
+        {
+            string fileExtension = Path.GetExtension(file.FileName);
+            string storageKey = $"deliveries/{deliveryId}/printouts/{Guid.NewGuid()}{fileExtension}";
+
+            using (var stream = file.OpenReadStream())
+            {
+                await _storageService.UploadFileAsync(storageKey, stream, file.ContentType);
+            }
+
+            var documentRecord = new Document
+            {
+                DeliveryID = delivery.DeliveryID,
+                InvoiceID = null,
+                StorageKey = storageKey,
+                FileName = file.FileName,
+                ContentType = file.ContentType,
+                Type = DocumentType.DeliveryPrintOut,
+                UploadedAt = DateTime.UtcNow
+            };
+
+            _db.Documents.Add(documentRecord);
+            await _db.SaveChangesAsync();
+
+            await LogActivity(
+                "DeliveryPrintoutUploaded",
+                delivery.DeliveryNumber,
+                $"Printout document '{file.FileName}' uploaded for delivery {delivery.DeliveryNumber}",
+                "Info"
+            );
+
+            var baseApiUrl = _configuration["App:ApiBaseUrl"] ?? "http://localhost:8080";
+            var downloadUrl = $"{baseApiUrl.TrimEnd('/')}/api/deliveries/files/download?key={Uri.EscapeDataString(storageKey)}";
+
+            return Ok(new
+            {
+                documentId = documentRecord.DocumentID,
+                fileName = file.FileName,
+                storageKey = storageKey,
+                downloadUrl = downloadUrl,
+                uploadedAt = documentRecord.UploadedAt
+            });
+        }
+        catch (Exception ex)
+        {
+            await LogActivity(
+                "DeliveryPrintoutUploadFailed",
+                delivery.DeliveryNumber,
+                $"Failed to upload printout: {ex.Message}",
+                "Error"
+            );
+
+            return StatusCode(500, $"Failed to upload file: {ex.Message}");
+        }
     }
 }

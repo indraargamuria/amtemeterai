@@ -74,8 +74,16 @@ builder.Services.AddScoped<CustomerService>();
 // Bind the Gmail Options Payload Block
 builder.Services.Configure<SmtpSettings>(builder.Configuration.GetSection("SmtpSettings"));
 
-// Register the Transient Infrastructure Service 
+// Register the Transient Infrastructure Service
 builder.Services.AddTransient<IEmailService, EmailService>();
+
+// // Register Billing Background Service
+// builder.Services.AddHostedService<BillingBackgroundService>();
+
+// Register Periuri PDS Service for e-Meterai stamping
+builder.Services.AddHttpClient();
+builder.Services.AddScoped<IPeriuriPdsService, PeriuriPdsService>();
+
 // Register the named HttpClient that your DeliveriesController uses to talk to SAP
 builder.Services.AddHttpClient("SapClient", (serviceProvider, client) =>
 {
