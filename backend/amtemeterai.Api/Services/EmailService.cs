@@ -209,46 +209,57 @@ namespace amtemeterai.Api.Services
                 await client.DisconnectAsync(true);
             }
         }
-
         private string BuildPinEmailTemplate(string pin, string deliveryNumber)
         {
             var sb = new StringBuilder();
-            sb.Append("<div style='font-family: -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif; color: #1d2351; max-width: 650px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 12px; padding: 24px;'>");
+            
+            // Outer wrapping container wrapper to force white backdrop isolation layers even on deep night configurations
+            sb.Append("<div style='background-color: #ffffff; padding: 32px 16px; min-height: 100%; width: 100%; font-family: -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif;'>");
+            
+            // Core Card Frame
+            sb.Append("<div style='background-color: #ffffff; color: #0f172a; max-width: 580px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 12px; padding: 32px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);'>");
 
-            // Header with lock icon
-            sb.Append("<div style='text-align: center; margin-bottom: 24px;'>");
-            sb.Append("<div style='width: 60px; height: 60px; background: linear-gradient(135deg, #1d2351 0%, #2d3555 100%); border-radius: 50%; display: inline-flex; align-items: center; justify-content: center;'>");
-            sb.Append("<span style='font-size: 28px;'>🔒</span>");
+            // Header Meta Block
+            sb.Append("<div style='text-align: center; margin-bottom: 28px;'>");
+            sb.Append("<div style='width: 56px; height: 56px; background-color: #f1f5f9; border-radius: 50%; display: inline-block; text-align: center; line-height: 56px;'>");
+            sb.Append("<span style='font-size: 24px; vertical-align: middle;'>🔒</span>");
             sb.Append("</div>");
-            sb.Append($"<h2 style='margin: 16px 0 8px 0; font-size: 20px; font-weight: 600; color: #1d2351;'>Your Verification PIN</h2>");
-            sb.Append($"<p style='font-size: 14px; color: #64748b; margin: 0;'>Delivery Reference: <strong>{deliveryNumber}</strong></p>");
-            sb.Append("</div>");
-
-            // PIN display box
-            sb.Append("<div style='background: linear-gradient(135deg, #1d2351 0%, #2d3555 100%); border-radius: 12px; padding: 24px; text-align: center; margin: 24px 0;'>");
-            sb.Append("<p style='font-size: 13px; color: rgba(255,255,255,0.7); margin: 0 0 12px 0; letter-spacing: 0.5px;'>USE THIS SECURITY CODE TO VERIFY</p>");
-            sb.Append($"<div style='font-size: 36px; font-weight: 700; color: #ffffff; letter-spacing: 8px; font-family: monospace;'>{pin}</div>");
+            sb.Append("<h2 style='margin: 16px 0 6px 0; font-size: 22px; font-weight: 700; color: #1e3a8a; tracking-tight: -0.025em;'>Corporate Security PIN</h2>");
+            sb.Append($"<p style='font-size: 14px; color: #475569; margin: 0;'>Delivery Destination Context: <strong style='color: #0f172a;'>{deliveryNumber}</strong></p>");
             sb.Append("</div>");
 
-            // Instructions
-            sb.Append("<div style='background: #f8fafc; border-radius: 8px; padding: 16px; margin: 24px 0;'>");
-            sb.Append("<h3 style='margin: 0 0 12px 0; font-size: 14px; font-weight: 600; color: #1d2351;'>How to verify:</h3>");
-            sb.Append("<ol style='margin: 0; padding-left: 20px; font-size: 14px; color: #475569; line-height: 1.8;'>");
-            sb.Append("<li>Return to the delivery verification page</li>");
-            sb.Append("<li>Enter the 6-digit PIN shown above</li>");
-            sb.Append("<li>Complete your delivery confirmation</li>");
+            // Clean, High-Contrast PIN Display Section (White background with dark blue border to survive night modes gracefully)
+            sb.Append("<div style='background-color: #f8fafc; border: 2px dashed #cbd5e1; border-radius: 12px; padding: 24px; text-align: center; margin: 24px 0;'>");
+            sb.Append("<p style='font-size: 12px; font-weight: 600; color: #64748b; margin: 0 0 8px 0; letter-spacing: 1px; uppercase;'>YOUR PERMANENT VERIFICATION CODE</p>");
+            sb.Append($"<div style='font-size: 38px; font-weight: 800; color: #1e3a8a; letter-spacing: 10px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; padding-left: 10px;'>{pin}</div>");
+            sb.Append("</div>");
+
+            // Informational Flow Block
+            sb.Append("<div style='background-color: #f8fafc; border-radius: 8px; padding: 18px; margin: 24px 0; border: 1px solid #e2e8f0;'>");
+            sb.Append("<h3 style='margin: 0 0 10px 0; font-size: 13px; font-weight: 700; color: #334155; text-transform: uppercase; letter-spacing: 0.5px;'>Fulfillment Verification Steps:</h3>");
+            sb.Append("<ol style='margin: 0; padding-left: 20px; font-size: 14px; color: #334155; line-height: 1.7;'>");
+            sb.Append("<li>Return to your secure tracking landing page URL</li>");
+            sb.Append("<li>Provide authorization details along with the unique 6-digit PIN above</li>");
+            sb.Append("<li>Confirm physical item volume allocations to complete hand-off ledger state</li>");
             sb.Append("</ol>");
             sb.Append("</div>");
 
-            // Security notice
-            sb.Append("<div style='background: #fef2f2; border-left: 4px solid #dc2626; border-radius: 4px; padding: 12px 16px;'>");
-            sb.Append("<p style='font-size: 12px; color: #991b1b; margin: 0;'>🔐 <strong>Security Notice:</strong> This PIN is valid for a single use. Never share this code with anyone.</p>");
+            // Security Disclaimer Banner (Adjusted to emphasize permanent customer status rules)
+            sb.Append("<div style='background-color: #eff6ff; border-left: 4px solid #2563eb; border-radius: 4px; padding: 14px 16px; margin: 24px 0;'>");
+            sb.Append("<p style='font-size: 12.5px; color: #1e40af; margin: 0; line-height: 1.5;'>");
+            sb.Append("🔑 <strong>Organization Master PIN Notice:</strong> This authentication code is mapped permanently directly to your corporate account registry configuration. It is used for handling verification confirmations across shipment cycles. Please guard this string token securely.");
+            sb.Append("</p>");
             sb.Append("</div>");
 
-            // Footer
+            // Standard Footer Elements
             sb.Append("<hr style='border: 0; border-top: 1px solid #e2e8f0; margin: 24px 0;' />");
-            sb.Append("<p style='font-size: 11px; color: #94a3b8; text-align: center; margin-bottom: 0;'>Automated transmission sent via AMT e-Meterai System.</p>");
-            sb.Append("</div>");
+            sb.Append("<p style='font-size: 11px; color: #94a3b8; text-align: center; margin-bottom: 0; line-height: 1.4;'>");
+            sb.Append("Automated transmission generated securely by AMT e-Meterai ERP Connector Systems.<br />");
+            sb.Append("Please contact your accounts administrator if you need to update your target notifications channel matrix.");
+            sb.Append("</p>");
+
+            sb.Append("</div>"); // Close core card frame
+            sb.Append("</div>"); // Close outer wrapper block
 
             return sb.ToString();
         }

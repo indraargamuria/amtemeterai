@@ -477,19 +477,22 @@ export function DeliveryReceivePage() {
   if (!isVerified) {
     return (
       <div className="min-h-screen bg-brand-blue/2 flex items-center justify-center p-4">
-        <Card className="w-full max-w-md">
-          <CardHeader className="text-center">
-            <div className="w-12 h-12 rounded-full bg-brand-blue/10 flex items-center justify-center mx-auto mb-4">
-              <svg className="w-6 h-6 text-brand-blue" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <Card className="w-full max-w-md border-brand-blue/10 shadow-xl bg-white">
+          <CardHeader className="text-center pb-4">
+            <div className="w-12 h-12 rounded-full bg-brand-blue/5 flex items-center justify-center mx-auto mb-3">
+              <svg className="w-5 h-5 text-brand-blue" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2-0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
               </svg>
             </div>
-            <CardTitle className="text-lg font-semibold text-brand-blue tracking-tight">Delivery Verification</CardTitle>
-            <CardDescription className="text-sm text-brand-blue/60">Please enter the security PIN provided by the sender.</CardDescription>
+            <CardTitle className="text-xl font-bold text-brand-blue tracking-tight">Delivery Verification</CardTitle>
+            <CardDescription className="text-xs text-brand-blue/60 mt-1">
+              Please enter your secure 6-digit company verification PIN to inspect and confirm this incoming shipment.
+            </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
+          
+          <CardContent className="space-y-5">
             <div className="space-y-2">
-              <Label htmlFor="pin" className="text-sm text-brand-blue/70">Security PIN</Label>
+              <Label htmlFor="pin" className="text-xs font-semibold uppercase tracking-wider text-brand-blue/60">Security PIN</Label>
               <Input
                 id="pin"
                 type="password"
@@ -506,59 +509,68 @@ export function DeliveryReceivePage() {
                     handleVerifyPin()
                   }
                 }}
-                placeholder="Enter 6-digit PIN"
-                className="text-center text-lg tracking-widest h-12"
+                placeholder="000000"
+                className="text-center text-xl font-mono tracking-[0.5em] pl-[0.5em] h-12 border-brand-blue/10 bg-brand-blue/2 focus:bg-white transition-colors"
                 autoFocus
               />
             </div>
+            
             {pinError && (
-              <p className="text-sm text-brand-red bg-brand-red/10 px-3 py-2 rounded-md text-center">{pinError}</p>
+              <p className="text-xs text-brand-red bg-brand-red/5 border border-brand-red/10 px-3 py-2.5 rounded-lg text-center font-medium">
+                {pinError}
+              </p>
             )}
-            <Button className="w-full" onClick={handleVerifyPin} disabled={verifying || !pinInput || isSending}>
-              {verifying ? "Verifying..." : "Access Delivery"}
+            
+            <Button className="w-full h-11 text-sm font-medium transition-all" onClick={handleVerifyPin} disabled={verifying || !pinInput || isSending}>
+              {verifying ? "Verifying Token..." : "Unlock & Access Delivery"}
             </Button>
 
-            {/* Request PIN Section */}
-            {!sentToEmail && (
-              <div className="pt-4 mt-4 border-t border-brand-blue/5">
-                <p className="text-xs text-brand-blue/60 text-center mb-3">
-                  Don't know your security PIN? Click below to dispatch it to your company's registered channel.
-                </p>
-                <Button
-                  variant="outline"
-                  className="w-full"
-                  onClick={handleRequestPin}
-                  disabled={isSending || verifying}
-                >
-                  {isSending ? "Processing Request..." : "Request PIN"}
-                </Button>
-                {requestError && (
-                  <p className="text-sm text-brand-red mt-2 text-center">{requestError}</p>
-                )}
-              </div>
-            )}
-
-            {/* PIN Sent Success State */}
-            {sentToEmail && (
-              <div className="mt-4 bg-emerald-950/30 border border-emerald-500/20 rounded-lg p-4 text-center">
-                <p className="text-sm text-emerald-400 font-medium mb-2">
-                  🔒 Security code sent! Check the inbox of:
-                </p>
-                <p className="text-lg font-mono tracking-wider text-emerald-300 mb-3">
-                  {sentToEmail}
-                </p>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSentToEmail(null)
-                    setRequestError(null)
-                  }}
-                  className="text-xs text-emerald-400/70 hover:text-emerald-400 underline"
-                >
-                  Need to resend?
-                </button>
-              </div>
-            )}
+            {/* Premium, High-Density Request PIN Fallback Workflow Layout */}
+            <div className="pt-4 border-t border-brand-blue/5">
+              {!sentToEmail ? (
+                <div className="flex flex-col space-y-3">
+                  <p className="text-[11px] leading-relaxed text-brand-blue/50 text-center px-2">
+                    Don't know your security keys? Request an instant out-of-band dispatch to your organization's pre-registered communication channel.
+                  </p>
+                  <Button
+                    variant="outline"
+                    className="w-full h-9 border-brand-blue/10 hover:bg-brand-blue/5 text-xs text-brand-blue/80 font-medium"
+                    onClick={handleRequestPin}
+                    disabled={isSending || verifying}
+                  >
+                    {isSending ? "Processing Request..." : "Request PIN via Registered Email"}
+                  </Button>
+                  {requestError && (
+                    <p className="text-xs text-brand-red text-center font-medium mt-1">{requestError}</p>
+                  )}
+                </div>
+              ) : (
+                <div className="p-3.5 bg-emerald-50 border border-emerald-200 rounded-xl text-center animate-in fade-in slide-in-from-bottom-2 duration-200">
+                  <div className="flex items-center justify-center gap-1.5 text-xs text-emerald-800 font-semibold mb-1">
+                    <svg className="w-3.5 h-3.5 text-emerald-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                    </svg>
+                    Security Pin Dispatched
+                  </div>
+                  <p className="text-[11px] text-emerald-700/80 leading-normal">
+                    The security access key has been successfully transmitted. Please inspect the inbox of:
+                  </p>
+                  <p className="text-sm font-mono font-bold tracking-wide text-emerald-900 mt-2 bg-white/60 py-1.5 border border-emerald-200/50 rounded-lg selection:bg-transparent">
+                    {sentToEmail}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSentToEmail(null)
+                      setRequestError(null)
+                    }}
+                    className="text-[11px] text-emerald-600 hover:text-emerald-800 underline mt-3 font-medium inline-flex items-center gap-1 transition-colors"
+                  >
+                    Need to resend or check another address?
+                  </button>
+                </div>
+              )}
+            </div>
           </CardContent>
         </Card>
       </div>

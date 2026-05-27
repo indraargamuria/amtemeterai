@@ -738,26 +738,29 @@ public class DeliveriesController : ControllerBase
             });
         }
     }
-
     private static string MaskEmail(string email)
     {
         if (string.IsNullOrWhiteSpace(email))
             return string.Empty;
 
-        var atIndex = email.IndexOf('@');
+        var trimmed = email.Trim();
+        var atIndex = trimmed.IndexOf('@');
+        
+        // Fallback if the string structure has an invalid format or missing domain
         if (atIndex <= 0)
-            return email;
+            return "***";
 
-        var localPart = email.Substring(0, atIndex);
-        var domainPart = email.Substring(atIndex);
+        var localPart = trimmed.Substring(0, atIndex);
+        var domainPart = trimmed.Substring(atIndex); // Includes the '@' symbol
 
-        if (localPart.Length <= 2)
-        {
-            return $"{localPart[0]}***{domainPart}";
-        }
+        // Secure, Fixed-Width standard. Extracted character is lowercased for uniform layout metrics.
+        char firstChar = char.ToLower(localPart[0]);
 
-        var maskedLocal = $"{localPart[0]}{new string('*', localPart.Length - 2)}{localPart[^1]}";
-        return maskedLocal + domainPart;
+        // Always outputs: first_letter + exactly 3 asterisks + domain
+        // e.g., arga@opexcg.com          -> a***@opexcg.com
+        // e.g., administrator@opexcg.com -> a***@opexcg.com
+        // e.g., a@opexcg.com             -> a***@opexcg.com
+        return $"{firstChar}***{domainPart}";
     }
 
     [HttpPost("dev/seed-deliveries")]
