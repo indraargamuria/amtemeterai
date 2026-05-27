@@ -12,7 +12,7 @@ import {
   TableRow,
 } from "../../shared/components/ui/Table"
 import { Pagination } from "../../shared/components/ui/Pagination"
-import { useApi, uploadDeliveryPrintout } from "../../shared/utils/api"
+import { useApi } from "../../shared/utils/api"
 
 interface DeliveryHeader {
   deliveryId: number
