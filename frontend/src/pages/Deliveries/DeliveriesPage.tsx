@@ -3,7 +3,6 @@ import { useNavigate } from "react-router-dom"
 import { Badge } from "../../shared/components/ui/Badge"
 import { Card, CardContent } from "../../shared/components/ui/Card"
 import { Input } from "../../shared/components/ui/Input"
-import { Button } from "../../shared/components/ui/Button"
 import {
   Table,
   TableBody,
@@ -14,7 +13,6 @@ import {
 } from "../../shared/components/ui/Table"
 import { Pagination } from "../../shared/components/ui/Pagination"
 import { useApi, uploadDeliveryPrintout } from "../../shared/utils/api"
-import { cn } from "../../shared/utils/cn"
 
 interface DeliveryHeader {
   deliveryId: number
@@ -60,28 +58,28 @@ export function DeliveriesPage() {
   const [complianceFilter, setComplianceFilter] = useState<ComplianceFilter>("all")
   const [pipelineFilter, setPipelineFilter] = useState<PipelineFilter>("active") // Defaults to hiding noise from cancelled rows
   const [showDiscrepancyOnly, setShowDiscrepancyOnly] = useState(false)
-  const [uploading, setUploading] = useState<number | null>(null)
-  const [fileInput, setFileInput] = useState<HTMLInputElement | null>(null)
+  // const [_uploading, setUploading] = useState<number | null>(null)
+  // const [fileInput, _setFileInput] = useState<HTMLInputElement | null>(null)
 
   const api = useApi()
 
-  const handleFileUpload = async (deliveryId: number) => {
-    const file = fileInput?.files?.[0]
-    if (!file) return
+  // const handleFileUpload = async (deliveryId: number) => {
+  //   const file = fileInput?.files?.[0]
+  //   if (!file) return
 
-    try {
-      setUploading(deliveryId)
-      await uploadDeliveryPrintout(deliveryId, file)
-      // Refresh data
-      fetchDeliveries()
-    } catch (err) {
-      console.error("Failed to upload printout:", err)
-      alert("Failed to upload printout. Please try again.")
-    } finally {
-      setUploading(null)
-      if (fileInput) fileInput.value = ""
-    }
-  }
+  //   try {
+  //     setUploading(deliveryId)
+  //     await uploadDeliveryPrintout(deliveryId, file)
+  //     // Refresh data
+  //     fetchDeliveries()
+  //   } catch (err) {
+  //     console.error("Failed to upload printout:", err)
+  //     alert("Failed to upload printout. Please try again.")
+  //   } finally {
+  //     setUploading(null)
+  //     if (fileInput) fileInput.value = ""
+  //   }
+  // }
 
   const fetchDeliveries = async () => {
     try {

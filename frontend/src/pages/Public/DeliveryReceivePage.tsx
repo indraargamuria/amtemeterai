@@ -7,7 +7,7 @@ import { Input } from "../../shared/components/ui/Input"
 import { Label } from "../../shared/components/ui/Label"
 
 // 🚀 Imported Icons to elevate the Enterprise SaaS UX
-import { Camera, Upload, Trash2, RotateCcw, Image as ImageIcon } from "lucide-react"
+import { Camera, Upload, Trash2, RotateCcw } from "lucide-react"
 
 interface DeliveryPhoto {
   fileName: string
