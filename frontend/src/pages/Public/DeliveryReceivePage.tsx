@@ -1,10 +1,13 @@
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { useParams } from "react-router-dom"
 import { Button } from "../../shared/components/ui/Button"
 import { Badge } from "../../shared/components/ui/Badge"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "../../shared/components/ui/Card"
 import { Input } from "../../shared/components/ui/Input"
 import { Label } from "../../shared/components/ui/Label"
+
+// 🚀 Imported Icons to elevate the Enterprise SaaS UX
+import { Camera, Upload, Trash2, RotateCcw, Image as ImageIcon } from "lucide-react"
 
 interface DeliveryPhoto {
   fileName: string
@@ -86,6 +89,10 @@ export function DeliveryReceivePage() {
   const [isSending, setIsSending] = useState(false)
   const [sentToEmail, setSentToEmail] = useState<string | null>(null)
   const [requestError, setRequestError] = useState<string | null>(null)
+
+  // 🚀 Refs to bridge custom UI buttons cleanly to hidden native file element nodes
+  const cameraInputRef = useRef<HTMLInputElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     const fetchDelivery = async () => {
@@ -474,6 +481,10 @@ export function DeliveryReceivePage() {
     )
   }
 
+  // Calculate global total count constraints safely
+  const activePhotosCount = (delivery.photos?.length || 0) + photoFiles.length - keysToDelete.length;
+  const isUploadDisabled = delivery.invoiced || submitting || activePhotosCount >= 5;
+
   if (!isVerified) {
     return (
       <div className="min-h-screen bg-brand-blue/2 flex items-center justify-center p-4">
@@ -481,7 +492,7 @@ export function DeliveryReceivePage() {
           <CardHeader className="text-center pb-4">
             <div className="w-12 h-12 rounded-full bg-brand-blue/5 flex items-center justify-center mx-auto mb-3">
               <svg className="w-5 h-5 text-brand-blue" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2-0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2-0 002-2v-6a2 2-0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
               </svg>
             </div>
             <CardTitle className="text-xl font-bold text-brand-blue tracking-tight">Delivery Verification</CardTitle>
@@ -799,34 +810,86 @@ export function DeliveryReceivePage() {
               <CardDescription className="text-xs text-brand-blue/60">Manage existing server assets or upload new images under 5MB limit.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
+              
+              {/* 🚀 PREMIUM HIGH-DENSITY DUAL ACTION WRAPPER FRAME */}
               <div className="space-y-2">
-                <Label className="text-sm text-brand-blue/70">Select New Files</Label>
-                <Input
+                <Label className="text-xs font-semibold uppercase tracking-wider text-brand-blue/60">Add Evidence Documentation</Label>
+                
+                {/* Visual Action Grid Layout */}
+                <div className="grid grid-cols-2 gap-3">
+                  
+                  {/* CHANNEL 1: NATIVE REAR-FACING CAMERA SNAP */}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => cameraInputRef.current?.click()}
+                    disabled={isUploadDisabled}
+                    className="w-full flex items-center justify-center gap-2 h-11 text-sm border-brand-blue/10 bg-white hover:bg-brand-blue/5 transition-all shadow-sm"
+                  >
+                    <Camera className="w-4 h-4 text-brand-blue/70 shrink-0" />
+                    <span>Take Photo</span>
+                  </Button>
+
+                  {/* CHANNEL 2: MULTI-FILE SELECT GALLERY EXPLORER */}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={isUploadDisabled}
+                    className="w-full flex items-center justify-center gap-2 h-11 text-sm border-brand-blue/10 bg-white hover:bg-brand-blue/5 transition-all shadow-sm"
+                  >
+                    <Upload className="w-4 h-4 text-brand-blue/70 shrink-0" />
+                    <span>Upload Files</span>
+                  </Button>
+                </div>
+
+                {/* HIDDEN BACKGROUND INPUT NODES */}
+                {/* Camera Channel: Enforces direct single capture mode bypassing picker blocks */}
+                <input
                   type="file"
-                  accept="image/jpeg,image/jpg,image/png"
+                  ref={cameraInputRef}
+                  accept="image/jpeg,image/png"
+                  capture="environment"
+                  onChange={handlePhotoUpload}
+                  disabled={isUploadDisabled}
+                  className="hidden"
+                />
+
+                {/* Document Gallery Explorer Channel: Multi-file select capabilities enabled */}
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  accept="image/jpeg,image/png"
                   multiple
                   onChange={handlePhotoUpload}
-                  disabled={delivery.invoiced || submitting || (delivery.photos?.length || 0) + photoFiles.length - keysToDelete.length >= 5}
+                  disabled={isUploadDisabled}
+                  className="hidden"
                 />
-                <p className="text-xs text-brand-blue/50">
-                  Total Active Visuals: {((delivery.photos?.length || 0) + photoFiles.length - keysToDelete.length)} / 5 Max
-                </p>
+
+                <div className="flex items-center justify-between pt-1">
+                  <p className="text-[11px] text-brand-blue/50">
+                    Total Active Visuals: <span className="font-semibold text-brand-blue">{activePhotosCount}</span> / 5 Max
+                  </p>
+                  {activePhotosCount >= 5 && (
+                    <span className="text-[10px] text-amber-600 font-medium">Upload limit quota reached</span>
+                  )}
+                </div>
               </div>
 
               {photoErrors.map((pErr, pIdx) => (
-                <p key={pIdx} className="text-xs text-brand-red">{pErr}</p>
+                <p key={pIdx} className="text-xs text-brand-red bg-brand-red/5 border border-brand-red/10 px-3 py-1.5 rounded-lg font-medium">{pErr}</p>
               ))}
 
               {/* UNIFIED RENDER CORE */}
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 pt-2">
                 
                 {/* PART A: Server Trace Photos with State-Driven Deletion Toggles */}
                 {delivery.photos?.map((photo) => {
                   const isMarkedForDeletion = keysToDelete.includes(photo.storageKey);
 
                   return (
-                    <div key={photo.storageKey} className="relative group rounded-lg overflow-hidden border border-brand-blue/10">
-                      <div className={`aspect-square bg-brand-blue/5 transition-opacity ${isMarkedForDeletion ? "opacity-30 mix-blend-luminosity" : ""}`}>
+                    <div key={photo.storageKey} className="relative group rounded-lg overflow-hidden border border-brand-blue/10 shadow-sm">
+                      <div className={`aspect-square bg-brand-blue/5 transition-all duration-200 ${isMarkedForDeletion ? "opacity-30 mix-blend-luminosity scale-95" : ""}`}>
                         <img src={photo.downloadUrl} alt={photo.fileName} className="w-full h-full object-cover" />
                       </div>
                       
@@ -841,19 +904,31 @@ export function DeliveryReceivePage() {
                             );
                           }}
                           disabled={submitting}
-                          className={`absolute top-1 right-1 rounded px-2 py-1 text-xs font-medium shadow-sm transition-opacity ${
+                          className={`absolute top-1.5 right-1.5 rounded-md px-2 py-1 text-[11px] font-semibold shadow-sm transition-all flex items-center gap-1 backdrop-blur-sm ${
                             isMarkedForDeletion 
                               ? "bg-brand-blue text-white opacity-100" 
-                              : "bg-red-600 text-white opacity-0 group-hover:opacity-100"
+                              : "bg-red-600 text-white opacity-0 group-hover:opacity-100 hover:bg-red-700"
                           }`}
                         >
-                          {isMarkedForDeletion ? "↩️ Keep" : "🗑️ Wipe"}
+                          {isMarkedForDeletion ? (
+                            <>
+                              <RotateCcw className="w-3 h-3" />
+                              <span>Keep</span>
+                            </>
+                          ) : (
+                            <>
+                              <Trash2 className="w-3 h-3" />
+                              <span>Wipe</span>
+                            </>
+                          )}
                         </button>
                       )}
                       
-                      <p className="text-[10px] text-brand-blue/60 px-1.5 py-0.5 truncate bg-white/90 absolute bottom-0 w-full flex justify-between items-center">
-                        <span className="truncate">{photo.fileName}</span>
-                        <span className="text-[9px] font-semibold text-brand-blue/40 shrink-0 ml-1">
+                      <p className="text-[10px] text-brand-blue/60 px-1.5 py-1 truncate bg-white/95 absolute bottom-0 w-full flex justify-between items-center border-t border-brand-blue/5">
+                        <span className="truncate max-w-[65%] font-medium">{photo.fileName}</span>
+                        <span className={`text-[9px] font-bold px-1 py-0.5 rounded uppercase tracking-wide shrink-0 ml-1 ${
+                          isMarkedForDeletion ? "bg-red-100 text-red-700 animate-pulse" : "bg-brand-blue/5 text-brand-blue/60"
+                        }`}>
                           {isMarkedForDeletion ? "DELETING" : "Legacy"}
                         </span>
                       </p>
@@ -863,7 +938,7 @@ export function DeliveryReceivePage() {
 
                 {/* PART B: Staged Client File Previews Local Streams */}
                 {photoFiles.map((file, idx) => (
-                  <div key={`staged-${idx}`} className="relative group rounded-lg overflow-hidden border border-amber-300 bg-amber-50/5">
+                  <div key={`staged-${idx}`} className="relative group rounded-lg overflow-hidden border border-amber-300 bg-amber-50/5 shadow-sm animate-in zoom-in-95 duration-150">
                     <div className="aspect-square">
                       <img src={URL.createObjectURL(file)} alt={file.name} className="w-full h-full object-cover" />
                     </div>
@@ -871,13 +946,13 @@ export function DeliveryReceivePage() {
                       type="button"
                       onClick={() => removePhoto(idx)}
                       disabled={submitting}
-                      className="absolute top-1 right-1 bg-red-600 text-white rounded p-1 text-xs"
+                      className="absolute top-1.5 right-1.5 bg-red-600 hover:bg-red-700 text-white rounded-md p-1.5 text-xs shadow-md backdrop-blur-sm transition-colors"
                     >
-                      ✕
+                      <Trash2 className="w-3 h-3" />
                     </button>
-                    <p className="text-[10px] text-amber-800 font-bold px-1.5 py-0.5 truncate bg-amber-100 absolute bottom-0 w-full flex justify-between items-center">
-                      <span className="truncate">{file.name}</span>
-                      <span className="text-[9px] font-extrabold text-amber-600 shrink-0 ml-1 uppercase tracking-wider">Staged</span>
+                    <p className="text-[10px] text-amber-900 font-bold px-1.5 py-1 truncate bg-amber-50 absolute bottom-0 w-full flex justify-between items-center border-t border-amber-200">
+                      <span className="truncate max-w-[65%] font-medium">{file.name}</span>
+                      <span className="text-[9px] font-extrabold text-amber-700 shrink-0 ml-1 uppercase tracking-wider bg-amber-200/60 px-1 py-0.5 rounded">Staged</span>
                     </p>
                   </div>
                 ))}
