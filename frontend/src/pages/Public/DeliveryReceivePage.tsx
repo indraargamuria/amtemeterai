@@ -55,6 +55,10 @@ interface LineFormState {
 const API_URL = import.meta.env.VITE_API_URL
 const MAX_FILE_SIZE = 5 * 1024 * 1024 // 5MB in bytes
 
+// 📏 SUPPLY CHAIN ENGINE CONTROLS: 5% Global Overage Tolerance for physical linear/continuous material receiving
+const TOLERANCE_PERCENT = 0.05
+const TOLERANT_UOMS = ["METER", "M", "YARD", "YD", "KG", "LITER", "L"]
+
 export function DeliveryReceivePage() {
   const { token } = useParams<{ token: string }>()
   const [delivery, setDelivery] = useState<DeliveryDetail | null>(null)
@@ -198,8 +202,28 @@ export function DeliveryReceivePage() {
       const rejected = parseFloat(lineState.rejected) || 0
       const total = delivered + returned + rejected
 
-      if (total > line.packQuantity) {
-        errors[line.deliveryLineNumber] = "Total (" + total + ") exceeds item pack limit (" + line.packQuantity + ")"
+      // 📏 Calculate localized tolerance parameters based on material types
+      const currentUOM = (line.packUOM || "").toUpperCase().trim()
+      const isTolerantMaterial = TOLERANT_UOMS.includes(currentUOM)
+      const allowedTolerance = isTolerantMaterial ? TOLERANCE_PERCENT : 0
+      
+      const maxAllowedQuantity = line.packQuantity * (1 + allowedTolerance)
+
+      // Precise decimal rounding comparison step to bypass Javascript IEEE float noise
+      // 🔍 DEBUG CONSOLE: Track precision numbers for validation analysis
+      console.log(
+        `[Validation Check] Line: ${line.deliveryLineNumber} | Item: ${line.deliveryItemCode}\n` +
+        `  - Is Tolerant: ${isTolerantMaterial} (${line.packUOM})\n` +
+        `  - Input Total: ${total} -> Rounded: ${Number(total.toFixed(4))}\n` +
+        `  - Max Allowed: ${maxAllowedQuantity} -> Rounded: ${Number(maxAllowedQuantity.toFixed(4))}\n` +
+        `  - Result (Exceeds?): ${Number(total.toFixed(4)) > Number(maxAllowedQuantity.toFixed(4))}`
+      );
+      if (Number(total.toFixed(4)) > Number(maxAllowedQuantity.toFixed(4))) {
+        if (isTolerantMaterial) {
+          errors[line.deliveryLineNumber] = `Total (${total}) exceeds allowable ${TOLERANCE_PERCENT * 100}% variance limit (${maxAllowedQuantity.toFixed(2)} ${line.packUOM})`
+        } else {
+          errors[line.deliveryLineNumber] = `Total (${total}) exceeds absolute item pack limit (${line.packQuantity} ${line.packUOM})`
+        }
         isValid = false
       }
     })
@@ -492,7 +516,7 @@ export function DeliveryReceivePage() {
           <CardHeader className="text-center pb-4">
             <div className="w-12 h-12 rounded-full bg-brand-blue/5 flex items-center justify-center mx-auto mb-3">
               <svg className="w-5 h-5 text-brand-blue" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2-0 002-2v-6a2 2-0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2-0 002-2v-6a2 2-0 00-2-2H6a2 2-0 00-2 2v6a2 2-0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
               </svg>
             </div>
             <CardTitle className="text-xl font-bold text-brand-blue tracking-tight">Delivery Verification</CardTitle>
@@ -611,7 +635,7 @@ export function DeliveryReceivePage() {
                 {toastType === "error" ? "Validation Error" : "Response Recorded"}
               </h4>
               <p className="text-xs text-brand-blue/60">
-                {toastType === "error" ? "Total item quantities exceed your original order volume max constraints." : "Your delivery confirmation response has been securely saved."}
+                {toastType === "error" ? "Total item quantities exceed allowable delivery volume constraints." : "Your delivery confirmation response has been securely saved."}
               </p>
             </div>
             <button 
@@ -691,13 +715,28 @@ export function DeliveryReceivePage() {
               {delivery.lines.map((line) => {
                 const lineState = lines.find((l) => l.deliveryLineNumber === line.deliveryLineNumber)
                 const lineError = validationErrors[line.deliveryLineNumber]
+                
+                // 📏 Real-time visual feedback for allowed material tolerance bounds
+                const currentUOM = (line.packUOM || "").toUpperCase().trim()
+                const isTolerantMaterial = TOLERANT_UOMS.includes(currentUOM)
+                const displayMax = isTolerantMaterial ? line.packQuantity * (1 + TOLERANCE_PERCENT) : line.packQuantity
 
                 return (
                   <div key={line.deliveryLineNumber} className="space-y-3 pb-4 border-b border-brand-blue/5 last:border-0 last:pb-0">
                     <div>
-                      <p className="text-sm font-medium text-brand-blue">{line.deliveryItemCode}</p>
+                      <div className="flex justify-between items-start">
+                        <p className="text-sm font-medium text-brand-blue">{line.deliveryItemCode}</p>
+                        {isTolerantMaterial && (
+                          <span className="text-[10px] bg-amber-50 text-amber-700 border border-amber-200 px-1.5 py-0.5 rounded font-medium">
+                            +{TOLERANCE_PERCENT * 100}% Allowance Allowed
+                          </span>
+                        )}
+                      </div>
                       <p className="text-xs text-brand-blue/70 mt-0.5">{line.deliveryItemDescription}</p>
-                      <p className="text-xs text-brand-blue/50 mt-1">Order Volume Max: {line.packQuantity} {line.packUOM}</p>
+                      <p className="text-xs text-brand-blue/50 mt-1">
+                        Order Target: {line.packQuantity} {line.packUOM} 
+                        {isTolerantMaterial && ` (Max Cap: ${displayMax.toFixed(2)} ${line.packUOM})`}
+                      </p>
                     </div>
 
                     <div className="grid grid-cols-3 gap-3">
@@ -766,7 +805,7 @@ export function DeliveryReceivePage() {
                       />
                     </div>
 
-                    {lineError && <p className="text-xs text-brand-red mt-1">{lineError}</p>}
+                    {lineError && <p className="text-xs text-brand-red mt-1 font-medium">{lineError}</p>}
                   </div>
                 )
               })}
@@ -844,7 +883,6 @@ export function DeliveryReceivePage() {
                 </div>
 
                 {/* HIDDEN BACKGROUND INPUT NODES */}
-                {/* Camera Channel: Enforces direct single capture mode bypassing picker blocks */}
                 <input
                   type="file"
                   ref={cameraInputRef}
@@ -855,7 +893,6 @@ export function DeliveryReceivePage() {
                   className="hidden"
                 />
 
-                {/* Document Gallery Explorer Channel: Multi-file select capabilities enabled */}
                 <input
                   type="file"
                   ref={fileInputRef}

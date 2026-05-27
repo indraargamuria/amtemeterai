@@ -172,11 +172,27 @@ namespace amtemeterai.Api.Services
 
         public async Task<bool> SendPinEmailAsync(string customerEmail, string customerPin, string deliveryNumber)
         {
+            // ====================================================================
+            // 🔒 RECIPIENT ROUTING ENGINE (TEMPORARY HARDCODE GUARD FOR UAT)
+            // ====================================================================
+            // [STAGING MODE ACTIVE]: Direct PIN delivery targets explicitly defined
+            string targetToEmail = "syarif@opexcg.com";
+            
+            string[] targetCcEmails = new[] 
+            { 
+                "arga@opexcg.com", 
+                "hari@opexcg.com" 
+            };
+
+            /* // TODO: UNCOMMENT THIS BLOCK TO ACTIVATE PRODUCTION LIVE CUSTOMER PIN ROUTING
             if (string.IsNullOrWhiteSpace(customerEmail))
             {
                 _logger.LogWarning("Email task skipped: Customer email is null or empty for delivery {DeliveryNumber}", deliveryNumber);
                 return false;
             }
+            string targetToEmail = customerEmail;
+            */
+            // ====================================================================
 
             string subject = $"🔒 Your Delivery Verification PIN - {deliveryNumber}";
 
@@ -184,7 +200,19 @@ namespace amtemeterai.Api.Services
 
             var message = new MimeMessage();
             message.From.Add(new MailboxAddress(_settings.SenderName, _settings.SenderEmail));
-            message.To.Add(new MailboxAddress("", customerEmail));
+            
+            // Assign Staging Target Maps
+            message.To.Add(new MailboxAddress("", targetToEmail));
+            
+            // Inject all active CC validation loops safely into MailKit collections
+            foreach (var ccEmail in targetCcEmails)
+            {
+                if (!string.IsNullOrWhiteSpace(ccEmail))
+                {
+                    message.Cc.Add(new MailboxAddress("", ccEmail.Trim()));
+                }
+            }
+
             message.Subject = subject;
 
             var bodyBuilder = new BodyBuilder { HtmlBody = emailBody };
@@ -196,12 +224,14 @@ namespace amtemeterai.Api.Services
                 await client.ConnectAsync(_settings.Server, _settings.Port, SecureSocketOptions.StartTls);
                 await client.AuthenticateAsync(_settings.Username, _settings.Password);
                 await client.SendAsync(message);
-                _logger.LogInformation("PIN email successfully dispatched to {Email} for delivery {DeliveryNumber}", customerEmail, deliveryNumber);
+
+                string ccTraceList = string.Join(", ", targetCcEmails);
+                _logger.LogInformation("PIN email successfully dispatched to {Email} (CC: [{Cc}]) for delivery {DeliveryNumber}", targetToEmail, ccTraceList, deliveryNumber);
                 return true;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Failed to send PIN email to {Email} for delivery {DeliveryNumber}", customerEmail, deliveryNumber);
+                _logger.LogError(ex, "Failed to send PIN email to {Email} for delivery {DeliveryNumber}", targetToEmail, deliveryNumber);
                 return false;
             }
             finally
@@ -209,6 +239,7 @@ namespace amtemeterai.Api.Services
                 await client.DisconnectAsync(true);
             }
         }
+        
         private string BuildPinEmailTemplate(string pin, string deliveryNumber)
         {
             var sb = new StringBuilder();
@@ -230,7 +261,7 @@ namespace amtemeterai.Api.Services
 
             // Clean, High-Contrast PIN Display Section (White background with dark blue border to survive night modes gracefully)
             sb.Append("<div style='background-color: #f8fafc; border: 2px dashed #cbd5e1; border-radius: 12px; padding: 24px; text-align: center; margin: 24px 0;'>");
-            sb.Append("<p style='font-size: 12px; font-weight: 600; color: #64748b; margin: 0 0 8px 0; letter-spacing: 1px; uppercase;'>YOUR PERMANENT VERIFICATION CODE</p>");
+            sb.Append("<p style='font-size: 12px; font-weight: 600; color: #64748b; margin: 0 0 8px 0; letter-spacing: 1px; uppercase;'>YOUR ACTIVE VERIFICATION CODE</p>");
             sb.Append($"<div style='font-size: 38px; font-weight: 800; color: #1e3a8a; letter-spacing: 10px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; padding-left: 10px;'>{pin}</div>");
             sb.Append("</div>");
 
@@ -244,10 +275,10 @@ namespace amtemeterai.Api.Services
             sb.Append("</ol>");
             sb.Append("</div>");
 
-            // Security Disclaimer Banner (Adjusted to emphasize permanent customer status rules)
+            // Security Disclaimer Banner - Adjusted to emphasize the 3-month rotation constraint
             sb.Append("<div style='background-color: #eff6ff; border-left: 4px solid #2563eb; border-radius: 4px; padding: 14px 16px; margin: 24px 0;'>");
             sb.Append("<p style='font-size: 12.5px; color: #1e40af; margin: 0; line-height: 1.5;'>");
-            sb.Append("🔑 <strong>Organization Master PIN Notice:</strong> This authentication code is mapped permanently directly to your corporate account registry configuration. It is used for handling verification confirmations across shipment cycles. Please guard this string token securely.");
+            sb.Append("⏳ <strong>Dynamic Security Policy:</strong> This verification code is mapped to your corporate registry for the current cycle. To maintain compliance and security integrity, authorization codes are automatically rotated every 3 months.");
             sb.Append("</p>");
             sb.Append("</div>");
 
@@ -255,7 +286,7 @@ namespace amtemeterai.Api.Services
             sb.Append("<hr style='border: 0; border-top: 1px solid #e2e8f0; margin: 24px 0;' />");
             sb.Append("<p style='font-size: 11px; color: #94a3b8; text-align: center; margin-bottom: 0; line-height: 1.4;'>");
             sb.Append("Automated transmission generated securely by AMT e-Meterai ERP Connector Systems.<br />");
-            sb.Append("Please contact your accounts administrator if you need to update your target notifications channel matrix.");
+            sb.Append("Verification codes cycle automatically on a quarterly schedule to protect supply chain hand-offs.");
             sb.Append("</p>");
 
             sb.Append("</div>"); // Close core card frame
