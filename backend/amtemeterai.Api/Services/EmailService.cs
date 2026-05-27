@@ -169,5 +169,88 @@ namespace amtemeterai.Api.Services
 
             return sb.ToString();
         }
+
+        public async Task<bool> SendPinEmailAsync(string customerEmail, string customerPin, string deliveryNumber)
+        {
+            if (string.IsNullOrWhiteSpace(customerEmail))
+            {
+                _logger.LogWarning("Email task skipped: Customer email is null or empty for delivery {DeliveryNumber}", deliveryNumber);
+                return false;
+            }
+
+            string subject = $"🔒 Your Delivery Verification PIN - {deliveryNumber}";
+
+            var emailBody = BuildPinEmailTemplate(customerPin, deliveryNumber);
+
+            var message = new MimeMessage();
+            message.From.Add(new MailboxAddress(_settings.SenderName, _settings.SenderEmail));
+            message.To.Add(new MailboxAddress("", customerEmail));
+            message.Subject = subject;
+
+            var bodyBuilder = new BodyBuilder { HtmlBody = emailBody };
+            message.Body = bodyBuilder.ToMessageBody();
+
+            using var client = new SmtpClient();
+            try
+            {
+                await client.ConnectAsync(_settings.Server, _settings.Port, SecureSocketOptions.StartTls);
+                await client.AuthenticateAsync(_settings.Username, _settings.Password);
+                await client.SendAsync(message);
+                _logger.LogInformation("PIN email successfully dispatched to {Email} for delivery {DeliveryNumber}", customerEmail, deliveryNumber);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to send PIN email to {Email} for delivery {DeliveryNumber}", customerEmail, deliveryNumber);
+                return false;
+            }
+            finally
+            {
+                await client.DisconnectAsync(true);
+            }
+        }
+
+        private string BuildPinEmailTemplate(string pin, string deliveryNumber)
+        {
+            var sb = new StringBuilder();
+            sb.Append("<div style='font-family: -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif; color: #1d2351; max-width: 650px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 12px; padding: 24px;'>");
+
+            // Header with lock icon
+            sb.Append("<div style='text-align: center; margin-bottom: 24px;'>");
+            sb.Append("<div style='width: 60px; height: 60px; background: linear-gradient(135deg, #1d2351 0%, #2d3555 100%); border-radius: 50%; display: inline-flex; align-items: center; justify-content: center;'>");
+            sb.Append("<span style='font-size: 28px;'>🔒</span>");
+            sb.Append("</div>");
+            sb.Append($"<h2 style='margin: 16px 0 8px 0; font-size: 20px; font-weight: 600; color: #1d2351;'>Your Verification PIN</h2>");
+            sb.Append($"<p style='font-size: 14px; color: #64748b; margin: 0;'>Delivery Reference: <strong>{deliveryNumber}</strong></p>");
+            sb.Append("</div>");
+
+            // PIN display box
+            sb.Append("<div style='background: linear-gradient(135deg, #1d2351 0%, #2d3555 100%); border-radius: 12px; padding: 24px; text-align: center; margin: 24px 0;'>");
+            sb.Append("<p style='font-size: 13px; color: rgba(255,255,255,0.7); margin: 0 0 12px 0; letter-spacing: 0.5px;'>USE THIS SECURITY CODE TO VERIFY</p>");
+            sb.Append($"<div style='font-size: 36px; font-weight: 700; color: #ffffff; letter-spacing: 8px; font-family: monospace;'>{pin}</div>");
+            sb.Append("</div>");
+
+            // Instructions
+            sb.Append("<div style='background: #f8fafc; border-radius: 8px; padding: 16px; margin: 24px 0;'>");
+            sb.Append("<h3 style='margin: 0 0 12px 0; font-size: 14px; font-weight: 600; color: #1d2351;'>How to verify:</h3>");
+            sb.Append("<ol style='margin: 0; padding-left: 20px; font-size: 14px; color: #475569; line-height: 1.8;'>");
+            sb.Append("<li>Return to the delivery verification page</li>");
+            sb.Append("<li>Enter the 6-digit PIN shown above</li>");
+            sb.Append("<li>Complete your delivery confirmation</li>");
+            sb.Append("</ol>");
+            sb.Append("</div>");
+
+            // Security notice
+            sb.Append("<div style='background: #fef2f2; border-left: 4px solid #dc2626; border-radius: 4px; padding: 12px 16px;'>");
+            sb.Append("<p style='font-size: 12px; color: #991b1b; margin: 0;'>🔐 <strong>Security Notice:</strong> This PIN is valid for a single use. Never share this code with anyone.</p>");
+            sb.Append("</div>");
+
+            // Footer
+            sb.Append("<hr style='border: 0; border-top: 1px solid #e2e8f0; margin: 24px 0;' />");
+            sb.Append("<p style='font-size: 11px; color: #94a3b8; text-align: center; margin-bottom: 0;'>Automated transmission sent via AMT e-Meterai System.</p>");
+            sb.Append("</div>");
+
+            return sb.ToString();
+        }
     }
 }

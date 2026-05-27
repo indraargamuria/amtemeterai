@@ -630,6 +630,136 @@ public class DeliveriesController : ControllerBase
         return Unauthorized("Invalid PIN");
     }
 
+    [AllowAnonymous]
+    [HttpPost("public/request-pin")]
+    public async Task<ActionResult<RequestPinResponseDto>> RequestPin([FromBody] RequestPinDto dto)
+    {
+        if (dto.ReceiverToken == Guid.Empty)
+        {
+            return BadRequest(new RequestPinResponseDto
+            {
+                Success = false,
+                Message = "Invalid receiver token.",
+                SentTo = string.Empty
+            });
+        }
+
+        var delivery = await _db.DeliveryHeaders
+            .Include(d => d.Customer)
+            .FirstOrDefaultAsync(d => d.ReceiverToken == dto.ReceiverToken);
+
+        if (delivery == null)
+        {
+            return NotFound(new RequestPinResponseDto
+            {
+                Success = false,
+                Message = "Delivery not found or link has expired.",
+                SentTo = string.Empty
+            });
+        }
+
+        if (delivery.Received)
+        {
+            return BadRequest(new RequestPinResponseDto
+            {
+                Success = false,
+                Message = "This delivery has already been verified.",
+                SentTo = string.Empty
+            });
+        }
+
+        var customerEmail = delivery.Customer?.CustomerEmail;
+        var customerPin = delivery.Customer?.CustomerPin;
+
+        if (string.IsNullOrWhiteSpace(customerEmail))
+        {
+            return BadRequest(new RequestPinResponseDto
+            {
+                Success = false,
+                Message = "No email registered for this customer.",
+                SentTo = string.Empty
+            });
+        }
+
+        if (string.IsNullOrWhiteSpace(customerPin))
+        {
+            return BadRequest(new RequestPinResponseDto
+            {
+                Success = false,
+                Message = "No security PIN configured for this customer.",
+                SentTo = string.Empty
+            });
+        }
+
+        try
+        {
+            using var scope = _serviceProvider.CreateScope();
+            var emailService = scope.ServiceProvider.GetRequiredService<IEmailService>();
+
+            bool emailSent = await emailService.SendPinEmailAsync(customerEmail, customerPin, delivery.DeliveryNumber);
+
+            if (!emailSent)
+            {
+                return StatusCode(500, new RequestPinResponseDto
+                {
+                    Success = false,
+                    Message = "Failed to send PIN email. Please try again.",
+                    SentTo = string.Empty
+                });
+            }
+
+            await LogActivity(
+                "PinRequested",
+                delivery.DeliveryNumber,
+                $"PIN requested and sent to masked email address",
+                "Info"
+            );
+
+            _logger.LogInformation(
+                "PIN requested for delivery {DeliveryNumber} and sent to {Email}",
+                delivery.DeliveryNumber,
+                customerEmail);
+
+            return Ok(new RequestPinResponseDto
+            {
+                Success = true,
+                Message = "Verification PIN dispatched successfully.",
+                SentTo = MaskEmail(customerEmail)
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error sending PIN for delivery {DeliveryNumber}", delivery.DeliveryNumber);
+            return StatusCode(500, new RequestPinResponseDto
+            {
+                Success = false,
+                Message = "An error occurred while sending the PIN. Please try again.",
+                SentTo = string.Empty
+            });
+        }
+    }
+
+    private static string MaskEmail(string email)
+    {
+        if (string.IsNullOrWhiteSpace(email))
+            return string.Empty;
+
+        var atIndex = email.IndexOf('@');
+        if (atIndex <= 0)
+            return email;
+
+        var localPart = email.Substring(0, atIndex);
+        var domainPart = email.Substring(atIndex);
+
+        if (localPart.Length <= 2)
+        {
+            return $"{localPart[0]}***{domainPart}";
+        }
+
+        var maskedLocal = $"{localPart[0]}{new string('*', localPart.Length - 2)}{localPart[^1]}";
+        return maskedLocal + domainPart;
+    }
+
     [HttpPost("dev/seed-deliveries")]
     public async Task<IActionResult> SeedDeliveries()
     {

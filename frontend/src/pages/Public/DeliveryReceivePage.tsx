@@ -82,6 +82,11 @@ export function DeliveryReceivePage() {
   const [verifying, setVerifying] = useState(false)
   const [pinError, setPinError] = useState<string | null>(null)
 
+  // PIN Request States
+  const [isSending, setIsSending] = useState(false)
+  const [sentToEmail, setSentToEmail] = useState<string | null>(null)
+  const [requestError, setRequestError] = useState<string | null>(null)
+
   useEffect(() => {
     const fetchDelivery = async () => {
       if (!token) {
@@ -326,6 +331,34 @@ export function DeliveryReceivePage() {
     }
   }
 
+  const handleRequestPin = async () => {
+    if (!token) return
+
+    setIsSending(true)
+    setRequestError(null)
+    setSentToEmail(null)
+
+    try {
+      const res = await fetch(`${API_URL}/api/deliveries/public/request-pin`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ receiverToken: token }),
+      })
+
+      const data = await res.json()
+
+      if (res.ok && data.success) {
+        setSentToEmail(data.sentTo)
+      } else {
+        setRequestError(data.message || "Failed to send PIN. Please try again.")
+      }
+    } catch {
+      setRequestError("An error occurred. Please try again.")
+    } finally {
+      setIsSending(false)
+    }
+  }
+
   const handleLineChange = (
     deliveryLineNumber: string,
     field: "delivered" | "returned" | "rejected" | "lineComment",
@@ -481,9 +514,51 @@ export function DeliveryReceivePage() {
             {pinError && (
               <p className="text-sm text-brand-red bg-brand-red/10 px-3 py-2 rounded-md text-center">{pinError}</p>
             )}
-            <Button className="w-full" onClick={handleVerifyPin} disabled={verifying || !pinInput}>
+            <Button className="w-full" onClick={handleVerifyPin} disabled={verifying || !pinInput || isSending}>
               {verifying ? "Verifying..." : "Access Delivery"}
             </Button>
+
+            {/* Request PIN Section */}
+            {!sentToEmail && (
+              <div className="pt-4 mt-4 border-t border-brand-blue/5">
+                <p className="text-xs text-brand-blue/60 text-center mb-3">
+                  Don't know your security PIN? Click below to dispatch it to your company's registered channel.
+                </p>
+                <Button
+                  variant="outline"
+                  className="w-full"
+                  onClick={handleRequestPin}
+                  disabled={isSending || verifying}
+                >
+                  {isSending ? "Processing Request..." : "Request PIN"}
+                </Button>
+                {requestError && (
+                  <p className="text-sm text-brand-red mt-2 text-center">{requestError}</p>
+                )}
+              </div>
+            )}
+
+            {/* PIN Sent Success State */}
+            {sentToEmail && (
+              <div className="mt-4 bg-emerald-950/30 border border-emerald-500/20 rounded-lg p-4 text-center">
+                <p className="text-sm text-emerald-400 font-medium mb-2">
+                  🔒 Security code sent! Check the inbox of:
+                </p>
+                <p className="text-lg font-mono tracking-wider text-emerald-300 mb-3">
+                  {sentToEmail}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSentToEmail(null)
+                    setRequestError(null)
+                  }}
+                  className="text-xs text-emerald-400/70 hover:text-emerald-400 underline"
+                >
+                  Need to resend?
+                </button>
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
