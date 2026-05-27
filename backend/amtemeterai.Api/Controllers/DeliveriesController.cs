@@ -658,15 +658,15 @@ public class DeliveriesController : ControllerBase
             });
         }
 
-        if (delivery.Received)
-        {
-            return BadRequest(new RequestPinResponseDto
-            {
-                Success = false,
-                Message = "This delivery has already been verified.",
-                SentTo = string.Empty
-            });
-        }
+        // if (delivery.Received)
+        // {
+        //     return BadRequest(new RequestPinResponseDto
+        //     {
+        //         Success = false,
+        //         Message = "This delivery has already been verified.",
+        //         SentTo = string.Empty
+        //     });
+        // }
 
         var customerEmail = delivery.Customer?.CustomerEmail;
         var customerPin = delivery.Customer?.CustomerPin;

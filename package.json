@@ -3,7 +3,7 @@
   "private": true,
   "scripts": {
     "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
-    "dev:backend": "dotnet run --project backend/amtemeterai.Api",
+    "dev:backend": "dotnet run --project backend/amtemeterai.Api --urls \"http://0.0.0.0:8080\"",
     "dev:frontend": "npm run dev --prefix frontend"
   },
   "devDependencies": {
