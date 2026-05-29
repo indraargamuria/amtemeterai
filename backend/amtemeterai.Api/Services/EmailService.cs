@@ -46,12 +46,12 @@ namespace amtemeterai.Api.Services
             // 🔒 RECIPIENT ROUTING ENGINE (TEMPORARY HARDCODE GUARD)
             // ====================================================================
             // [STAGING MODE ACTIVE]: Direct delivery targets explicitly defined
-            string targetToEmail = "syarif@opexcg.com";
+            string targetToEmail = "arga@opexcg.com";
             
-            // 🚀 Updated: Collection engine to cleanly route multiple transparent visibility copies
-            string[] targetCcEmails = new[] 
+            // 🚀 FIXED: Array explicitly typed as string[] to eliminate compile-time inference issues (CS0826)
+            string[] targetCcEmails = new string[] 
             { 
-                "arga@opexcg.com", 
+                "syarif@opexcg.com", 
                 "hari@opexcg.com" // You can append additional testing emails here
             };
 
@@ -68,9 +68,10 @@ namespace amtemeterai.Api.Services
             // 2. Identify if any items were damaged, missing, or rejected
             bool hasDiscrepancies = delivery.Lines.Any(l => l.PackQuantityReturned > 0 || l.PackQuantityRejected > 0);
 
+            // 🚀 Spam Mitigation: Cleaned up bracket formats to prevent automated inbox filter rules from flagging as junk
             string subject = hasDiscrepancies
-                ? $"⚠️ [Discrepancy Variance] Delivery Confirmed: {delivery.DeliveryNumber}"
-                : $"✅ [Clean Receipt] Delivery Confirmed: {delivery.DeliveryNumber}";
+                ? $"⚠️ Delivery Confirmation - Discrepancy Variance Mismatch: {delivery.DeliveryNumber}"
+                : $"✅ Delivery Confirmation - Transaction Receipt Summary: {delivery.DeliveryNumber}";
 
             // 3. Compile high-density HTML content
             var emailBody = BuildHtmlTemplate(delivery, hasDiscrepancies);
@@ -123,14 +124,16 @@ namespace amtemeterai.Api.Services
         {
             var sb = new StringBuilder();
             sb.Append("<div style='font-family: -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif; color: #1d2351; max-width: 650px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 12px; padding: 24px;'>");
-            sb.Append($"<h2 style='margin-top: 0; font-size: 20px; font-weight: 600; color: {(hasDiscrepancies ? "#dc2626" : "#1d2351")};'>Fulfillment Confirmation Report</h2>");
-            sb.Append("<p style='font-size: 14px; color: #64748b;'>A buyer has verified delivery status. See operational payload details below:</p>");
+            sb.Append($"<h2 style='margin-top: 0; font-size: 20px; font-weight: 600; color: {(hasDiscrepancies ? "#dc2626" : "#1d2351")};'>Delivery Confirmation Notice</h2>");
+            
+            // 🚀 Spam Mitigation: Altered metadata technical payload description strings to standard clean business summaries
+            sb.Append("<p style='font-size: 14px; color: #64748b;'>This notification serves as a verification summary of the recent delivery record. Please find your transaction details cataloged below:</p>");
             
             sb.Append("<table style='width: 100%; border-collapse: collapse; margin-top: 16px; font-size: 14px;'>");
             sb.Append($"<tr><td style='padding: 6px 0; color: #64748b; width: 35%;'>Delivery Number:</td><td style='padding: 6px 0; font-weight: 600;'>{delivery.DeliveryNumber}</td></tr>");
             sb.Append($"<tr><td style='padding: 6px 0; color: #64748b;'>Receiver Name:</td><td style='padding: 6px 0; font-weight: 600;'>{delivery.ReceiverName}</td></tr>");
-            sb.Append($"<tr><td style='padding: 6px 0; color: #64748b;'>Fulfillment State:</td><td style='padding: 6px 0; font-weight: 600;'>{(hasDiscrepancies ? "<span style='color:#dc2626;'>Discrepancy Variance Flagged</span>" : "<span style='color:#16a34a;'>Clean Transaction</span>")}</td></tr>");
-            sb.Append($"<tr><td style='padding: 6px 0; color: #64748b;'>Buyer Notes:</td><td style='padding: 6px 0; font-style: italic;'>{(string.IsNullOrWhiteSpace(delivery.ReceiverNotes) ? "-" : delivery.ReceiverNotes)}</td></tr>");
+            sb.Append($"<tr><td style='padding: 6px 0; color: #64748b;'>Delivery Status:</td><td style='padding: 6px 0; font-weight: 600;'>{(hasDiscrepancies ? "<span style='color:#dc2626;'>Discrepancies Reported</span>" : "<span style='color:#16a34a;'>Completed Successfully</span>")}</td></tr>");
+            sb.Append($"<tr><td style='padding: 6px 0; color: #64748b;'>Receiver Notes:</td><td style='padding: 6px 0; font-style: italic;'>{(string.IsNullOrWhiteSpace(delivery.ReceiverNotes) ? "-" : delivery.ReceiverNotes)}</td></tr>");
             sb.Append("</table>");
 
             // Build dynamic validation sub-table if discrepancy variables exist
@@ -164,7 +167,7 @@ namespace amtemeterai.Api.Services
             }
 
             sb.Append("<hr style='border: 0; border-top: 1px solid #e2e8f0; margin: 24px 0;' />");
-            sb.Append("<p style='font-size: 11px; color: #94a3b8; text-align: center; margin-bottom: 0;'>Automated transmission sent via OpexNOW Engine System.</p>");
+            sb.Append("<p style='font-size: 11px; color: #94a3b8; text-align: center; margin-bottom: 0;'>This notification message was automatically generated by the corporate portal system.</p>");
             sb.Append("</div>");
 
             return sb.ToString();
@@ -176,11 +179,12 @@ namespace amtemeterai.Api.Services
             // 🔒 RECIPIENT ROUTING ENGINE (TEMPORARY HARDCODE GUARD FOR UAT)
             // ====================================================================
             // [STAGING MODE ACTIVE]: Direct PIN delivery targets explicitly defined
-            string targetToEmail = "syarif@opexcg.com";
+            string targetToEmail = "arga@opexcg.com";
             
-            string[] targetCcEmails = new[] 
+            // 🚀 FIXED: Explicitly typed as string[] to clear up compilation (CS0826)
+            string[] targetCcEmails = new string[] 
             { 
-                "arga@opexcg.com", 
+                "syarif@opexcg.com", 
                 "hari@opexcg.com" 
             };
 
@@ -194,7 +198,7 @@ namespace amtemeterai.Api.Services
             */
             // ====================================================================
 
-            string subject = $"🔒 Your Delivery Verification PIN - {deliveryNumber}";
+            string subject = $"Verification Access Code - Document {deliveryNumber}";
 
             var emailBody = BuildPinEmailTemplate(customerPin, deliveryNumber);
 
@@ -255,8 +259,8 @@ namespace amtemeterai.Api.Services
             sb.Append("<div style='width: 56px; height: 56px; background-color: #f1f5f9; border-radius: 50%; display: inline-block; text-align: center; line-height: 56px;'>");
             sb.Append("<span style='font-size: 24px; vertical-align: middle;'>🔒</span>");
             sb.Append("</div>");
-            sb.Append("<h2 style='margin: 16px 0 6px 0; font-size: 22px; font-weight: 700; color: #1e3a8a; tracking-tight: -0.025em;'>Corporate Security PIN</h2>");
-            sb.Append($"<p style='font-size: 14px; color: #475569; margin: 0;'>Delivery Destination Context: <strong style='color: #0f172a;'>{deliveryNumber}</strong></p>");
+            sb.Append("<h2 style='margin: 16px 0 6px 0; font-size: 22px; font-weight: 700; color: #1e3a8a; tracking-tight: -0.025em;'>Verification Access Code</h2>");
+            sb.Append($"<p style='font-size: 14px; color: #475569; margin: 0;'>Delivery Number Reference: <strong style='color: #0f172a;'>{deliveryNumber}</strong></p>");
             sb.Append("</div>");
 
             // Clean, High-Contrast PIN Display Section (White background with dark blue border to survive night modes gracefully)
@@ -267,26 +271,26 @@ namespace amtemeterai.Api.Services
 
             // Informational Flow Block
             sb.Append("<div style='background-color: #f8fafc; border-radius: 8px; padding: 18px; margin: 24px 0; border: 1px solid #e2e8f0;'>");
-            sb.Append("<h3 style='margin: 0 0 10px 0; font-size: 13px; font-weight: 700; color: #334155; text-transform: uppercase; letter-spacing: 0.5px;'>Fulfillment Verification Steps:</h3>");
+            sb.Append("<h3 style='margin: 0 0 10px 0; font-size: 13px; font-weight: 700; color: #334155; text-transform: uppercase; letter-spacing: 0.5px;'>Verification Steps:</h3>");
             sb.Append("<ol style='margin: 0; padding-left: 20px; font-size: 14px; color: #334155; line-height: 1.7;'>");
-            sb.Append("<li>Return to your secure tracking landing page URL</li>");
-            sb.Append("<li>Provide authorization details along with the unique 6-digit PIN above</li>");
-            sb.Append("<li>Confirm physical item volume allocations to complete hand-off ledger state</li>");
+            sb.Append("<li>Open the delivery tracking link provided on your platform landing dashboard</li>");
+            sb.Append("<li>Enter your verification credentials along with the unique 6-digit access pin listed above</li>");
+            sb.Append("<li>Verify the item receipt summaries to complete the secure verification process</li>");
             sb.Append("</ol>");
             sb.Append("</div>");
 
-            // Security Disclaimer Banner - Adjusted to emphasize the 3-month rotation constraint
+            // Security Disclaimer Banner
             sb.Append("<div style='background-color: #eff6ff; border-left: 4px solid #2563eb; border-radius: 4px; padding: 14px 16px; margin: 24px 0;'>");
             sb.Append("<p style='font-size: 12.5px; color: #1e40af; margin: 0; line-height: 1.5;'>");
-            sb.Append("⏳ <strong>Dynamic Security Policy:</strong> This verification code is mapped to your corporate registry for the current cycle. To maintain compliance and security integrity, authorization codes are automatically rotated every 3 months.");
+            sb.Append("⏳ <strong>Security Notice:</strong> This authorization credential code is securely mapped for the active verification validation lifecycle window. Secure tracking channels automatically cycle systematically to preserve account integrity.");
             sb.Append("</p>");
             sb.Append("</div>");
 
             // Standard Footer Elements
             sb.Append("<hr style='border: 0; border-top: 1px solid #e2e8f0; margin: 24px 0;' />");
             sb.Append("<p style='font-size: 11px; color: #94a3b8; text-align: center; margin-bottom: 0; line-height: 1.4;'>");
-            sb.Append("Automated transmission generated securely by AMT e-Meterai ERP Connector Systems.<br />");
-            sb.Append("Verification codes cycle automatically on a quarterly schedule to protect supply chain hand-offs.");
+            sb.Append("This transmission was automatically dispatched by the ERP system connector interface layer.<br />");
+            sb.Append("Verification tokens are systematically rotated on dynamic intervals to maintain operational security compliance protocols.");
             sb.Append("</p>");
 
             sb.Append("</div>"); // Close core card frame
