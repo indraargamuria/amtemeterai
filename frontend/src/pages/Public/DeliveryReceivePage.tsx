@@ -1,13 +1,15 @@
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, useMemo } from "react"
 import { useParams } from "react-router-dom"
 import { Button } from "../../shared/components/ui/Button"
 import { Badge } from "../../shared/components/ui/Badge"
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "../../shared/components/ui/Card"
+import { Card, CardContent, CardHeader, CardTitle } from "../../shared/components/ui/Card"
 import { Input } from "../../shared/components/ui/Input"
 import { Label } from "../../shared/components/ui/Label"
+import { Camera, Upload, Trash2, Search, CheckCircle, AlertTriangle, ChevronDown, ChevronUp, Package, Lock, FileText, MapPin } from "lucide-react"
 
-// 🚀 Imported Icons to elevate the Enterprise SaaS UX
-import { Camera, Upload, Trash2, RotateCcw } from "lucide-react"
+// ============================================================================
+// TYPE DEFINITIONS
+// ============================================================================
 
 interface DeliveryPhoto {
   fileName: string
@@ -42,6 +44,7 @@ interface DeliveryDetail {
   invoiced: boolean
   photos?: DeliveryPhoto[]
   lines: DeliveryLine[]
+  customerPONumber?: string
 }
 
 interface LineFormState {
@@ -52,73 +55,94 @@ interface LineFormState {
   lineComment: string
 }
 
-const API_URL = import.meta.env.VITE_API_URL
-const MAX_FILE_SIZE = 5 * 1024 * 1024 // 5MB in bytes
+interface VarianceSummary {
+  lineNumber: string
+  itemCode: string
+  description: string
+  scheduled: number
+  actualTotal: number
+  variancePercent: string
+  uom: string
+}
 
-// 📏 SUPPLY CHAIN ENGINE CONTROLS: 5% Global Overage Tolerance for physical linear/continuous material receiving
-const TOLERANCE_PERCENT = 0.05
-const TOLERANT_UOMS = ["METER", "M", "YARD", "YD", "KG", "LITER", "L"]
+// ============================================================================
+// CONSTANTS
+// ============================================================================
+
+const API_URL = import.meta.env.VITE_API_URL
+const MAX_FILE_SIZE = 5 * 1024 * 1024
+
+// ============================================================================
+// MAIN COMPONENT
+// ============================================================================
 
 export function DeliveryReceivePage() {
   const { token } = useParams<{ token: string }>()
+
+  // Core state
   const [delivery, setDelivery] = useState<DeliveryDetail | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [submitted, setSubmitted] = useState(false)
-  
-  // 🚀 Toast Management States (Success & Error variants supported)
+
+  // UI state
   const [showToast, setShowToast] = useState(false)
   const [toastType, setToastType] = useState<"success" | "error">("success")
 
+  // Form state
   const [receiverName, setReceiverName] = useState("")
   const [receiverNotes, setReceiverNotes] = useState("")
   const [lines, setLines] = useState<LineFormState[]>([])
-  const [validationErrors, setValidationErrors] = useState<Record<string, string>>({})
   const [photoFiles, setPhotoFiles] = useState<File[]>([])
   const [photoErrors, setPhotoErrors] = useState<string[]>([])
   const [latitude, setLatitude] = useState<number | null>(null)
   const [longitude, setLongitude] = useState<number | null>(null)
-
-  // 🗑️ State for tracking legacy image deletion keys before final submit
   const [keysToDelete, setKeysToDelete] = useState<string[]>([])
 
-  // PIN Verification States
+  // List UI state
+  const [searchQuery, setSearchQuery] = useState("")
+  const [activeTab, setActiveTab] = useState<"all" | "issues">("all")
+  const [expandedRows, setExpandedRows] = useState<Record<string, boolean>>({})
+
+  // PIN Verification state
   const [isVerified, setIsVerified] = useState(false)
   const [pinInput, setPinInput] = useState("")
   const [verifying, setVerifying] = useState(false)
   const [pinError, setPinError] = useState<string | null>(null)
-
-  // PIN Request States
   const [isSending, setIsSending] = useState(false)
   const [sentToEmail, setSentToEmail] = useState<string | null>(null)
   const [requestError, setRequestError] = useState<string | null>(null)
 
-  // 🚀 Refs to bridge custom UI buttons cleanly to hidden native file element nodes
+  // Modal state
+  const [showVarianceModal, setShowVarianceModal] = useState(false)
+  const [pendingVariances, setPendingVariances] = useState<VarianceSummary[]>()
+
   const cameraInputRef = useRef<HTMLInputElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  // ============================================================================
+  // EFFECTS
+  // ============================================================================
 
   useEffect(() => {
     const fetchDelivery = async () => {
       if (!token) {
-        setError("Invalid delivery token")
+        setError("Invalid secure warehouse token parameter.")
         setLoading(false)
         return
       }
 
       try {
         const res = await fetch(`${API_URL}/api/deliveries/${token}`)
-        if (!res.ok) {
-          throw new Error("Delivery not found")
-        }
+        if (!res.ok) throw new Error("Delivery reference payload not resolved.")
         const data: DeliveryDetail = await res.json()
         setDelivery(data)
 
-        // Initialize form header states
         setReceiverName(data.receiverName || "")
         setReceiverNotes(data.receiverNotes || "")
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to fetch delivery")
+        setError(err instanceof Error ? err.message : "Failed to establish enterprise link.")
       } finally {
         setLoading(false)
       }
@@ -127,26 +151,19 @@ export function DeliveryReceivePage() {
     fetchDelivery()
   }, [token])
 
-  // Check for existing verification in sessionStorage
   useEffect(() => {
     if (token) {
       const verified = sessionStorage.getItem(`verified-${token}`)
-      if (verified === "true") {
-        setIsVerified(true)
-      }
+      if (verified === "true") setIsVerified(true)
     }
   }, [token])
 
-  // Clean up verification when token changes or component unmounts
   useEffect(() => {
     return () => {
-      if (token) {
-        sessionStorage.removeItem(`verified-${token}`)
-      }
+      if (token) sessionStorage.removeItem(`verified-${token}`)
     }
   }, [token])
 
-  // Auto-capture GPS coordinates
   useEffect(() => {
     if ("geolocation" in navigator) {
       navigator.geolocation.getCurrentPosition(
@@ -154,21 +171,18 @@ export function DeliveryReceivePage() {
           setLatitude(position.coords.latitude)
           setLongitude(position.coords.longitude)
         },
-        () => {
-          console.warn("Geolocation not available or permission denied")
-        },
+        () => console.warn("Location tracking permission withheld."),
         { enableHighAccuracy: true, timeout: 5000 }
       )
     }
   }, [])
 
-  // Initialize line values from backend model payload
   useEffect(() => {
     if (delivery && !submitted) {
       setLines(
         delivery.lines.map((line) => ({
           deliveryLineNumber: line.deliveryLineNumber,
-          delivered: line.packQuantityDelivered.toString(),
+          delivered: line.packQuantityDelivered.toString() === "0" ? line.packQuantity.toString() : line.packQuantityDelivered.toString(),
           returned: line.packQuantityReturned.toString(),
           rejected: line.packQuantityRejected.toString(),
           lineComment: line.lineComment || "",
@@ -177,21 +191,134 @@ export function DeliveryReceivePage() {
     }
   }, [delivery, submitted])
 
-  // Auto-dismiss the popup window after 5 seconds to reduce manual interaction load
   useEffect(() => {
     if (showToast) {
-      const timer = setTimeout(() => {
-        setShowToast(false)
-      }, 5000)
+      const timer = setTimeout(() => setShowToast(false), 5000)
       return () => clearTimeout(timer)
     }
   }, [showToast])
 
-  const validateLines = (): boolean => {
-    const errors: Record<string, string> = {}
-    let isValid = true
+  // ============================================================================
+  // COMPUTED VALUES
+  // ============================================================================
 
-    if (!delivery) return false
+  const checkIsIssueLine = (lineState: LineFormState, originalPackQuantity: number) => {
+    const delivered = parseFloat(lineState.delivered) || 0
+    const returned = parseFloat(lineState.returned) || 0
+    const rejected = parseFloat(lineState.rejected) || 0
+    return returned > 0 || rejected > 0 || (delivered + returned + rejected) !== originalPackQuantity || lineState.lineComment.trim() !== ""
+  }
+
+  const filteredLines = useMemo(() => {
+    if (!delivery) return []
+    return delivery.lines.filter((line) => {
+      const lineState = lines.find((l) => l.deliveryLineNumber === line.deliveryLineNumber)
+      const matchesSearch =
+        line.deliveryItemCode.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        line.deliveryItemDescription.toLowerCase().includes(searchQuery.toLowerCase())
+
+      if (!matchesSearch) return false
+      if (activeTab === "issues" && lineState) {
+        return checkIsIssueLine(lineState, line.packQuantity)
+      }
+      return true
+    })
+  }, [delivery, lines, searchQuery, activeTab])
+
+  const issuesCount = useMemo(() => {
+    if (!delivery) return 0
+    return lines.filter(l => {
+      const orig = delivery.lines.find(ol => ol.deliveryLineNumber === l.deliveryLineNumber)
+      return orig ? checkIsIssueLine(l, orig.packQuantity) : false
+    }).length
+  }, [delivery, lines])
+
+  const activePhotosCount = (delivery?.photos?.length || 0) + photoFiles.length - keysToDelete.length
+  const isUploadDisabled = delivery?.invoiced || submitting || activePhotosCount >= 5
+
+  // ============================================================================
+  // HANDLERS
+  // ============================================================================
+
+  const handleReceiveAllClean = () => {
+    if (!delivery) return
+    setLines(
+      delivery.lines.map((line) => ({
+        deliveryLineNumber: line.deliveryLineNumber,
+        delivered: line.packQuantity.toString(),
+        returned: "0",
+        rejected: "0",
+        lineComment: "",
+      }))
+    )
+    setToastType("success")
+    setShowToast(true)
+  }
+
+  const toggleRowExpansion = (lineNumber: string) => {
+    setExpandedRows(prev => ({ ...prev, [lineNumber]: !prev[lineNumber] }))
+  }
+
+  const processFormSubmission = async () => {
+    if (!delivery || !token) return
+    setSubmitting(true)
+    setShowVarianceModal(false)
+
+    try {
+      const formData = new FormData()
+      formData.append("ReceiverName", receiverName || "")
+      if (receiverNotes) formData.append("ReceiverNotes", receiverNotes)
+      if (latitude !== null) formData.append("Latitude", latitude.toString())
+      if (longitude !== null) formData.append("Longitude", longitude.toString())
+
+      photoFiles.forEach((file) => formData.append("NewPhotoFiles", file))
+      keysToDelete.forEach((key, idx) => formData.append(`KeysToDelete[${idx}]`, key))
+
+      delivery.lines.forEach((line, idx) => {
+        const lineState = lines.find((l) => l.deliveryLineNumber === line.deliveryLineNumber)
+        formData.append(`Lines[${idx}].DeliveryLineNumber`, line.deliveryLineNumber)
+        formData.append(`Lines[${idx}].PackQuantityDelivered`, parseFloat(lineState?.delivered || "0").toString())
+        formData.append(`Lines[${idx}].PackQuantityReturned`, parseFloat(lineState?.returned || "0").toString())
+        formData.append(`Lines[${idx}].PackQuantityRejected`, parseFloat(lineState?.rejected || "0").toString())
+        if (lineState?.lineComment) formData.append(`Lines[${idx}].LineComment`, lineState.lineComment)
+      })
+
+      const res = await fetch(`${API_URL}/api/deliveries/${token}`, {
+        method: "PATCH",
+        body: formData,
+      })
+
+      if (!res.ok) throw new Error("Posting operation failed on ERP interface.")
+
+      setDelivery((prev) => {
+        if (!prev) return null
+        const legacy = prev.photos?.filter((p) => !keysToDelete.includes(p.storageKey)) || []
+        const staged = photoFiles.map((f) => ({
+          fileName: f.name,
+          storageKey: f.name,
+          downloadUrl: URL.createObjectURL(f),
+          uploadedAt: new Date().toISOString()
+        }))
+        return { ...prev, photos: [...legacy, ...staged] }
+      })
+
+      setSubmitted(true)
+      setToastType("success")
+      setShowToast(true)
+      setKeysToDelete([])
+      setPhotoFiles([])
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to post physical goods receipt updates.")
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const handleValidationCheck = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!delivery) return
+
+    const variancesList: VarianceSummary[] = []
 
     delivery.lines.forEach((line) => {
       const lineState = lines.find((l) => l.deliveryLineNumber === line.deliveryLineNumber)
@@ -200,146 +327,43 @@ export function DeliveryReceivePage() {
       const delivered = parseFloat(lineState.delivered) || 0
       const returned = parseFloat(lineState.returned) || 0
       const rejected = parseFloat(lineState.rejected) || 0
-      const total = delivered + returned + rejected
+      const totalActual = delivered + returned + rejected
 
-      // 📏 Calculate localized tolerance parameters based on material types
-      const currentUOM = (line.packUOM || "").toUpperCase().trim()
-      const isTolerantMaterial = TOLERANT_UOMS.includes(currentUOM)
-      const allowedTolerance = isTolerantMaterial ? TOLERANCE_PERCENT : 0
-      
-      const maxAllowedQuantity = line.packQuantity * (1 + allowedTolerance)
+      if (Number(totalActual.toFixed(4)) !== Number(line.packQuantity.toFixed(4))) {
+        const rawVariance = totalActual - line.packQuantity
+        const percentCalc = ((rawVariance / line.packQuantity) * 100).toFixed(2)
+        const displayPercent = rawVariance > 0 ? `+${percentCalc}%` : `${percentCalc}%`
 
-      // Precise decimal rounding comparison step to bypass Javascript IEEE float noise
-      // 🔍 DEBUG CONSOLE: Track precision numbers for validation analysis
-      console.log(
-        `[Validation Check] Line: ${line.deliveryLineNumber} | Item: ${line.deliveryItemCode}\n` +
-        `  - Is Tolerant: ${isTolerantMaterial} (${line.packUOM})\n` +
-        `  - Input Total: ${total} -> Rounded: ${Number(total.toFixed(4))}\n` +
-        `  - Max Allowed: ${maxAllowedQuantity} -> Rounded: ${Number(maxAllowedQuantity.toFixed(4))}\n` +
-        `  - Result (Exceeds?): ${Number(total.toFixed(4)) > Number(maxAllowedQuantity.toFixed(4))}`
-      );
-      if (Number(total.toFixed(4)) > Number(maxAllowedQuantity.toFixed(4))) {
-        if (isTolerantMaterial) {
-          errors[line.deliveryLineNumber] = `Total (${total}) exceeds allowable ${TOLERANCE_PERCENT * 100}% variance limit (${maxAllowedQuantity.toFixed(2)} ${line.packUOM})`
-        } else {
-          errors[line.deliveryLineNumber] = `Total (${total}) exceeds absolute item pack limit (${line.packQuantity} ${line.packUOM})`
-        }
-        isValid = false
+        variancesList.push({
+          lineNumber: line.deliveryLineNumber,
+          itemCode: line.deliveryItemCode,
+          description: line.deliveryItemDescription,
+          scheduled: line.packQuantity,
+          actualTotal: totalActual,
+          variancePercent: displayPercent,
+          uom: line.packUOM
+        })
       }
     })
 
-    setValidationErrors(errors)
-
-    // 🚀 Added Error Pop-up Trigger on Validation Over-Quota Exceeded Exceptions
-    if (!isValid) {
-      setToastType("error")
-      setShowToast(true)
-    }
-
-    return isValid
-  }
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-
-    if (!delivery || !token) return
-
-    if (!validateLines()) {
-      return
-    }
-
-    setSubmitting(true)
-
-    try {
-      const formData = new FormData()
-
-      formData.append("ReceiverName", receiverName || "")
-      if (receiverNotes) {
-        formData.append("ReceiverNotes", receiverNotes)
-      }
-      if (latitude !== null) {
-        formData.append("Latitude", latitude.toString())
-      }
-      if (longitude !== null) {
-        formData.append("Longitude", longitude.toString())
-      }
-
-      // 📸 Append fresh uploaded files using the exact key the backend expects
-      photoFiles.forEach((file) => {
-        formData.append("NewPhotoFiles", file);
-      });
-
-      // 🗑️ Append keys to delete for the backend wiping process
-      keysToDelete.forEach((key, index) => {
-        formData.append(`KeysToDelete[${index}]`, key)
-      })
-
-      // Append lines
-      delivery.lines.forEach((line, index) => {
-        const lineState = lines.find((l) => l.deliveryLineNumber === line.deliveryLineNumber)
-        formData.append(`Lines[${index}].DeliveryLineNumber`, line.deliveryLineNumber)
-        formData.append(`Lines[${index}].PackQuantityDelivered`, parseFloat(lineState?.delivered || "0").toString())
-        formData.append(`Lines[${index}].PackQuantityReturned`, parseFloat(lineState?.returned || "0").toString())
-        formData.append(`Lines[${index}].PackQuantityRejected`, parseFloat(lineState?.rejected || "0").toString())
-        if (lineState?.lineComment) {
-          formData.append(`Lines[${index}].LineComment`, lineState.lineComment)
-        }
-      })
-
-      const res = await fetch(`${API_URL}/api/deliveries/${token}`, {
-        method: "PATCH",
-        body: formData,
-      })
-
-      if (!res.ok) {
-        throw new Error("Failed to update delivery")
-      }
-
-      // 🚀 THE INSTANT REFRESH FIX: Map staged uploads to preview states immediately on success!
-      setDelivery((prevDelivery) => {
-        if (!prevDelivery) return null
-
-        // 1. Filter out the wiped images from local memory
-        const remainingLegacyPhotos = prevDelivery.photos?.filter((p) => !keysToDelete.includes(p.storageKey)) || []
-
-        // 2. Map the newly staged files into the identical DeliveryPhoto object signature
-        const newlySavedPhotos = photoFiles.map((file) => ({
-          fileName: file.name,
-          storageKey: file.name, // Temporary key until next refresh fetch
-          downloadUrl: URL.createObjectURL(file), // Keeps the local stream preview alive seamlessly
-          uploadedAt: new Date().toISOString()
-        }))
-
-        return {
-          ...prevDelivery,
-          photos: [...remainingLegacyPhotos, ...newlySavedPhotos] // Combine both maps back together safely
-        }
-      })
-
-      // Reset local submission state queues completely
-      setSubmitted(true)
-      setToastType("success") // Ensure variant state path is correct
-      setShowToast(true) // 🚀 Fire popup window on successful processing action
-      setKeysToDelete([])
-      setPhotoFiles([]) // Safely clears the staged upload block since they're now in part A
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to submit delivery")
-    } finally {
-      setSubmitting(false)
+    if (variancesList.length > 0) {
+      setPendingVariances(variancesList)
+      setShowVarianceModal(true)
+    } else {
+      processFormSubmission()
     }
   }
 
   const handleVerifyPin = async () => {
     if (!token || !pinInput) {
-      setPinError("Please enter a PIN")
+      setPinError("Verification code entry required.")
       return
     }
-
     setVerifying(true)
     setPinError(null)
 
     try {
-      const res = await fetch(API_URL + "/api/deliveries/" + token + "/verify-pin", {
+      const res = await fetch(`${API_URL}/api/deliveries/${token}/verify-pin`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ pin: pinInput }),
@@ -347,16 +371,12 @@ export function DeliveryReceivePage() {
 
       if (res.ok) {
         setIsVerified(true)
-        sessionStorage.setItem("verified-" + token, "true")
-      } else if (res.status === 401) {
-        setPinError("Invalid PIN. Please try again.")
-      } else if (res.status === 404) {
-        setPinError("Delivery record not found.")
+        sessionStorage.setItem(`verified-${token}`, "true")
       } else {
-        setPinError("Verification failed. Please try again.")
+        setPinError(res.status === 401 ? "Incorrect security verification PIN." : "Validation pathway failure.")
       }
     } catch {
-      setPinError("An error occurred during verification. Please try again.")
+      setPinError("Network error matching warehouse secure keys.")
     } finally {
       setVerifying(false)
     }
@@ -364,7 +384,6 @@ export function DeliveryReceivePage() {
 
   const handleRequestPin = async () => {
     if (!token) return
-
     setIsSending(true)
     setRequestError(null)
     setSentToEmail(null)
@@ -375,637 +394,716 @@ export function DeliveryReceivePage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ receiverToken: token }),
       })
-
       const data = await res.json()
-
       if (res.ok && data.success) {
         setSentToEmail(data.sentTo)
       } else {
-        setRequestError(data.message || "Failed to send PIN. Please try again.")
+        setRequestError(data.message || "Unable to dispatch security token request.")
       }
     } catch {
-      setRequestError("An error occurred. Please try again.")
+      setRequestError("Inbound network pathway exception.")
     } finally {
       setIsSending(false)
     }
   }
 
-  const handleLineChange = (
-    deliveryLineNumber: string,
-    field: "delivered" | "returned" | "rejected" | "lineComment",
-    value: string
-  ) => {
-    // 🚀 SANITIZATION ENGAGED: Force-clamp numerical quantities to zero if drops below zero
-    let sanitizedValue = value
+  const handleLineChange = (deliveryLineNumber: string, field: "delivered" | "returned" | "rejected" | "lineComment", value: string) => {
+    let sanitized = value
     if (field !== "lineComment" && value !== "") {
-      const num = parseFloat(value)
-      if (num < 0) {
-        sanitizedValue = "0"
-      }
+      if (parseFloat(value) < 0) sanitized = "0"
     }
-
-    setLines((prev) =>
-      prev.map((line) =>
-        line.deliveryLineNumber === deliveryLineNumber
-          ? { ...line, [field]: sanitizedValue }
-          : line
-      )
-    )
-    if (validationErrors[deliveryLineNumber]) {
-      setValidationErrors((prev) => {
-        const newErrors = { ...prev }
-        delete newErrors[deliveryLineNumber]
-        return newErrors
-      })
-    }
+    setLines((prev) => prev.map((l) => l.deliveryLineNumber === deliveryLineNumber ? { ...l, [field]: sanitized } : l))
   }
 
-  // 🚀 Handles clearing input context if active value is zero
   const handleInputFocus = (deliveryLineNumber: string, field: "delivered" | "returned" | "rejected") => {
-    setLines((prev) =>
-      prev.map((line) => {
-        if (line.deliveryLineNumber === deliveryLineNumber) {
-          const currentValue = line[field]
-          if (parseFloat(currentValue) === 0) {
-            return { ...line, [field]: "" }
-          }
-        }
-        return line
-      })
-    )
+    setLines((prev) => prev.map((l) => l.deliveryLineNumber === deliveryLineNumber && parseFloat(l[field]) === 0 ? { ...l, [field]: "" } : l))
   }
 
-  // 🚀 Restores zero fallback boundaries upon field blurring empty targets
   const handleInputBlur = (deliveryLineNumber: string, field: "delivered" | "returned" | "rejected") => {
-    setLines((prev) =>
-      prev.map((line) => {
-        if (line.deliveryLineNumber === deliveryLineNumber) {
-          if (line[field].trim() === "") {
-            return { ...line, [field]: "0" }
-          }
-        }
-        return line
-      })
-    )
+    setLines((prev) => prev.map((l) => l.deliveryLineNumber === deliveryLineNumber && l[field].trim() === "" ? { ...l, [field]: "0" } : l))
   }
 
   const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || [])
     const errors: string[] = []
-    const validFiles: File[] = []
+    const valid: File[] = []
 
-    files.forEach((file) => {
-      if (!["image/jpeg", "image/jpg", "image/png"].includes(file.type)) {
-        errors.push(file.name + ": Only JPG and PNG files are allowed")
+    files.forEach((f) => {
+      if (!["image/jpeg", "image/jpg", "image/png"].includes(f.type)) {
+        errors.push(`${f.name}: Invalid attachment format (JPEG/PNG only).`)
         return
       }
-      if (file.size > MAX_FILE_SIZE) {
-        errors.push(file.name + ": File size exceeds 5MB limit")
+      if (f.size > MAX_FILE_SIZE) {
+        errors.push(`${f.name}: Image exceeds 5MB memory footprint threshold.`)
         return
       }
-      validFiles.push(file)
+      valid.push(f)
     })
-
     setPhotoErrors(errors)
-    setPhotoFiles((prev) => [...prev, ...validFiles])
+    setPhotoFiles((prev) => [...prev, ...valid])
     e.target.value = ""
   }
 
-  const removePhoto = (index: number) => {
-    setPhotoFiles((prev) => prev.filter((_, i) => i !== index))
-  }
+  const removePhoto = (idx: number) => setPhotoFiles((prev) => prev.filter((_, i) => i !== idx))
+  const formatDate = (ds: string) => new Date(ds).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" })
 
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString)
-    return date.toLocaleDateString("en-US", {
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-    })
-  }
+  // ============================================================================
+  // RENDER STATES
+  // ============================================================================
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-brand-blue/2 flex items-center justify-center p-4">
-        <p className="text-brand-blue/60">Loading delivery information...</p>
+      <div className="min-h-screen bg-white flex items-center justify-center p-4">
+        <div className="text-center space-y-4">
+          <div className="w-12 h-12 rounded-full border-2 border-[#1d2351]/10 border-t-[#1d2351] animate-spin mx-auto" />
+          <p className="text-xs font-mono tracking-widest text-slate-400 uppercase">Loading Delivery Data</p>
+        </div>
       </div>
     )
   }
 
   if (error || !delivery) {
     return (
-      <div className="min-h-screen bg-brand-blue/2 flex items-center justify-center p-4">
-        <Card className="w-full max-w-xl">
-          <CardContent className="py-12 text-center">
-            <p className="text-brand-red font-medium mb-4">{error || "Delivery not found"}</p>
-            <Button onClick={() => window.location.reload()} variant="outline">Retry Engine Link</Button>
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
+        <Card className="w-full max-w-md border-slate-200 shadow-lg bg-white">
+          <CardContent className="py-12 text-center space-y-5">
+            <div className="w-14 h-14 bg-red-50 rounded-full flex items-center justify-center mx-auto">
+              <AlertTriangle className="w-7 h-7 text-red-600" />
+            </div>
+            <div className="space-y-2">
+              <h3 className="text-sm font-bold text-slate-900">Unable to Load Delivery</h3>
+              <p className="text-xs text-slate-500 max-w-[240px] mx-auto">{error || "The delivery reference could not be found or has expired."}</p>
+            </div>
+            <Button onClick={() => window.location.reload()} variant="outline" className="text-xs h-10 px-6">
+              Try Again
+            </Button>
           </CardContent>
         </Card>
       </div>
     )
   }
 
-  // Calculate global total count constraints safely
-  const activePhotosCount = (delivery.photos?.length || 0) + photoFiles.length - keysToDelete.length;
-  const isUploadDisabled = delivery.invoiced || submitting || activePhotosCount >= 5;
+  // ============================================================================
+  // PIN VERIFICATION SCREEN
+  // ============================================================================
 
   if (!isVerified) {
     return (
-      <div className="min-h-screen bg-brand-blue/2 flex items-center justify-center p-4">
-        <Card className="w-full max-w-md border-brand-blue/10 shadow-xl bg-white">
-          <CardHeader className="text-center pb-4">
-            <div className="w-12 h-12 rounded-full bg-brand-blue/5 flex items-center justify-center mx-auto mb-3">
-              <svg className="w-5 h-5 text-brand-blue" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2-0 002-2v-6a2 2-0 00-2-2H6a2 2-0 00-2 2v6a2 2-0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-              </svg>
-            </div>
-            <CardTitle className="text-xl font-bold text-brand-blue tracking-tight">Delivery Verification</CardTitle>
-            <CardDescription className="text-xs text-brand-blue/60 mt-1">
-              Please enter your secure 6-digit company verification PIN to inspect and confirm this incoming shipment.
-            </CardDescription>
-          </CardHeader>
-          
-          <CardContent className="space-y-5">
-            <div className="space-y-2">
-              <Label htmlFor="pin" className="text-xs font-semibold uppercase tracking-wider text-brand-blue/60">Security PIN</Label>
-              <Input
-                id="pin"
-                type="password"
-                inputMode="numeric"
-                maxLength={6}
-                value={pinInput}
-                onChange={(e) => {
-                  setPinInput(e.target.value)
-                  setPinError(null)
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault()
-                    handleVerifyPin()
-                  }
-                }}
-                placeholder="000000"
-                className="text-center text-xl font-mono tracking-[0.5em] pl-[0.5em] h-12 border-brand-blue/10 bg-brand-blue/2 focus:bg-white transition-colors"
-                autoFocus
-              />
-            </div>
-            
-            {pinError && (
-              <p className="text-xs text-brand-red bg-brand-red/5 border border-brand-red/10 px-3 py-2.5 rounded-lg text-center font-medium">
-                {pinError}
-              </p>
-            )}
-            
-            <Button className="w-full h-11 text-sm font-medium transition-all" onClick={handleVerifyPin} disabled={verifying || !pinInput || isSending}>
-              {verifying ? "Verifying Token..." : "Unlock & Access Delivery"}
-            </Button>
+      <div className="min-h-screen bg-slate-50 flex flex-col">
+        {/* Top decorative bar */}
+        <div className="h-1 bg-[#1d2351]" />
 
-            {/* Premium, High-Density Request PIN Fallback Workflow Layout */}
-            <div className="pt-4 border-t border-brand-blue/5">
-              {!sentToEmail ? (
-                <div className="flex flex-col space-y-3">
-                  <p className="text-[11px] leading-relaxed text-brand-blue/50 text-center px-2">
-                    Don't know your security keys? Request an instant out-of-band dispatch to your organization's pre-registered communication channel.
-                  </p>
-                  <Button
-                    variant="outline"
-                    className="w-full h-9 border-brand-blue/10 hover:bg-brand-blue/5 text-xs text-brand-blue/80 font-medium"
-                    onClick={handleRequestPin}
-                    disabled={isSending || verifying}
-                  >
-                    {isSending ? "Processing Request..." : "Request PIN via Registered Email"}
-                  </Button>
-                  {requestError && (
-                    <p className="text-xs text-brand-red text-center font-medium mt-1">{requestError}</p>
+        <div className="flex-1 flex items-center justify-center p-4">
+          <div className="w-full max-w-sm">
+            {/* Logo/Brand area */}
+            <div className="text-center mb-8">
+              <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-[#1d2351] mb-4 shadow-lg shadow-[#1d2351]/20">
+                <Lock className="w-8 h-8 text-white" />
+              </div>
+              <h1 className="text-xl font-bold text-[#1d2351] tracking-tight mb-1">Secure Delivery Access</h1>
+              <p className="text-sm text-slate-500">Enter your security PIN to verify this delivery</p>
+            </div>
+
+            {/* PIN Card */}
+            <Card className="border-slate-200 shadow-xl bg-white">
+              <CardContent className="p-6 space-y-5">
+                <div className="space-y-2">
+                  <Label htmlFor="pin" className="text-xs font-semibold uppercase tracking-wider text-slate-500">Security PIN</Label>
+                  <Input
+                    id="pin"
+                    type="password"
+                    inputMode="numeric"
+                    maxLength={6}
+                    value={pinInput}
+                    onChange={(e) => {
+                      setPinInput(e.target.value.replace(/\D/g, ""))
+                      setPinError(null)
+                    }}
+                    onKeyDown={(e) => { if (e.key === "Enter") handleVerifyPin() }}
+                    placeholder="••••••"
+                    className="text-center text-2xl font-mono tracking-[0.5em] h-14 border-slate-300 bg-slate-50 focus:bg-white focus:border-[#1d2351] focus:ring-1 focus:ring-[#1d2351]"
+                    autoFocus
+                  />
+                </div>
+
+                {pinError && (
+                  <div className="p-3 rounded-lg bg-red-50 border border-red-100 flex items-start gap-2">
+                    <AlertTriangle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
+                    <p className="text-xs text-red-700 font-medium">{pinError}</p>
+                  </div>
+                )}
+
+                <Button
+                  className="w-full h-12 text-sm font-semibold bg-[#1d2351] hover:bg-[#2a3266] text-white shadow-lg shadow-[#1d2351]/20"
+                  onClick={handleVerifyPin}
+                  disabled={verifying || !pinInput || isSending}
+                >
+                  {verifying ? "Verifying..." : "Verify & Continue"}
+                </Button>
+
+                <div className="pt-5 border-t border-slate-100">
+                  {!sentToEmail ? (
+                    <div className="space-y-3">
+                      <p className="text-xs text-slate-500 text-center">Don't have a PIN? Request one to be sent to your email.</p>
+                      <Button
+                        variant="outline"
+                        className="w-full h-10 border-slate-300 text-slate-700 hover:bg-slate-50"
+                        onClick={handleRequestPin}
+                        disabled={isSending || verifying}
+                      >
+                        {isSending ? "Sending..." : "Request PIN via Email"}
+                      </Button>
+                      {requestError && <p className="text-xs text-red-600 text-center font-medium mt-2">{requestError}</p>}
+                    </div>
+                  ) : (
+                    <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-lg text-center space-y-2">
+                      <CheckCircle className="w-6 h-6 text-emerald-600 mx-auto" />
+                      <div>
+                        <p className="text-xs font-semibold text-emerald-900">PIN Sent Successfully</p>
+                        <p className="text-xs text-emerald-700 mt-1">Check your email at:</p>
+                        <p className="text-sm font-mono font-bold text-emerald-800 mt-1">{sentToEmail}</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => { setSentToEmail(null); setRequestError(null) }}
+                        className="text-xs text-emerald-700 hover:text-emerald-900 underline font-medium"
+                      >
+                        Request again
+                      </button>
+                    </div>
                   )}
                 </div>
-              ) : (
-                <div className="p-3.5 bg-emerald-50 border border-emerald-200 rounded-xl text-center animate-in fade-in slide-in-from-bottom-2 duration-200">
-                  <div className="flex items-center justify-center gap-1.5 text-xs text-emerald-800 font-semibold mb-1">
-                    <svg className="w-3.5 h-3.5 text-emerald-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-                    </svg>
-                    Security Pin Dispatched
-                  </div>
-                  <p className="text-[11px] text-emerald-700/80 leading-normal">
-                    The security access key has been successfully transmitted. Please inspect the inbox of:
-                  </p>
-                  <p className="text-sm font-mono font-bold tracking-wide text-emerald-900 mt-2 bg-white/60 py-1.5 border border-emerald-200/50 rounded-lg selection:bg-transparent">
-                    {sentToEmail}
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSentToEmail(null)
-                      setRequestError(null)
-                    }}
-                    className="text-[11px] text-emerald-600 hover:text-emerald-800 underline mt-3 font-medium inline-flex items-center gap-1 transition-colors"
-                  >
-                    Need to resend or check another address?
-                  </button>
-                </div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="py-4 text-center">
+          <p className="text-xs text-slate-400">Enterprise Warehouse Management System</p>
+        </div>
       </div>
     )
   }
 
-  return (
-    <div className="min-h-screen bg-brand-blue/2 py-8 px-4 relative">
-      
-      {/* 🚀 FIXED RUNTIME FLOATING POPUP TOAST (Supports Success and Error Variants) */}
-      {showToast && (
-        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 w-full max-w-sm px-4 animate-in fade-in slide-in-from-top-4 duration-300">
-          <div className={`bg-white border rounded-xl shadow-xl p-4 flex items-start gap-3 ${toastType === "error" ? "border-brand-red/30" : "border-brand-blue/20"}`}>
-            <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${toastType === "error" ? "bg-brand-red/10 text-brand-red" : "bg-brand-blue/10 text-brand-blue"}`}>
-              {toastType === "error" ? (
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                </svg>
-              ) : (
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                </svg>
-              )}
-            </div>
-            <div className="flex-1 space-y-0.5">
-              <h4 className={`text-sm font-semibold ${toastType === "error" ? "text-brand-red" : "text-brand-blue"}`}>
-                {toastType === "error" ? "Validation Error" : "Response Recorded"}
-              </h4>
-              <p className="text-xs text-brand-blue/60">
-                {toastType === "error" ? "Total item quantities exceed allowable delivery volume constraints." : "Your delivery confirmation response has been securely saved."}
-              </p>
-            </div>
-            <button 
-              onClick={() => setShowToast(false)}
-              className="text-brand-blue/40 hover:text-brand-blue/70 transition-colors p-0.5"
-              type="button"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          </div>
-        </div>
-      )}
+  // ============================================================================
+  // MAIN RECEIVING FORM
+  // ============================================================================
 
-      <div className="max-w-xl mx-auto space-y-6">
-        
-        {/* FINANCIAL LOCK BANNER */}
+  return (
+    <div className="min-h-screen bg-slate-50 pb-32 pt-6 px-4">
+      <div className="max-w-2xl mx-auto space-y-5">
+
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-lg font-bold text-[#1d2351] tracking-tight">Goods Receipt</h1>
+            <p className="text-xs text-slate-500 mt-0.5">Verify and document incoming delivery</p>
+          </div>
+          <Badge
+            variant={delivery.invoiced ? "warning" : (delivery.received ? "success" : "info")}
+            className="text-xs font-medium px-3 py-1"
+          >
+            {delivery.invoiced ? "Locked" : (delivery.received ? "Completed" : "Pending")}
+          </Badge>
+        </div>
+
+        {/* Blocked alert */}
         {delivery.invoiced && (
-          <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-center">
-            <p className="text-sm font-semibold text-red-800">
-              ⚠️ This record has already been invoiced and cannot be modified.
-            </p>
+          <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 flex items-start gap-3">
+            <div className="w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center shrink-0">
+              <Lock className="w-4 h-4 text-amber-700" />
+            </div>
+            <div>
+              <h3 className="text-sm font-semibold text-amber-900">Goods Receipt Blocked</h3>
+              <p className="text-xs text-amber-700 mt-0.5">Invoice document has been posted. No further modifications allowed.</p>
+            </div>
           </div>
         )}
 
-        <div className="text-center space-y-2">
-          <h1 className="text-2xl font-semibold text-brand-blue tracking-tight">Delivery Confirmation</h1>
-          <p className="text-sm text-brand-blue/60">Please confirm item counts and fulfillment status</p>
-        </div>
-
-        <Card>
-          <CardHeader>
-            <div className="flex items-start justify-between">
-              <CardTitle className="text-lg font-semibold text-brand-blue tracking-tight">{delivery.deliveryNumber}</CardTitle>
-              <Badge variant={delivery.invoiced ? "default" : (delivery.received ? "default" : "accent")}>
-                {delivery.invoiced ? "Invoiced & Locked" : (delivery.received ? "Received" : "Not Received")}
-              </Badge>
+        {/* Success alert */}
+        {submitted && (
+          <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4 flex items-start gap-3">
+            <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center shrink-0">
+              <CheckCircle className="w-4 h-4 text-emerald-700" />
             </div>
+            <div>
+              <h3 className="text-sm font-semibold text-emerald-900">Receipt Posted Successfully</h3>
+              <p className="text-xs text-emerald-700 mt-0.5">Warehouse inventory registers have been updated.</p>
+            </div>
+          </div>
+        )}
+
+        {/* Delivery Info Card */}
+        <Card className="border-slate-200 shadow-sm bg-white">
+          <CardHeader className="px-4 py-3 border-b border-slate-100">
+            <CardTitle className="text-sm font-semibold text-slate-800">Delivery Details</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="flex justify-between">
-              <span className="text-sm text-brand-blue/60">Delivery Date</span>
-              <span className="text-sm text-brand-blue/80">{formatDate(delivery.deliveryDate)}</span>
+          <CardContent className="p-4">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+              <div className="space-y-1">
+                <p className="text-[10px] font-medium uppercase tracking-wider text-slate-400">Delivery Number</p>
+                <p className="text-sm font-semibold text-[#1d2351] font-mono">{delivery.deliveryNumber}</p>
+              </div>
+              <div className="space-y-1">
+                <p className="text-[10px] font-medium uppercase tracking-wider text-slate-400">Customer PO</p>
+                <p className="text-sm font-semibold text-slate-700 font-mono">{delivery.customerPONumber || "—"}</p>
+              </div>
+              <div className="space-y-1">
+                <p className="text-[10px] font-medium uppercase tracking-wider text-slate-400">Delivery Date</p>
+                <p className="text-sm font-medium text-slate-600">{formatDate(delivery.deliveryDate)}</p>
+              </div>
+              <div className="space-y-1">
+                <p className="text-[10px] font-medium uppercase tracking-wider text-slate-400">Items</p>
+                <p className="text-sm font-semibold text-slate-700">{delivery.lines.length} line items</p>
+              </div>
             </div>
             {delivery.deliveryRemarks && (
-              <div className="flex justify-between">
-                <span className="text-sm text-brand-blue/60">Remarks</span>
-                <span className="text-sm text-brand-blue/80 text-right max-w-[60%]">{delivery.deliveryRemarks}</span>
+              <div className="mt-4 pt-4 border-t border-slate-100">
+                <p className="text-[10px] font-medium uppercase tracking-wider text-slate-400 mb-1">Shipping Notes</p>
+                <p className="text-xs text-slate-600">{delivery.deliveryRemarks}</p>
               </div>
             )}
           </CardContent>
         </Card>
 
-        {submitted && (
-          <Card className="border-brand-blue/20 bg-brand-blue/5">
-            <CardContent className="py-6 text-center">
-              <div className="w-12 h-12 rounded-full bg-brand-blue/10 flex items-center justify-center mx-auto mb-3">
-                <svg className="w-6 h-6 text-brand-blue" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                </svg>
+        {/* Quick Actions */}
+        {!delivery.invoiced && !submitted && (
+          <div className="bg-[#1d2351]/5 border border-[#1d2351]/10 rounded-lg p-4 flex items-center justify-between gap-4">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-lg bg-[#1d2351]/10 flex items-center justify-center shrink-0">
+                <CheckCircle className="w-5 h-5 text-[#1d2351]" />
               </div>
-              <p className="text-sm font-medium text-brand-blue">Delivery Updates Applied</p>
-              <p className="text-xs text-brand-blue/60 mt-1">Changes committed into system database entries</p>
-            </CardContent>
-          </Card>
+              <div>
+                <h3 className="text-sm font-semibold text-[#1d2351]">Full Receipt</h3>
+                <p className="text-xs text-slate-600 mt-0.5">All items received without discrepancies</p>
+              </div>
+            </div>
+            <Button
+              type="button"
+              size="sm"
+              className="bg-[#1d2351] hover:bg-[#2a3266] text-white shadow-sm"
+              onClick={handleReceiveAllClean}
+            >
+              Apply to All
+            </Button>
+          </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-6">
-          
-          {/* DELIVERY LINES CONFIG MATRIX */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base font-semibold text-brand-blue tracking-tight">Delivery Items</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {delivery.lines.map((line) => {
-                const lineState = lines.find((l) => l.deliveryLineNumber === line.deliveryLineNumber)
-                const lineError = validationErrors[line.deliveryLineNumber]
-                
-                // 📏 Real-time visual feedback for allowed material tolerance bounds
-                const currentUOM = (line.packUOM || "").toUpperCase().trim()
-                const isTolerantMaterial = TOLERANT_UOMS.includes(currentUOM)
-                const displayMax = isTolerantMaterial ? line.packQuantity * (1 + TOLERANCE_PERCENT) : line.packQuantity
+        <form id="delivery-form" onSubmit={handleValidationCheck} className="space-y-5">
 
-                return (
-                  <div key={line.deliveryLineNumber} className="space-y-3 pb-4 border-b border-brand-blue/5 last:border-0 last:pb-0">
-                    <div>
-                      <div className="flex justify-between items-start">
-                        <p className="text-sm font-medium text-brand-blue">{line.deliveryItemCode}</p>
-                        {isTolerantMaterial && (
-                          <span className="text-[10px] bg-amber-50 text-amber-700 border border-amber-200 px-1.5 py-0.5 rounded font-medium">
-                            +{TOLERANCE_PERCENT * 100}% Allowance Allowed
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-xs text-brand-blue/70 mt-0.5">{line.deliveryItemDescription}</p>
-                      <p className="text-xs text-brand-blue/50 mt-1">
-                        Order Target: {line.packQuantity} {line.packUOM} 
-                        {isTolerantMaterial && ` (Max Cap: ${displayMax.toFixed(2)} ${line.packUOM})`}
-                      </p>
+          {/* Items List */}
+          <Card className="border-slate-200 shadow-sm bg-white overflow-hidden">
+            {/* Card Header with Search & Tabs */}
+            <div className="p-4 border-b border-slate-100 space-y-4">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-sm font-semibold text-slate-800">Line Items</CardTitle>
+                <span className="text-xs text-slate-500">{filteredLines.length} of {delivery.lines.length}</span>
+              </div>
+
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                <Input
+                  type="text"
+                  placeholder="Search items..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-10 h-10 text-sm border-slate-300 focus:border-[#1d2351] focus:ring-[#1d2351]"
+                />
+              </div>
+
+              <div className="flex border-b border-slate-200">
+                <button
+                  type="button"
+                  onClick={() => setActiveTab("all")}
+                  className={`px-4 py-2 text-xs font-medium border-b-2 transition-colors ${activeTab === "all"
+                    ? "border-[#1d2351] text-[#1d2351]"
+                    : "border-transparent text-slate-500 hover:text-slate-700"
+                    }`}
+                >
+                  All Items ({delivery.lines.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab("issues")}
+                  className={`px-4 py-2 text-xs font-medium border-b-2 transition-colors ${activeTab === "issues"
+                    ? "border-red-500 text-red-600"
+                    : "border-transparent text-slate-500 hover:text-slate-700"
+                    }`}
+                >
+                  Discrepancies {issuesCount > 0 && `(${issuesCount})`}
+                </button>
+              </div>
+            </div>
+
+            {/* Items List */}
+            <div className="divide-y divide-slate-100 max-h-[400px] overflow-y-auto">
+              {filteredLines.length === 0 ? (
+                <div className="p-8 text-center">
+                  <Package className="w-10 h-10 text-slate-300 mx-auto mb-2" />
+                  <p className="text-sm text-slate-500">No items found</p>
+                </div>
+              ) : (
+                filteredLines.map((line) => {
+                  const lineState = lines.find((l) => l.deliveryLineNumber === line.deliveryLineNumber)
+                  const isExpanded = !!expandedRows[line.deliveryLineNumber]
+                  const isModified = lineState ? checkIsIssueLine(lineState, line.packQuantity) : false
+                  const actualTotal = lineState
+                    ? parseFloat(lineState.delivered) + parseFloat(lineState.returned) + parseFloat(lineState.rejected)
+                    : line.packQuantity
+
+                  return (
+                    <div key={line.deliveryLineNumber} className={isModified ? "bg-red-50/30" : ""}>
+                      <button
+                        type="button"
+                        onClick={() => toggleRowExpansion(line.deliveryLineNumber)}
+                        className="w-full p-4 flex items-center gap-4 hover:bg-slate-50 transition-colors text-left"
+                      >
+                        <div className="w-10 h-10 rounded-lg bg-slate-100 flex items-center justify-center shrink-0">
+                          <Package className="w-5 h-5 text-slate-500" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-0.5">
+                            <span className="text-sm font-medium text-slate-900 truncate">{line.deliveryItemDescription}</span>
+                            {isModified && (
+                              <Badge className="bg-red-100 text-red-700 border-none text-[10px] px-1.5 h-5 font-semibold">
+                                Modified
+                              </Badge>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-3 text-xs text-slate-500">
+                            <span className="font-mono">{line.deliveryItemCode}</span>
+                            <span>•</span>
+                            <span>Scheduled: <strong className="text-slate-700">{line.packQuantity} {line.packUOM}</strong></span>
+                            {isModified && (
+                              <>
+                                <span>•</span>
+                                <span className={isModified ? "text-red-600 font-medium" : ""}>
+                                  Actual: <strong>{actualTotal} {line.packUOM}</strong>
+                                </span>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                        <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center shrink-0">
+                          {isExpanded ? <ChevronUp className="w-4 h-4 text-slate-600" /> : <ChevronDown className="w-4 h-4 text-slate-600" />}
+                        </div>
+                      </button>
+
+                      {isExpanded && (
+                        <div className="px-4 pb-4 pt-2 bg-slate-50/50 border-t border-slate-100 animate-in slide-in-from-top-1">
+                          <div className="grid grid-cols-3 gap-3 sm:gap-4">
+                            <div className="space-y-1.5">
+                              <Label className="text-xs font-medium text-slate-600">Delivered</Label>
+                              <Input
+                                type="number"
+                                step="0.01"
+                                min="0"
+                                value={lineState?.delivered ?? "0"}
+                                onChange={(e) => handleLineChange(line.deliveryLineNumber, "delivered", e.target.value)}
+                                onFocus={() => handleInputFocus(line.deliveryLineNumber, "delivered")}
+                                onBlur={() => handleInputBlur(line.deliveryLineNumber, "delivered")}
+                                disabled={delivery.invoiced || submitted || submitting}
+                                className="h-10 text-sm border-slate-300 focus:border-[#1d2351] focus:ring-[#1d2351]"
+                              />
+                            </div>
+                            <div className="space-y-1.5">
+                              <Label className="text-xs font-medium text-slate-600">Returned</Label>
+                              <Input
+                                type="number"
+                                step="0.01"
+                                min="0"
+                                value={lineState?.returned ?? "0"}
+                                onChange={(e) => handleLineChange(line.deliveryLineNumber, "returned", e.target.value)}
+                                onFocus={() => handleInputFocus(line.deliveryLineNumber, "returned")}
+                                onBlur={() => handleInputBlur(line.deliveryLineNumber, "returned")}
+                                disabled={delivery.invoiced || submitted || submitting}
+                                className="h-10 text-sm border-slate-300 focus:border-[#1d2351] focus:ring-[#1d2351]"
+                              />
+                            </div>
+                            <div className="space-y-1.5">
+                              <Label className="text-xs font-medium text-slate-600">Damaged</Label>
+                              <Input
+                                type="number"
+                                step="0.01"
+                                min="0"
+                                value={lineState?.rejected ?? "0"}
+                                onChange={(e) => handleLineChange(line.deliveryLineNumber, "rejected", e.target.value)}
+                                onFocus={() => handleInputFocus(line.deliveryLineNumber, "rejected")}
+                                onBlur={() => handleInputBlur(line.deliveryLineNumber, "rejected")}
+                                disabled={delivery.invoiced || submitted || submitting}
+                                className="h-10 text-sm border-slate-300 focus:border-[#1d2351] focus:ring-[#1d2351]"
+                              />
+                            </div>
+                          </div>
+                          <div className="mt-3 space-y-1.5">
+                            <Label className="text-xs font-medium text-slate-600">Notes</Label>
+                            <Input
+                              type="text"
+                              value={lineState?.lineComment || ""}
+                              onChange={(e) => handleLineChange(line.deliveryLineNumber, "lineComment", e.target.value)}
+                              disabled={delivery.invoiced || submitted || submitting}
+                              placeholder="Add any notes about this item..."
+                              className="h-10 text-sm border-slate-300 focus:border-[#1d2351] focus:ring-[#1d2351]"
+                            />
+                          </div>
+                        </div>
+                      )}
                     </div>
-
-                    <div className="grid grid-cols-3 gap-3">
-                      <div className="space-y-1">
-                        <Label className="text-xs text-brand-blue/60">Delivered</Label>
-                        <Input
-                          type="number"
-                          step="0.01"
-                          min="0"
-                          onKeyDown={(e) => {
-                            if (e.key === "-") e.preventDefault()
-                          }}
-                          value={lineState?.delivered ?? ""}
-                          onChange={(e) => handleLineChange(line.deliveryLineNumber, "delivered", e.target.value)}
-                          onFocus={() => handleInputFocus(line.deliveryLineNumber, "delivered")}
-                          onBlur={() => handleInputBlur(line.deliveryLineNumber, "delivered")}
-                          disabled={delivery.invoiced || submitted || submitting}
-                          className="h-9"
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <Label className="text-xs text-brand-blue/60">Returned</Label>
-                        <Input
-                          type="number"
-                          step="0.01"
-                          min="0"
-                          onKeyDown={(e) => {
-                            if (e.key === "-") e.preventDefault()
-                          }}
-                          value={lineState?.returned ?? ""}
-                          onChange={(e) => handleLineChange(line.deliveryLineNumber, "returned", e.target.value)}
-                          onFocus={() => handleInputFocus(line.deliveryLineNumber, "returned")}
-                          onBlur={() => handleInputBlur(line.deliveryLineNumber, "returned")}
-                          disabled={delivery.invoiced || submitted || submitting}
-                          className="h-9"
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <Label className="text-xs text-brand-blue/60">Rejected</Label>
-                        <Input
-                          type="number"
-                          step="0.01"
-                          min="0"
-                          onKeyDown={(e) => {
-                            if (e.key === "-") e.preventDefault()
-                          }}
-                          value={lineState?.rejected ?? ""}
-                          onChange={(e) => handleLineChange(line.deliveryLineNumber, "rejected", e.target.value)}
-                          onFocus={() => handleInputFocus(line.deliveryLineNumber, "rejected")}
-                          onBlur={() => handleInputBlur(line.deliveryLineNumber, "rejected")}
-                          disabled={delivery.invoiced || submitted || submitting}
-                          className="h-9"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="space-y-1">
-                      <Label className="text-xs text-brand-blue/60">Remarks (Optional)</Label>
-                      <Input
-                        type="text"
-                        value={lineState?.lineComment || ""}
-                        onChange={(e) => handleLineChange(line.deliveryLineNumber, "lineComment", e.target.value)}
-                        disabled={delivery.invoiced || submitted || submitting}
-                        placeholder="Item discrepancy comments"
-                        className="h-9"
-                      />
-                    </div>
-
-                    {lineError && <p className="text-xs text-brand-red mt-1 font-medium">{lineError}</p>}
-                  </div>
-                )
-              })}
-            </CardContent>
+                  )
+                })
+              )}
+            </div>
           </Card>
 
-          {/* SIGNATURE/RECEIVER INFO METADATA */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base font-semibold text-brand-blue tracking-tight">Receiver Information</CardTitle>
+          {/* Receiver Info */}
+          <Card className="border-slate-200 shadow-sm bg-white">
+            <CardHeader className="px-4 py-3 border-b border-slate-100">
+              <CardTitle className="text-sm font-semibold text-slate-800 flex items-center gap-2">
+                <FileText className="w-4 h-4 text-slate-500" />
+                Receiver Information
+              </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-1">
-                <Label htmlFor="receiverName" className="text-sm text-brand-blue/70">Receiver Name *</Label>
+            <CardContent className="p-4 space-y-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="receiverName" className="text-xs font-medium text-slate-600">Receiver Name <span className="text-red-500">*</span></Label>
                 <Input
                   id="receiverName"
                   value={receiverName}
                   onChange={(e) => setReceiverName(e.target.value)}
                   disabled={delivery.invoiced || submitted || submitting}
-                  placeholder="Enter recipient identity signature"
+                  placeholder="Enter your full name"
+                  className="h-10 text-sm border-slate-300 focus:border-[#1d2351] focus:ring-[#1d2351]"
                   required
                 />
               </div>
-              <div className="space-y-1">
-                <Label htmlFor="receiverNotes" className="text-sm text-brand-blue/70">Notes (Optional)</Label>
+              <div className="space-y-1.5">
+                <Label htmlFor="receiverNotes" className="text-xs font-medium text-slate-600">Additional Notes</Label>
                 <Input
                   id="receiverNotes"
                   value={receiverNotes}
                   onChange={(e) => setReceiverNotes(e.target.value)}
                   disabled={delivery.invoiced || submitted || submitting}
-                  placeholder="General operational operational remarks"
+                  placeholder="Any additional delivery notes..."
+                  className="h-10 text-sm border-slate-300 focus:border-[#1d2351] focus:ring-[#1d2351]"
                 />
               </div>
             </CardContent>
           </Card>
 
-          {/* DYNAMIC HYBRID ATTACHMENTS VIEW GRID */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base font-semibold text-brand-blue tracking-tight">Proof Images Asset Portal</CardTitle>
-              <CardDescription className="text-xs text-brand-blue/60">Manage existing server assets or upload new images under 5MB limit.</CardDescription>
+          {/* Photo Upload */}
+          <Card className="border-slate-200 shadow-sm bg-white">
+            <CardHeader className="px-4 py-3 border-b border-slate-100">
+              <CardTitle className="text-sm font-semibold text-slate-800 flex items-center gap-2">
+                <Camera className="w-4 h-4 text-slate-500" />
+                Delivery Photos
+              </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4">
-              
-              {/* 🚀 PREMIUM HIGH-DENSITY DUAL ACTION WRAPPER FRAME */}
-              <div className="space-y-2">
-                <Label className="text-xs font-semibold uppercase tracking-wider text-brand-blue/60">Add Evidence Documentation</Label>
-                
-                {/* Visual Action Grid Layout */}
-                <div className="grid grid-cols-2 gap-3">
-                  
-                  {/* CHANNEL 1: NATIVE REAR-FACING CAMERA SNAP */}
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => cameraInputRef.current?.click()}
-                    disabled={isUploadDisabled}
-                    className="w-full flex items-center justify-center gap-2 h-11 text-sm border-brand-blue/10 bg-white hover:bg-brand-blue/5 transition-all shadow-sm"
-                  >
-                    <Camera className="w-4 h-4 text-brand-blue/70 shrink-0" />
-                    <span>Take Photo</span>
-                  </Button>
-
-                  {/* CHANNEL 2: MULTI-FILE SELECT GALLERY EXPLORER */}
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => fileInputRef.current?.click()}
-                    disabled={isUploadDisabled}
-                    className="w-full flex items-center justify-center gap-2 h-11 text-sm border-brand-blue/10 bg-white hover:bg-brand-blue/5 transition-all shadow-sm"
-                  >
-                    <Upload className="w-4 h-4 text-brand-blue/70 shrink-0" />
-                    <span>Upload Files</span>
-                  </Button>
-                </div>
-
-                {/* HIDDEN BACKGROUND INPUT NODES */}
-                <input
-                  type="file"
-                  ref={cameraInputRef}
-                  accept="image/jpeg,image/png"
-                  capture="environment"
-                  onChange={handlePhotoUpload}
+            <CardContent className="p-4 space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => cameraInputRef.current?.click()}
                   disabled={isUploadDisabled}
-                  className="hidden"
-                />
-
-                <input
-                  type="file"
-                  ref={fileInputRef}
-                  accept="image/jpeg,image/png"
-                  multiple
-                  onChange={handlePhotoUpload}
+                  className="h-11 border-slate-300 text-slate-700 hover:bg-slate-50"
+                >
+                  <Camera className="w-4 h-4 mr-2" />
+                  Take Photo
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => fileInputRef.current?.click()}
                   disabled={isUploadDisabled}
-                  className="hidden"
-                />
-
-                <div className="flex items-center justify-between pt-1">
-                  <p className="text-[11px] text-brand-blue/50">
-                    Total Active Visuals: <span className="font-semibold text-brand-blue">{activePhotosCount}</span> / 5 Max
-                  </p>
-                  {activePhotosCount >= 5 && (
-                    <span className="text-[10px] text-amber-600 font-medium">Upload limit quota reached</span>
-                  )}
-                </div>
+                  className="h-11 border-slate-300 text-slate-700 hover:bg-slate-50"
+                >
+                  <Upload className="w-4 h-4 mr-2" />
+                  Upload Files
+                </Button>
               </div>
 
-              {photoErrors.map((pErr, pIdx) => (
-                <p key={pIdx} className="text-xs text-brand-red bg-brand-red/5 border border-brand-red/10 px-3 py-1.5 rounded-lg font-medium">{pErr}</p>
+              <input
+                type="file"
+                ref={cameraInputRef}
+                accept="image/jpeg,image/png"
+                capture="environment"
+                onChange={handlePhotoUpload}
+                disabled={isUploadDisabled}
+                className="hidden"
+              />
+              <input
+                type="file"
+                ref={fileInputRef}
+                accept="image/jpeg,image/png"
+                multiple
+                onChange={handlePhotoUpload}
+                disabled={isUploadDisabled}
+                className="hidden"
+              />
+
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-slate-500">{activePhotosCount} / 5 photos</span>
+                {activePhotosCount >= 5 && <span className="text-red-600 font-medium">Maximum reached</span>}
+              </div>
+
+              {photoErrors.map((pErr, idx) => (
+                <p key={idx} className="text-xs text-red-600 bg-red-50 p-2.5 rounded border border-red-100">{pErr}</p>
               ))}
 
-              {/* UNIFIED RENDER CORE */}
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 pt-2">
-                
-                {/* PART A: Server Trace Photos with State-Driven Deletion Toggles */}
-                {delivery.photos?.map((photo) => {
-                  const isMarkedForDeletion = keysToDelete.includes(photo.storageKey);
-
+              <div className="grid grid-cols-3 sm:grid-cols-5 gap-3">
+                {delivery.photos?.map((p) => {
+                  const marked = keysToDelete.includes(p.storageKey)
                   return (
-                    <div key={photo.storageKey} className="relative group rounded-lg overflow-hidden border border-brand-blue/10 shadow-sm">
-                      <div className={`aspect-square bg-brand-blue/5 transition-all duration-200 ${isMarkedForDeletion ? "opacity-30 mix-blend-luminosity scale-95" : ""}`}>
-                        <img src={photo.downloadUrl} alt={photo.fileName} className="w-full h-full object-cover" />
-                      </div>
-                      
+                    <div key={p.storageKey} className="relative aspect-square rounded-lg overflow-hidden border border-slate-200 bg-slate-100 group">
+                      <img src={p.downloadUrl} alt={p.fileName} className={`w-full h-full object-cover transition-all ${marked ? "opacity-30" : ""}`} />
                       {!delivery.invoiced && !submitted && (
                         <button
                           type="button"
-                          onClick={() => {
-                            setKeysToDelete(prev => 
-                              prev.includes(photo.storageKey)
-                                ? prev.filter(k => k !== photo.storageKey)
-                                : [...prev, photo.storageKey]
-                            );
-                          }}
+                          onClick={() => setKeysToDelete(prev => prev.includes(p.storageKey) ? prev.filter(k => k !== p.storageKey) : [...prev, p.storageKey])}
                           disabled={submitting}
-                          className={`absolute top-1.5 right-1.5 rounded-md px-2 py-1 text-[11px] font-semibold shadow-sm transition-all flex items-center gap-1 backdrop-blur-sm ${
-                            isMarkedForDeletion 
-                              ? "bg-brand-blue text-white opacity-100" 
-                              : "bg-red-600 text-white opacity-0 group-hover:opacity-100 hover:bg-red-700"
-                          }`}
+                          className={`absolute inset-0 flex items-center justify-center text-xs font-semibold uppercase transition-all ${marked
+                            ? "bg-slate-900/80 text-white"
+                            : "bg-red-600/0 text-white opacity-0 group-hover:opacity-100 group-hover:bg-red-600/80"
+                            }`}
                         >
-                          {isMarkedForDeletion ? (
-                            <>
-                              <RotateCcw className="w-3 h-3" />
-                              <span>Keep</span>
-                            </>
-                          ) : (
-                            <>
-                              <Trash2 className="w-3 h-3" />
-                              <span>Wipe</span>
-                            </>
-                          )}
+                          {marked ? "Undo" : "Remove"}
                         </button>
                       )}
-                      
-                      <p className="text-[10px] text-brand-blue/60 px-1.5 py-1 truncate bg-white/95 absolute bottom-0 w-full flex justify-between items-center border-t border-brand-blue/5">
-                        <span className="truncate max-w-[65%] font-medium">{photo.fileName}</span>
-                        <span className={`text-[9px] font-bold px-1 py-0.5 rounded uppercase tracking-wide shrink-0 ml-1 ${
-                          isMarkedForDeletion ? "bg-red-100 text-red-700 animate-pulse" : "bg-brand-blue/5 text-brand-blue/60"
-                        }`}>
-                          {isMarkedForDeletion ? "DELETING" : "Legacy"}
-                        </span>
-                      </p>
                     </div>
-                  );
+                  )
                 })}
-
-                {/* PART B: Staged Client File Previews Local Streams */}
                 {photoFiles.map((file, idx) => (
-                  <div key={`staged-${idx}`} className="relative group rounded-lg overflow-hidden border border-amber-300 bg-amber-50/5 shadow-sm animate-in zoom-in-95 duration-150">
-                    <div className="aspect-square">
-                      <img src={URL.createObjectURL(file)} alt={file.name} className="w-full h-full object-cover" />
-                    </div>
+                  <div key={`staged-${idx}`} className="relative aspect-square rounded-lg overflow-hidden border border-blue-200 bg-blue-50">
+                    <img src={URL.createObjectURL(file)} alt={file.name} className="w-full h-full object-cover" />
                     <button
                       type="button"
                       onClick={() => removePhoto(idx)}
                       disabled={submitting}
-                      className="absolute top-1.5 right-1.5 bg-red-600 hover:bg-red-700 text-white rounded-md p-1.5 text-xs shadow-md backdrop-blur-sm transition-colors"
+                      className="absolute top-1.5 right-1.5 w-6 h-6 rounded-md bg-red-600 text-white flex items-center justify-center hover:bg-red-700 transition-colors"
                     >
-                      <Trash2 className="w-3 h-3" />
+                      <Trash2 className="w-3.5 h-3.5" />
                     </button>
-                    <p className="text-[10px] text-amber-900 font-bold px-1.5 py-1 truncate bg-amber-50 absolute bottom-0 w-full flex justify-between items-center border-t border-amber-200">
-                      <span className="truncate max-w-[65%] font-medium">{file.name}</span>
-                      <span className="text-[9px] font-extrabold text-amber-700 shrink-0 ml-1 uppercase tracking-wider bg-amber-200/60 px-1 py-0.5 rounded">Staged</span>
-                    </p>
                   </div>
                 ))}
               </div>
             </CardContent>
           </Card>
 
-          {/* DYNAMIC EXECUTION TOGGLE GATE */}
-          {!submitted && (
-            <Button type="submit" className="w-full" disabled={delivery.invoiced || submitting}>
-              {submitting ? "Processing Operations..." : "Save Confirmation Updates"}
-            </Button>
-          )}
-
         </form>
       </div>
+
+      {/* Sticky Submit Button */}
+      {!submitted && (
+        <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 p-4 shadow-[0_-4px_16px_rgba(0,0,0,0.06)] z-50">
+          <div className="max-w-2xl mx-auto flex items-center gap-3">
+            {latitude && longitude && (
+              <div className="flex items-center gap-1.5 text-xs text-slate-500 hidden sm:flex">
+                <MapPin className="w-3.5 h-3.5" />
+                <span className="font-mono">{latitude.toFixed(4)}, {longitude.toFixed(4)}</span>
+              </div>
+            )}
+            <Button
+              type="submit"
+              form="delivery-form"
+              onClick={(e) => {
+                const form = document.querySelector('form')
+                if (form) {
+                  form.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }))
+                }
+                e.preventDefault()
+              }}
+              className="flex-1 h-12 text-sm font-semibold bg-[#1d2351] hover:bg-[#2a3266] text-white shadow-lg shadow-[#1d2351]/20"
+              disabled={delivery.invoiced || submitting || !receiverName.trim()}
+            >
+              {submitting ? "Posting..." : "Post Goods Receipt"}
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Toast Notification */}
+      {showToast && (
+        <div className="fixed top-4 right-4 z-50 animate-in slide-in-from-top-4 fade-in duration-300">
+          <div className={`bg-white border rounded-lg shadow-xl p-4 flex items-start gap-3 min-w-[300px] ${toastType === "error" ? "border-red-200" : "border-emerald-200"}`}>
+            <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${toastType === "error" ? "bg-red-100" : "bg-emerald-100"}`}>
+              {toastType === "error" ? <AlertTriangle className="w-4 h-4 text-red-600" /> : <CheckCircle className="w-4 h-4 text-emerald-600" />}
+            </div>
+            <div className="flex-1">
+              <h4 className="text-sm font-semibold text-slate-900">
+                {toastType === "error" ? "Action Required" : "Success"}
+              </h4>
+              <p className="text-xs text-slate-500 mt-0.5">
+                {toastType === "error" ? "Please correct the highlighted issues." : "Your changes have been saved."}
+              </p>
+            </div>
+            <button
+              onClick={() => setShowToast(false)}
+              className="text-slate-400 hover:text-slate-600 shrink-0"
+            >
+              ×
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Variance Modal */}
+      {showVarianceModal && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <Card className="w-full max-w-lg shadow-2xl bg-white">
+            <CardHeader className="p-4 border-b border-slate-100 flex items-start gap-3">
+              <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center shrink-0">
+                <AlertTriangle className="w-5 h-5 text-amber-700" />
+              </div>
+              <div className="space-y-0.5">
+                <CardTitle className="text-base font-semibold text-slate-900">Quantity Discrepancies</CardTitle>
+                <p className="text-xs text-slate-500">The following items have quantity mismatches</p>
+              </div>
+            </CardHeader>
+            <CardContent className="p-4 space-y-4">
+              <div className="max-h-[200px] overflow-y-auto divide-y divide-slate-100">
+                {pendingVariances?.map((v) => (
+                  <div key={v.lineNumber} className="py-3 flex items-start gap-3">
+                    <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center shrink-0">
+                      <Package className="w-4 h-4 text-slate-500" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-slate-900 truncate">{v.description}</p>
+                      <p className="text-xs text-slate-500 mt-0.5">{v.itemCode}</p>
+                      <div className="flex items-center gap-3 mt-1.5 text-xs">
+                        <span className="text-slate-600">Scheduled: <strong>{v.scheduled}</strong></span>
+                        <span className="text-slate-400">|</span>
+                        <span className="text-slate-600">Actual: <strong>{v.actualTotal}</strong></span>
+                        <span className={`ml-auto font-bold ${v.variancePercent.startsWith('+') ? 'text-green-600' : 'text-red-600'}`}>
+                          {v.variancePercent}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="flex gap-3 pt-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="flex-1 h-10 border-slate-300 text-slate-700 hover:bg-slate-50"
+                  onClick={() => setShowVarianceModal(false)}
+                >
+                  Review & Edit
+                </Button>
+                <Button
+                  type="button"
+                  className="flex-1 h-10 bg-[#1d2351] hover:bg-[#2a3266] text-white"
+                  onClick={processFormSubmission}
+                >
+                  Confirm & Post
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
     </div>
   )
 }

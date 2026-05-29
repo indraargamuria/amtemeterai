@@ -6,7 +6,8 @@
       "Bash(npm run build:*)",
       "Bash(npm run dev)",
       "Bash(dotnet ef:*)",
-      "Bash(dotnet build:*)"
+      "Bash(dotnet build:*)",
+      "mcp__ide__getDiagnostics"
     ]
   }
 }
