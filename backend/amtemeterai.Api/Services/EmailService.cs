@@ -46,13 +46,13 @@ namespace amtemeterai.Api.Services
             // 🔒 RECIPIENT ROUTING ENGINE (TEMPORARY HARDCODE GUARD)
             // ====================================================================
             // [STAGING MODE ACTIVE]: Direct delivery targets explicitly defined
-            string targetToEmail = "arga@opexcg.com";
+            string targetToEmail = "syarif@opexcg.com";
             
             // 🚀 Updated: Collection engine to cleanly route multiple transparent visibility copies
             string[] targetCcEmails = new[] 
             { 
-                // "arga@opexcg.com", 
-                // "hari@opexcg.com" // You can append additional testing emails here
+                "arga@opexcg.com", 
+                "hari@opexcg.com" // You can append additional testing emails here
             };
 
             /* // TODO: UNCOMMENT THIS BLOCK TO ACTIVATE DYNAMIC PRODUCTION SALESPERSON ROUTING ON LIVE GO-LIVE
@@ -82,14 +82,14 @@ namespace amtemeterai.Api.Services
             // Assign Staging/Production Target Maps
             message.To.Add(new MailboxAddress("", targetToEmail));
             
-            // 🚀 Iteratively inject all active CC staging routes safely into MailKit address collection
-            foreach (var ccEmail in targetCcEmails)
-            {
-                if (!string.IsNullOrWhiteSpace(ccEmail))
-                {
-                    message.Cc.Add(new MailboxAddress("", ccEmail.Trim()));
-                }
-            }
+            // // 🚀 Iteratively inject all active CC staging routes safely into MailKit address collection
+            // foreach (var ccEmail in targetCcEmails)
+            // {
+            //     if (!string.IsNullOrWhiteSpace(ccEmail))
+            //     {
+            //         message.Cc.Add(new MailboxAddress("", ccEmail.Trim()));
+            //     }
+            // }
 
             message.Subject = subject;
 
@@ -176,12 +176,12 @@ namespace amtemeterai.Api.Services
             // 🔒 RECIPIENT ROUTING ENGINE (TEMPORARY HARDCODE GUARD FOR UAT)
             // ====================================================================
             // [STAGING MODE ACTIVE]: Direct PIN delivery targets explicitly defined
-            string targetToEmail = "arga@opexcg.com";
+            string targetToEmail = "syarif@opexcg.com";
             
             string[] targetCcEmails = new[] 
             { 
-                // "arga@opexcg.com", 
-                // "hari@opexcg.com" 
+                "arga@opexcg.com", 
+                "hari@opexcg.com" 
             };
 
             /* // TODO: UNCOMMENT THIS BLOCK TO ACTIVATE PRODUCTION LIVE CUSTOMER PIN ROUTING
@@ -204,14 +204,14 @@ namespace amtemeterai.Api.Services
             // Assign Staging Target Maps
             message.To.Add(new MailboxAddress("", targetToEmail));
             
-            // Inject all active CC validation loops safely into MailKit collections
-            foreach (var ccEmail in targetCcEmails)
-            {
-                if (!string.IsNullOrWhiteSpace(ccEmail))
-                {
-                    message.Cc.Add(new MailboxAddress("", ccEmail.Trim()));
-                }
-            }
+            // // Inject all active CC validation loops safely into MailKit collections
+            // foreach (var ccEmail in targetCcEmails)
+            // {
+            //     if (!string.IsNullOrWhiteSpace(ccEmail))
+            //     {
+            //         message.Cc.Add(new MailboxAddress("", ccEmail.Trim()));
+            //     }
+            // }
 
             message.Subject = subject;
 
