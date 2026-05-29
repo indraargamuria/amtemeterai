@@ -242,24 +242,30 @@ export function DeliveryReceivePage() {
 
   const handleReceiveAllClean = () => {
     if (!delivery) return
-    setLines(
-      delivery.lines.map((line) => ({
-        deliveryLineNumber: line.deliveryLineNumber,
-        delivered: line.packQuantity.toString(),
-        returned: "0",
-        rejected: "0",
-        lineComment: "",
-      }))
-    )
+
+    // Generate the baseline lines immediately
+    const cleanLines = delivery.lines.map((line) => ({
+      deliveryLineNumber: line.deliveryLineNumber,
+      delivered: line.packQuantity.toString(),
+      returned: "0",
+      rejected: "0",
+      lineComment: "",
+    }))
+
+    // Sync the local component state layout
+    setLines(cleanLines)
     setToastType("success")
     setShowToast(true)
+
+    // Fire the validation layout sequence using the freshly computed lines array
+    handleValidationCheck(null, cleanLines)
   }
 
   const toggleRowExpansion = (lineNumber: string) => {
     setExpandedRows(prev => ({ ...prev, [lineNumber]: !prev[lineNumber] }))
   }
 
-  const processFormSubmission = async () => {
+  const processFormSubmission = async (overrideLines?: LineFormState[]) => {
     if (!delivery || !token) return
     setSubmitting(true)
     setShowVarianceModal(false)
@@ -274,8 +280,11 @@ export function DeliveryReceivePage() {
       photoFiles.forEach((file) => formData.append("NewPhotoFiles", file))
       keysToDelete.forEach((key, idx) => formData.append(`KeysToDelete[${idx}]`, key))
 
+      // Use the specified line array or fall back to application component state
+      const targetLines = overrideLines || lines
+
       delivery.lines.forEach((line, idx) => {
-        const lineState = lines.find((l) => l.deliveryLineNumber === line.deliveryLineNumber)
+        const lineState = targetLines.find((l) => l.deliveryLineNumber === line.deliveryLineNumber)
         formData.append(`Lines[${idx}].DeliveryLineNumber`, line.deliveryLineNumber)
         formData.append(`Lines[${idx}].PackQuantityDelivered`, parseFloat(lineState?.delivered || "0").toString())
         formData.append(`Lines[${idx}].PackQuantityReturned`, parseFloat(lineState?.returned || "0").toString())
@@ -314,14 +323,15 @@ export function DeliveryReceivePage() {
     }
   }
 
-  const handleValidationCheck = (e: React.FormEvent) => {
-    e.preventDefault()
+  const handleValidationCheck = (e: React.FormEvent | null, overrideLines?: LineFormState[]) => {
+    if (e) e.preventDefault()
     if (!delivery) return
 
     const variancesList: VarianceSummary[] = []
+    const targetLines = overrideLines || lines
 
     delivery.lines.forEach((line) => {
-      const lineState = lines.find((l) => l.deliveryLineNumber === line.deliveryLineNumber)
+      const lineState = targetLines.find((l) => l.deliveryLineNumber === line.deliveryLineNumber)
       if (!lineState) return
 
       const delivered = parseFloat(lineState.delivered) || 0
@@ -350,7 +360,7 @@ export function DeliveryReceivePage() {
       setPendingVariances(variancesList)
       setShowVarianceModal(true)
     } else {
-      processFormSubmission()
+      processFormSubmission(targetLines)
     }
   }
 
@@ -684,13 +694,14 @@ export function DeliveryReceivePage() {
               size="sm"
               className="bg-[#1d2351] hover:bg-[#2a3266] text-white shadow-sm"
               onClick={handleReceiveAllClean}
+              disabled={submitting}
             >
-              Apply to All
+              {submitting ? "Posting..." : "Apply to All"}
             </Button>
           </div>
         )}
 
-        <form id="delivery-form" onSubmit={handleValidationCheck} className="space-y-5">
+        <form id="delivery-form" onSubmit={(e) => handleValidationCheck(e)} className="space-y-5">
 
           {/* Items List */}
           <Card className="border-slate-200 shadow-sm bg-white overflow-hidden">
@@ -772,9 +783,7 @@ export function DeliveryReceivePage() {
                             )}
                           </div>
                           <div className="flex items-center gap-3 text-xs text-slate-500">
-                            <span className="font-mono">{line.deliveryItemCode}</span>
-                            <span>•</span>
-                            <span>Scheduled: <strong className="text-slate-700">{line.packQuantity} {line.packUOM}</strong></span>
+                            <span>Delivery: <strong className="text-slate-700">{line.packQuantity} {line.packUOM}</strong></span>
                             {isModified && (
                               <>
                                 <span>•</span>
@@ -794,7 +803,7 @@ export function DeliveryReceivePage() {
                         <div className="px-4 pb-4 pt-2 bg-slate-50/50 border-t border-slate-100 animate-in slide-in-from-top-1">
                           <div className="grid grid-cols-3 gap-3 sm:gap-4">
                             <div className="space-y-1.5">
-                              <Label className="text-xs font-medium text-slate-600">Delivered</Label>
+                              <Label className="text-xs font-medium text-slate-600">Received</Label>
                               <Input
                                 type="number"
                                 step="0.01"
@@ -822,7 +831,7 @@ export function DeliveryReceivePage() {
                               />
                             </div>
                             <div className="space-y-1.5">
-                              <Label className="text-xs font-medium text-slate-600">Damaged</Label>
+                              <Label className="text-xs font-medium text-slate-600">Rejected</Label>
                               <Input
                                 type="number"
                                 step="0.01"
@@ -1094,7 +1103,7 @@ export function DeliveryReceivePage() {
                 <Button
                   type="button"
                   className="flex-1 h-10 bg-[#1d2351] hover:bg-[#2a3266] text-white"
-                  onClick={processFormSubmission}
+                  onClick={() => processFormSubmission()}
                 >
                   Confirm & Post
                 </Button>

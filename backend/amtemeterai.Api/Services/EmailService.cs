@@ -46,13 +46,13 @@ namespace amtemeterai.Api.Services
             // 🔒 RECIPIENT ROUTING ENGINE (TEMPORARY HARDCODE GUARD)
             // ====================================================================
             // [STAGING MODE ACTIVE]: Direct delivery targets explicitly defined
-            string targetToEmail = "syarif@opexcg.com";
+            string targetToEmail = "arga@opexcg.com";
             
             // 🚀 Updated: Collection engine to cleanly route multiple transparent visibility copies
             string[] targetCcEmails = new[] 
             { 
-                "arga@opexcg.com", 
-                "hari@opexcg.com" // You can append additional testing emails here
+                // "arga@opexcg.com", 
+                // "hari@opexcg.com" // You can append additional testing emails here
             };
 
             /* // TODO: UNCOMMENT THIS BLOCK TO ACTIVATE DYNAMIC PRODUCTION SALESPERSON ROUTING ON LIVE GO-LIVE
@@ -176,12 +176,12 @@ namespace amtemeterai.Api.Services
             // 🔒 RECIPIENT ROUTING ENGINE (TEMPORARY HARDCODE GUARD FOR UAT)
             // ====================================================================
             // [STAGING MODE ACTIVE]: Direct PIN delivery targets explicitly defined
-            string targetToEmail = "syarif@opexcg.com";
+            string targetToEmail = "arga@opexcg.com";
             
             string[] targetCcEmails = new[] 
             { 
-                "arga@opexcg.com", 
-                "hari@opexcg.com" 
+                // "arga@opexcg.com", 
+                // "hari@opexcg.com" 
             };
 
             /* // TODO: UNCOMMENT THIS BLOCK TO ACTIVATE PRODUCTION LIVE CUSTOMER PIN ROUTING
