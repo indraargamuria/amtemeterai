@@ -13,36 +13,24 @@ var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 
-//2026-04-30 18:30:44 - Arga - Add Db Context
+// 2026-04-30 - Add Db Context
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
 
-//2026-05-20 02:49:01
+// 2026-05-20 - Configure SAP Options
 builder.Services.Configure<SapOptions>(builder.Configuration.GetSection(SapOptions.Position));
-// builder.Services.AddHttpClient<ICustomerSource, ErpCustomerSource>();
 
-//2026-04-30 18:34:15 - Arga - Add Controller
+// 2026-04-30 - Add Controllers
 builder.Services.AddControllers();
 
-// 2026-04-30 13:51:08 - Arga - Add Swagger
+// 2026-04-30 - Add Swagger
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
-// 2026-05-05 18:31:08 - Arga - Allow CORS Dinamically
+// 2026-05-05 - Allow CORS Dynamically
 var allowedOrigins = builder.Configuration.GetSection("Cors:Origins").Get<string[]>();
 
-// Program.cs
 builder.Services.AddSingleton<IStorageService, MinioStorageService>();
-
-// builder.Services.AddCors(options =>
-// {
-//     options.AddPolicy("AllowFrontend", policy =>
-//     {
-//         policy.WithOrigins(allowedOrigins!)
-//               .AllowAnyHeader()
-//               .AllowAnyMethod();
-//     });
-// });
 
 builder.Services.AddCors(options =>
 {
@@ -54,9 +42,6 @@ builder.Services.AddCors(options =>
               .AllowAnyMethod();
     });
 });
-// 2026-05-06 - Customer Source Configuration
-// 2026-05-06 - Customer Source Configuration
-builder.Services.Configure<SapOptions>(builder.Configuration.GetSection(SapOptions.Position));
 
 // Customer Source Configuration Toggles
 var customerSourceType = builder.Configuration["CustomerSource"] ?? "Dummy";
@@ -67,18 +52,16 @@ if (customerSourceType == "Dummy")
 }
 else
 {
-    // Registers ErpCustomerSource and provides its HttpClient setup cleanly
     builder.Services.AddHttpClient<ICustomerSource, ErpCustomerSource>();
 }
+
 builder.Services.AddScoped<CustomerService>();
-// Bind the Gmail Options Payload Block
+
+// Bind the Smtp Settings Payload Block
 builder.Services.Configure<SmtpSettings>(builder.Configuration.GetSection("SmtpSettings"));
 
-// Register the Transient Infrastructure Service
+// Register Email Infrastructure Service
 builder.Services.AddTransient<IEmailService, EmailService>();
-
-// // Register Billing Background Service
-// builder.Services.AddHostedService<BillingBackgroundService>();
 
 // Register Periuri PDS Service for e-Meterai stamping
 builder.Services.AddHttpClient();
@@ -87,7 +70,6 @@ builder.Services.AddScoped<IPeriuriPdsService, PeriuriPdsService>();
 // Register the named HttpClient that your DeliveriesController uses to talk to SAP
 builder.Services.AddHttpClient("SapClient", (serviceProvider, client) =>
 {
-    // Extract the parsed credentials from DI
     var sapOptions = serviceProvider.GetRequiredService<Microsoft.Extensions.Options.IOptions<SapOptions>>().Value;
     
     if (string.IsNullOrEmpty(sapOptions.BaseUrl))
@@ -95,29 +77,24 @@ builder.Services.AddHttpClient("SapClient", (serviceProvider, client) =>
         throw new InvalidOperationException("SAP BaseUrl is missing from the configuration providers!");
     }
 
-    // 🚀 FIX: Ensure BaseAddress is explicitly set using a valid Uri object
     client.BaseAddress = new Uri(sapOptions.BaseUrl.TrimEnd('/'));
-    
-    // Add Authentication and Header constraints
     client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Basic", sapOptions.BasicAuthToken);
     client.DefaultRequestHeaders.Accept.Add(new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue("application/json"));
 });
+
 // 2026-05-06 - Add ASP.NET Core Identity
 builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
 {
-    // Password settings
     options.Password.RequireDigit = false;
     options.Password.RequireLowercase = false;
     options.Password.RequireUppercase = false;
     options.Password.RequireNonAlphanumeric = false;
     options.Password.RequiredLength = 6;
 
-    // Lockout settings
     options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(5);
     options.Lockout.MaxFailedAccessAttempts = 5;
     options.Lockout.AllowedForNewUsers = true;
 
-    // User settings
     options.User.RequireUniqueEmail = true;
 })
 .AddEntityFrameworkStores<AppDbContext>()
@@ -147,116 +124,133 @@ builder.Services.AddAuthentication(options =>
 builder.Services.AddAuthorization();
 
 var app = builder.Build();
-// Run the core RBAC data seeder
+
+// ==========================================
+// 🚀 FIXED EXECUTION LIFECYCLE FOR SEEDING & TEST ACCOUNTS
+// ==========================================
 using (var scope = app.Services.CreateScope())
 {
     var services = scope.ServiceProvider;
+    var logger = services.GetRequiredService<ILogger<Program>>();
+    
     try
     {
+        logger.LogInformation("Applying pending database migrations...");
+        var db = services.GetRequiredService<AppDbContext>();
+        await db.Database.MigrateAsync();
+
+        logger.LogInformation("Seeding dynamic RBAC Matrix structural tables...");
         await DbInitializer.SeedRbacAsync(services);
+
+        var userManager = services.GetRequiredService<UserManager<ApplicationUser>>();
+        var roleManager = services.GetRequiredService<RoleManager<IdentityRole>>();
+
+        // --- A. FIX & ENSURE ADMINISTRATOR EXISTENCE ---
+        var adminUser = await userManager.FindByEmailAsync("admin@amtemeterai.com");
+        if (adminUser == null)
+        {
+            logger.LogInformation("Generating fallback default administrator access credentials...");
+            adminUser = new ApplicationUser
+            {
+                UserName = "admin@amtemeterai.com",
+                Email = "admin@amtemeterai.com",
+                FullName = "System Administrator",
+                CreatedAt = DateTime.UtcNow
+            };
+            await userManager.CreateAsync(adminUser, "Admin@123");
+        }
+
+        // Move admin cleanly to sysadmin role if it's trapped in the legacy 'Admin' role
+        if (!await userManager.IsInRoleAsync(adminUser, "sysadmin"))
+        {
+            await userManager.AddToRoleAsync(adminUser, "sysadmin");
+            logger.LogInformation("Admin account successfully linked to 'sysadmin' role matrix.");
+            
+            // Clean up old string role reference if it exists
+            if (await userManager.IsInRoleAsync(adminUser, "Admin"))
+            {
+                await userManager.RemoveFromRoleAsync(adminUser, "Admin");
+            }
+        }
+
+        // --- B. PROVISION 1 DUMMY ACCOUNT PER CUSTOM SYSTEM ROLE ---
+        var dummyAccounts = new List<(string Email, string Name, string Role)>
+        {
+            ("finance@amtemeterai.com", "Finance Tester", "finance"),
+            ("warehouse@amtemeterai.com", "Warehouse Tester", "warehouse"),
+            ("sales@amtemeterai.com", "Sales Tester", "sales")
+        };
+
+        foreach (var account in dummyAccounts)
+        {
+            var existingDummy = await userManager.FindByEmailAsync(account.Email);
+            if (existingDummy == null)
+            {
+                logger.LogInformation("Provisioning dynamic test profile: {Email}", account.Email);
+                var testUser = new ApplicationUser
+                {
+                    UserName = account.Email,
+                    Email = account.Email,
+                    FullName = account.Name,
+                    CreatedAt = DateTime.UtcNow
+                };
+
+                var createResult = await userManager.CreateAsync(testUser, "Testing@123");
+                if (createResult.Succeeded)
+                {
+                    await userManager.AddToRoleAsync(testUser, account.Role);
+                    logger.LogInformation("Assigned {Email} to role '{Role}' cleanly.", account.Email, account.Role);
+                }
+                else
+                {
+                    logger.LogWarning("Failed to provision dummy account {Email}: {Errors}", 
+                        account.Email, string.Join(", ", createResult.Errors.Select(e => e.Description)));
+                }
+            }
+        }
+
+        // --- C. CLEAN UP LEGACY STRUCTURAL ROLES FROM INITIAL ENGINE (Optional) ---
+        string[] oldRoles = { "Admin", "User" };
+        foreach (var oldRole in oldRoles)
+        {
+            var roleNode = await roleManager.FindByNameAsync(oldRole);
+            if (roleNode != null && !db.UserRoles.Any(ur => ur.RoleId == roleNode.Id))
+            {
+                await roleManager.DeleteAsync(roleNode);
+                logger.LogInformation("Removed obsolete system role: {OldRole}", oldRole);
+            }
+        }
     }
     catch (Exception ex)
     {
-        var logger = services.GetRequiredService<ILogger<Program>>();
-        logger.LogError(ex, "An error occurred while seeding the dynamic RBAC tables.");
+        logger.LogError(ex, "A fatal exception was thrown during the critical database initialization pipeline sequence.");
     }
 }
+
 app.UseHttpsRedirection();
 
-var summaries = new[]
-{
-    "Freezing", "Bracing", "Chilly", "Cool", "Mild", "Warm", "Balmy", "Hot", "Sweltering", "Scorching"
-};
-
-// app.MapGet("/weatherforecast", () =>
-// {
-//     var forecast =  Enumerable.Range(1, 5).Select(index =>
-//         new WeatherForecast
-//         (
-//             DateOnly.FromDateTime(DateTime.Now.AddDays(index)),
-//             Random.Shared.Next(-20, 55),
-//             summaries[Random.Shared.Next(summaries.Length)]
-//         ))
-//         .ToArray();
-//     return forecast;
-// })
-// .WithName("GetWeatherForecast");
-
-//2026-04-30 13:51:36 - Arga - Add Swagger
-//2026-05-12 11:20:08 - Arga - Adjust Swagger Config based on NGINX
+// Adjust Swagger Config based on NGINX
 app.UseSwagger(options =>
 {
-    // This tells Swagger to generate the JSON file at /api/swagger/v1/swagger.json
     options.RouteTemplate = "api/swagger/{documentName}/swagger.json";
 });
 
 app.UseSwaggerUI(options =>
 {
-    // This tells the UI where to find that JSON file
     options.SwaggerEndpoint("/api/swagger/v1/swagger.json", "v1");
-
-    // This sets the address you type in the browser to localhost/api/swagger
     options.RoutePrefix = "api/swagger";
 });
 
-// 2026-05-06 - Add Authentication & Authorization middleware
-app.UseAuthentication();
-// app.UseCors("AllowFrontend");
-
+// ==========================================
+// MIDDLEWARE PIPELINE ROUTING CONFIGURATION
+// ==========================================
 app.UseRouting();
 
-app.UseCors(); // Automatically picks up the default policy configured above
+app.UseCors(); // Picks up global dynamic policy configurations
 
-app.UseAuthorization();
-app.UseAuthorization();
-
+app.UseAuthentication();
+app.UseAuthorization(); // Single clean authorization check
 
 app.MapControllers();
 
-using (var scope = app.Services.CreateScope())
-{
-    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-    db.Database.Migrate();
-
-    // Create default admin user if it doesn't exist
-    var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
-    var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>();
-
-    // Ensure Admin role exists
-    if (!await roleManager.RoleExistsAsync("Admin"))
-    {
-        await roleManager.CreateAsync(new IdentityRole("Admin"));
-    }
-
-    // Ensure User role exists
-    if (!await roleManager.RoleExistsAsync("User"))
-    {
-        await roleManager.CreateAsync(new IdentityRole("User"));
-    }
-
-    // Create default admin user
-    var adminUser = await userManager.FindByEmailAsync("admin@amtemeterai.com");
-    if (adminUser == null)
-    {
-        adminUser = new ApplicationUser
-        {
-            UserName = "admin@amtemeterai.com",
-            Email = "admin@amtemeterai.com",
-            FullName = "Administrator",
-            CreatedAt = DateTime.UtcNow
-        };
-
-        var result = await userManager.CreateAsync(adminUser, "Admin@123");
-        if (result.Succeeded)
-        {
-            await userManager.AddToRoleAsync(adminUser, "Admin");
-        }
-    }
-}
-
 app.Run();
-
-record WeatherForecast(DateOnly Date, int TemperatureC, string? Summary)
-{
-    public int TemperatureF => 32 + (int)(TemperatureC / 0.5556);
-}
