@@ -15,9 +15,9 @@ public class Document
     public int DocumentID { get; set; }
 
     // MinIO Object Metadata
-    public string StorageKey { get; set; }   // e.g., "deliveries/12/photos/uuid.jpg"
-    public string FileName { get; set; }     // Original upload name: "photo.jpg"
-    public string ContentType { get; set; }   // e.g., "image/jpeg"
+    public string StorageKey { get; set; } = string.Empty;
+    public string FileName { get; set; } = string.Empty;
+    public string ContentType { get; set; } = string.Empty;
     public DocumentType Type { get; set; }
     public DateTime UploadedAt { get; set; }
 

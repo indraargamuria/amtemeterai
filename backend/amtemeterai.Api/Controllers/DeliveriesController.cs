@@ -7,8 +7,8 @@ using amtemeterai.Api.Models;
 using amtemeterai.Api.Helpers;
 using amtemeterai.Api.Services;
 using amtemeterai.Api.Config;
-using System; // For Console
-using System.Text.Json; // For JsonSerializer
+using System; 
+using System.Text.Json; 
 
 namespace amtemeterai.Api.Controllers;
 
@@ -83,8 +83,8 @@ public class DeliveriesController : ControllerBase
                 DeliveryDate = d.DeliveryDate,
                 DeliveryRemarks = d.DeliveryRemarks,
 
-                CustomerCode = d.Customer.CustomerCode,
-                CustomerName = d.Customer.CustomerName,
+                CustomerCode = d.Customer != null ? d.Customer.CustomerCode : "UNKNOWN",
+                CustomerName = d.Customer != null ? d.Customer.CustomerName : "UNKNOWN",
 
                 Received = d.Received,
                 Invoiced = d.Invoiced,
@@ -163,14 +163,15 @@ public class DeliveriesController : ControllerBase
             })
             .ToListAsync();
 
+        // 🚀 FIX FOR CS9035: Set required members explicitly in object initializer
         var response = new DeliveryResponseDto
         {
             DeliveryID = delivery.DeliveryID,
             DeliveryNumber = delivery.DeliveryNumber,
             DeliveryDate = delivery.DeliveryDate,
             DeliveryRemarks = delivery.DeliveryRemarks,
-            CustomerCode = delivery.Customer.CustomerCode,
-            CustomerName = delivery.Customer.CustomerName,
+            CustomerCode = delivery.Customer?.CustomerCode ?? "UNKNOWN",
+            CustomerName = delivery.Customer?.CustomerName ?? "UNKNOWN",
             ReceiverToken = delivery.ReceiverToken,
             ReceiverName = delivery.ReceiverName,
             ReceiverNotes = delivery.ReceiverNotes,
@@ -197,7 +198,7 @@ public class DeliveriesController : ControllerBase
 
             Photos = photos,
 
-            Lines = delivery.Lines.Select(l => new DeliveryLineResponseDto
+            Lines = (delivery.Lines ?? new List<DeliveryLine>()).Select(l => new DeliveryLineResponseDto
             {
                 DeliveryLineNumber = l.DeliveryLineNumber,
                 DeliveryItemCode = l.DeliveryItemCode,
@@ -224,22 +225,27 @@ public class DeliveriesController : ControllerBase
     {
         var data = await _db.DeliveryHeaders
             .Include(x => x.Lines)
+            .Include(x => x.Customer)
             .FirstOrDefaultAsync(x => x.ReceiverToken == token);
 
         if (data == null) return NotFound();
 
+        // 🚀 FIX FOR CS9035: Map required customer strings for anonymous access link
         var result = new DeliveryResponseDto
         {
+            DeliveryID = data.DeliveryID,
             DeliveryNumber = data.DeliveryNumber,
             DeliveryDate = data.DeliveryDate,
             DeliveryRemarks = data.DeliveryRemarks,
+            CustomerCode = data.Customer?.CustomerCode ?? "UNKNOWN",
+            CustomerName = data.Customer?.CustomerName ?? "UNKNOWN",
             ReceiverToken = data.ReceiverToken,
             ReceiverName = data.ReceiverName,
             ReceiverNotes = data.ReceiverNotes,
             Received = data.Received,
             Invoiced = data.Invoiced,
             PublicUrl = GetPublicUrl(data.ReceiverToken, _configuration["App:PublicBaseUrl"]),
-            Lines = data.Lines.Select(l => new DeliveryLineResponseDto
+            Lines = (data.Lines ?? new List<DeliveryLine>()).Select(l => new DeliveryLineResponseDto
             {
                 DeliveryLineNumber = l.DeliveryLineNumber,
                 DeliveryItemCode = l.DeliveryItemCode,
@@ -389,6 +395,7 @@ public class DeliveriesController : ControllerBase
     {
         var data = await _db.DeliveryHeaders
             .Include(x => x.Lines)
+            .Include(x => x.Customer)
             .FirstOrDefaultAsync(x => x.ReceiverToken == token);
 
         if (data == null) return NotFound();
@@ -518,7 +525,8 @@ public class DeliveriesController : ControllerBase
                 ReceiverName = data.ReceiverName ?? string.Empty,
                 ReceiverStatus = hasDiscrepancy ? "2" : "1", 
                 ReceiverNotes = data.ReceiverNotes ?? string.Empty,
-                Lines = data.Lines.Select(l => new SapDeliveryLinePayload
+                // 🚀 FIX FOR CS8604: Wrap the collection inside a null-coalescing guard fallback
+                Lines = (data.Lines ?? Enumerable.Empty<DeliveryLine>()).Select(l => new SapDeliveryLinePayload
                 {
                     DeliveryLineNumber = l.DeliveryLineNumber,
                     DeliveredQuantity = l.PackQuantityDelivered,
@@ -624,7 +632,7 @@ public class DeliveriesController : ControllerBase
         if (delivery == null)
             return NotFound();
 
-        if (delivery.Customer.CustomerPin == request.Pin)
+        if (delivery.Customer != null && delivery.Customer.CustomerPin == request.Pin)
             return Ok(new { valid = true });
 
         return Unauthorized("Invalid PIN");
@@ -657,16 +665,6 @@ public class DeliveriesController : ControllerBase
                 SentTo = string.Empty
             });
         }
-
-        // if (delivery.Received)
-        // {
-        //     return BadRequest(new RequestPinResponseDto
-        //     {
-        //         Success = false,
-        //         Message = "This delivery has already been verified.",
-        //         SentTo = string.Empty
-        //     });
-        // }
 
         var customerEmail = delivery.Customer?.CustomerEmail;
         var customerPin = delivery.Customer?.CustomerPin;
@@ -738,6 +736,7 @@ public class DeliveriesController : ControllerBase
             });
         }
     }
+    
     private static string MaskEmail(string email)
     {
         if (string.IsNullOrWhiteSpace(email))
@@ -746,20 +745,14 @@ public class DeliveriesController : ControllerBase
         var trimmed = email.Trim();
         var atIndex = trimmed.IndexOf('@');
         
-        // Fallback if the string structure has an invalid format or missing domain
         if (atIndex <= 0)
             return "***";
 
         var localPart = trimmed.Substring(0, atIndex);
-        var domainPart = trimmed.Substring(atIndex); // Includes the '@' symbol
+        var domainPart = trimmed.Substring(atIndex); 
 
-        // Secure, Fixed-Width standard. Extracted character is lowercased for uniform layout metrics.
         char firstChar = char.ToLower(localPart[0]);
 
-        // Always outputs: first_letter + exactly 3 asterisks + domain
-        // e.g., arga@opexcg.com          -> a***@opexcg.com
-        // e.g., administrator@opexcg.com -> a***@opexcg.com
-        // e.g., a@opexcg.com             -> a***@opexcg.com
         return $"{firstChar}***{domainPart}";
     }
 

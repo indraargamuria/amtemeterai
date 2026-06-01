@@ -24,7 +24,8 @@ namespace amtemeterai.Api.Services
             };
 
             _s3Client = new AmazonS3Client(minioConfig["AccessKey"], minioConfig["SecretKey"], s3Config);
-            _bucketName = minioConfig["BucketName"];
+            _bucketName = minioConfig["BucketName"] 
+              ?? throw new InvalidOperationException("MinIO configuration error: 'BucketName' is missing in appsettings.json");
         }
 
         public async Task DeleteFileAsync(string objectKey)

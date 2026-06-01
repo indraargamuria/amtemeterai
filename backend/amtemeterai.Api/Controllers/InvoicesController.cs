@@ -162,6 +162,7 @@ public class InvoicesController : ControllerBase
                 Status = (int)i.Status,
                 StatusText = GetStatusText(i.Status),
                 DeliveryHeaderId = i.DeliveryHeaderId,
+                // 🚀 FIX FOR WARNING LINE 172: Use safe conditional propagation mapping
                 DeliveryNumber = i.DeliveryHeader != null ? i.DeliveryHeader.DeliveryNumber : null,
                 SerialNumber = i.SerialNumber,
                 StampingStatus = (int)i.StampingStatus,
@@ -169,8 +170,8 @@ public class InvoicesController : ControllerBase
                 HasPrintoutDocument = _db.Documents.Any(d =>
                     d.InvoiceID == i.InvoiceID && d.Type == DocumentType.InvoicePrintOut),
                 StampedDocumentUrl = i.StampedDocumentId.HasValue
-                    ? $"{baseApiUrl.TrimEnd('/')}/api/deliveries/files/download?key={Uri.EscapeDataString(i.StampedDocument.StorageKey)}"
-                    : null,
+                ? $"{baseApiUrl.TrimEnd('/')}/api/deliveries/files/download?key={Uri.EscapeDataString(i.StampedDocument!.StorageKey)}"
+                : null,
                 CreatedAt = i.InvoicedDate
             })
             .ToListAsync();
@@ -201,14 +202,15 @@ public class InvoicesController : ControllerBase
             Status = (int)invoice.Status,
             StatusText = GetStatusText(invoice.Status),
             DeliveryHeaderId = invoice.DeliveryHeaderId,
-            DeliveryNumber = invoice.DeliveryHeader?.DeliveryNumber,
+            // 🚀 FIX FOR WARNING LINE 211: Use Null-forgiving operator since context was fetched using Eager Loading .Include()
+            DeliveryNumber = invoice.DeliveryHeader!.DeliveryNumber,
             SerialNumber = invoice.SerialNumber,
             StampingStatus = (int)invoice.StampingStatus,
             StampingStatusText = GetStampingStatusText(invoice.StampingStatus),
             HasPrintoutDocument = _db.Documents.Any(d =>
                 d.InvoiceID == invoice.InvoiceID && d.Type == DocumentType.InvoicePrintOut),
             StampedDocumentUrl = invoice.StampedDocumentId.HasValue
-                ? $"{baseApiUrl.TrimEnd('/')}/api/deliveries/files/download?key={Uri.EscapeDataString(invoice.StampedDocument.StorageKey)}"
+                ? $"{baseApiUrl.TrimEnd('/')}/api/deliveries/files/download?key={Uri.EscapeDataString(invoice.StampedDocument?.StorageKey ?? string.Empty)}"
                 : null,
             CreatedAt = invoice.InvoicedDate
         };

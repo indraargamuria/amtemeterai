@@ -10,8 +10,8 @@ public class DeliveryResponseDto
 
     public Guid ReceiverToken { get; set; }
 
-    public string CustomerCode { get; set; }
-    public string CustomerName { get; set; }
+    public required string CustomerCode { get; set; }
+    public required string CustomerName { get; set; }
     public string? ReceiverName { get; set; }
     public string? ReceiverNotes { get; set; }
 

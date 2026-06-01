@@ -19,6 +19,12 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
     // Invoice Management
     public DbSet<Invoice> Invoices => Set<Invoice>();
 
+    // 🚀 Dynamic Dynamic RBAC Matrix Tables - 2026-06-02 - Arga
+    public DbSet<Permission> Permissions { get; set; } = null!;
+    public DbSet<ApplicationMenu> ApplicationMenus { get; set; } = null!;
+    public DbSet<RolePermission> RolePermissions { get; set; } = null!;
+    public DbSet<MenuPermission> MenuPermissions { get; set; } = null!;
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
@@ -120,5 +126,37 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
             .WithMany(i => i.Documents)
             .HasForeignKey(d => d.InvoiceID)
             .OnDelete(DeleteBehavior.Cascade);
+
+        // 🚀 4. Configure Composite Key and FKs for RolePermission
+        modelBuilder.Entity<RolePermission>(entity =>
+        {
+            entity.HasKey(rp => new { rp.RoleId, rp.PermissionId });
+
+            entity.HasOne(rp => rp.Permission)
+                  .WithMany(p => p.RolePermissions)
+                  .HasForeignKey(rp => rp.PermissionId)
+                  .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(rp => rp.Role)
+                  .WithMany()
+                  .HasForeignKey(rp => rp.RoleId)
+                  .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // 🚀 5. Configure Composite Key and FKs for MenuPermission
+        modelBuilder.Entity<MenuPermission>(entity =>
+        {
+            entity.HasKey(mp => new { mp.MenuId, mp.PermissionId });
+
+            entity.HasOne(mp => mp.Menu)
+                  .WithMany(m => m.MenuPermissions)
+                  .HasForeignKey(mp => mp.MenuId)
+                  .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(mp => mp.Permission)
+                  .WithMany(p => p.MenuPermissions)
+                  .HasForeignKey(mp => mp.PermissionId)
+                  .OnDelete(DeleteBehavior.Cascade);
+        });
     }
 }
