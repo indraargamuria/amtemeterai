@@ -74,7 +74,30 @@ public class DeliveriesController : ControllerBase
     {
         var baseUrl = _configuration["App:PublicBaseUrl"] ?? "http://localhost:5173";
 
-        var deliveries = await _db.DeliveryHeaders
+        // 🚀 1. CEK CONFIG MATRIX RBAC & CLAIMS DATA PLANT
+        var isSysAdmin = User.IsInRole("sysadmin");
+        
+        // Buat basic IQueryable query stream
+        var query = _db.DeliveryHeaders.AsQueryable();
+
+        // 🚀 2. SUNTIKKAN DATA-LEVEL PRIVACY ENFORCEMENT FILTER
+        if (!isSysAdmin)
+        {
+            // Ambil semua daftar kode plant dari Token JWT milik user yang sedang aktif
+            var allowedPlants = User.FindAll("plant").Select(c => c.Value).ToList();
+
+            if (!allowedPlants.Any())
+            {
+                // Jika user biasa tidak punya mapping plant sama sekali, block data & kembalikan list kosong
+                return Ok(new List<DeliveryHeaderDto>());
+            }
+
+            // Filter data PostgreSQL secara dinamis: Hanya ambil delivery yang kodenya ada di dalam klaim token
+            query = query.Where(d => allowedPlants.Contains(d.Plant));
+        }
+
+        // 3. Eksekusi penarikan data yang sudah ter-filter aman
+        var deliveries = await query
             .Include(d => d.Customer)
             .Select(d => new
             {
@@ -142,6 +165,7 @@ public class DeliveriesController : ControllerBase
     [HttpGet("{deliveryId:int}")]
     public async Task<ActionResult<DeliveryResponseDto>> GetDeliveryById(int deliveryId)
     {
+        // 🚀 1. TARIK DATA UNTUK DICHECK TERLEBIH DAHULU
         var delivery = await _db.DeliveryHeaders
             .Include(d => d.Lines)
             .Include(d => d.Customer)
@@ -149,6 +173,19 @@ public class DeliveriesController : ControllerBase
 
         if (delivery == null)
             return NotFound();
+
+        // 🚀 2. SECURITY GUARD CLAIMS VALIDATION FOR DIRECT URL INJECTION (ID GUESSING)
+        var isSysAdmin = User.IsInRole("sysadmin");
+        if (!isSysAdmin)
+        {
+            var allowedPlants = User.FindAll("plant").Select(c => c.Value).ToList();
+            
+            // Jika user mencoba menebak ID delivery milik plant lain, paksa return 403 Forbidden!
+            if (!allowedPlants.Contains(delivery.Plant))
+            {
+                return Forbid(); 
+            }
+        }
 
         var baseApiUrl = _configuration["App:ApiBaseUrl"] ?? "http://localhost:8080";
         
@@ -163,7 +200,6 @@ public class DeliveriesController : ControllerBase
             })
             .ToListAsync();
 
-        // 🚀 FIX FOR CS9035: Set required members explicitly in object initializer
         var response = new DeliveryResponseDto
         {
             DeliveryID = delivery.DeliveryID,
