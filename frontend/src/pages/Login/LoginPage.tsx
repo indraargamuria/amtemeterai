@@ -6,6 +6,7 @@ import { Label } from "../../shared/components/ui/Label"
 import Logo from '../../assets/amtlogo.png'
 import Landscape from '../../assets/amtlandscape.jpg'
 import { useAuth } from "../../shared/contexts/AuthContext"
+import { resolveDefaultLandingRoute } from "../../shared/utils/routeResolver"
 import { Mail, Lock, AlertCircle, ChevronRight, Eye, EyeOff } from "lucide-react"
 
 export function LoginPage() {
@@ -20,7 +21,15 @@ export function LoginPage() {
   const location = useLocation()
   const { login } = useAuth()
 
-  const from = (location.state as any)?.from?.pathname || "/"
+  // Get redirect path from location state, or use dynamic resolver
+  const getRedirectPath = () => {
+    const from = (location.state as any)?.from?.pathname
+    if (from && from !== '/login' && from !== '/unauthorized') {
+      return from
+    }
+    // Use dynamic resolver to determine appropriate landing page
+    return resolveDefaultLandingRoute()
+  }
 
   // Trigger mount animation
   useEffect(() => {
@@ -40,7 +49,8 @@ export function LoginPage() {
 
     try {
       await login(email, password)
-      navigate(from, { replace: true })
+      // Navigate to the dynamically resolved landing route
+      navigate(getRedirectPath(), { replace: true })
     } catch (err) {
       setError(err instanceof Error ? err.message : "Login failed. Please try again.")
     } finally {

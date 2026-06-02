@@ -1,0 +1,1 @@
+export { DashboardRedirectPage } from "./DashboardRedirectPage"

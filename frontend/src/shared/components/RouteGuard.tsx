@@ -7,23 +7,38 @@ interface RouteGuardProps {
 }
 
 /**
+ * Routes that should bypass route guard validation
+ */
+const publicRoutes = ['/unauthorized', '/login']
+
+/**
  * RouteGuard - Protects routes by checking user permissions
  * Intercepts route changes and validates menu claims before allowing access
+ *
+ * Excludes root paths from strict validation to allow the dynamic
+ * redirect resolver to determine the appropriate landing page.
  */
 export function RouteGuard({ children }: RouteGuardProps) {
   const navigate = useNavigate()
   const location = useLocation()
 
+  const currentPath = location.pathname.replace(/\/$/, "") // Strip trailing slashes
+
+  // Skip validation for public routes
+  if (publicRoutes.includes(currentPath)) {
+    return <>{children}</>
+  }
+
   useEffect(() => {
     // Check if user has access to current route
-    if (!hasRouteAccess(location.pathname)) {
+    if (!hasRouteAccess(currentPath)) {
       // Redirect to unauthorized page
       navigate('/unauthorized', { replace: true })
     }
-  }, [location.pathname, navigate])
+  }, [currentPath, navigate])
 
   // Check access on mount
-  if (!hasRouteAccess(location.pathname)) {
+  if (!hasRouteAccess(currentPath)) {
     return null // Will redirect in useEffect
   }
 
