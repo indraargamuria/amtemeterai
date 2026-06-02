@@ -20,11 +20,15 @@ public class DeliveryHeader
     public int CustomerID { get; set; }
     public Customer Customer { get; set; } = null!;
 
+
     public string DeliveryNumber { get; set; } = null!;
     public DateTime DeliveryDate { get; set; }
 
     public string? DeliveryRemarks { get; set; }
 
+    public string? OrderNumber { get; set; }           
+    public string? BuyerPONumber { get; set; }
+    
     public Guid ReceiverToken { get; set; }
 
     public string? ReceiverName { get; set; }

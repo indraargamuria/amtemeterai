@@ -92,8 +92,7 @@ public class DeliveriesController : ControllerBase
                 return Ok(new List<DeliveryHeaderDto>());
             }
 
-            // Filter data PostgreSQL secara dinamis: Hanya ambil delivery yang kodenya ada di dalam klaim token
-            query = query.Where(d => allowedPlants.Contains(d.Plant));
+            // Filter data PostgreSQL secara dinamis: Hanya ambil delivery yang kodenya ada di dalam klaim tokenquery = query.Where(d => allowedPlants.Contains(d.Plant ?? ""));
         }
 
         // 3. Eksekusi penarikan data yang sudah ter-filter aman
@@ -181,7 +180,7 @@ public class DeliveriesController : ControllerBase
             var allowedPlants = User.FindAll("plant").Select(c => c.Value).ToList();
             
             // Jika user mencoba menebak ID delivery milik plant lain, paksa return 403 Forbidden!
-            if (!allowedPlants.Contains(delivery.Plant))
+            if (!allowedPlants.Contains(delivery.Plant ?? ""))
             {
                 return Forbid(); 
             }
@@ -206,6 +205,8 @@ public class DeliveriesController : ControllerBase
             DeliveryNumber = delivery.DeliveryNumber,
             DeliveryDate = delivery.DeliveryDate,
             DeliveryRemarks = delivery.DeliveryRemarks,
+            OrderNumber = delivery.OrderNumber,
+            BuyerPONumber = delivery.BuyerPONumber,
             CustomerCode = delivery.Customer?.CustomerCode ?? "UNKNOWN",
             CustomerName = delivery.Customer?.CustomerName ?? "UNKNOWN",
             ReceiverToken = delivery.ReceiverToken,
@@ -275,6 +276,8 @@ public class DeliveriesController : ControllerBase
             DeliveryRemarks = data.DeliveryRemarks,
             CustomerCode = data.Customer?.CustomerCode ?? "UNKNOWN",
             CustomerName = data.Customer?.CustomerName ?? "UNKNOWN",
+            OrderNumber = data.OrderNumber,
+            BuyerPONumber = data.BuyerPONumber,
             ReceiverToken = data.ReceiverToken,
             ReceiverName = data.ReceiverName,
             ReceiverNotes = data.ReceiverNotes,
@@ -347,6 +350,8 @@ public class DeliveriesController : ControllerBase
             Plant = dto.Plant,
             SalesPersonName = dto.SalesPersonName,
             SalesPersonEmail = dto.SalesPersonEmail,
+            OrderNumber = dto.OrderNumber,
+            BuyerPONumber = dto.BuyerPONumber,
             Type = (DeliveryHeader.DeliveryType)dto.Type,
             ReceiverToken = Guid.NewGuid()
         };
@@ -406,6 +411,8 @@ public class DeliveriesController : ControllerBase
         existing.Plant = dto.Plant;
         existing.SalesPersonName = dto.SalesPersonName;
         existing.SalesPersonEmail = dto.SalesPersonEmail;
+        existing.OrderNumber = dto.OrderNumber;
+        existing.BuyerPONumber = dto.BuyerPONumber;
         existing.Type = (DeliveryHeader.DeliveryType)dto.Type;
         
         _db.DeliveryLines.RemoveRange(existing.Lines);

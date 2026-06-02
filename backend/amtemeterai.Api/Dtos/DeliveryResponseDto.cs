@@ -8,6 +8,9 @@ public class DeliveryResponseDto
 
     public string? DeliveryRemarks { get; set; }
 
+    public string? OrderNumber { get; set; }
+    public string? BuyerPONumber { get; set; }
+
     public Guid ReceiverToken { get; set; }
 
     public required string CustomerCode { get; set; }
