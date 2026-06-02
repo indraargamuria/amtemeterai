@@ -171,6 +171,33 @@ public class AccountController : ControllerBase
             claims.Add(new Claim("plant", plantCode)); // Dynamic "plant" type identifier claims
         }
 
+        // 🚀 4. Fetch and aggregate structural Menu permissions based on user roles
+        // Query chain: Role -> RolePermission -> Permission -> MenuPermission -> Menu
+        var userRoleIds = await _context.UserRoles
+            .Where(ur => ur.UserId == user.Id)
+            .Select(ur => ur.RoleId)
+            .ToListAsync();
+
+        var rolePermissionIds = await _context.RolePermissions
+            .Where(rp => userRoleIds.Contains(rp.RoleId))
+            .Select(rp => rp.PermissionId)
+            .Distinct()
+            .ToListAsync();
+
+        var assignedMenus = await _context.MenuPermissions
+            .Where(mp => rolePermissionIds.Contains(mp.PermissionId))
+            .Select(mp => mp.Menu!.MenuKey)
+            .Distinct()
+            .ToListAsync();
+
+        foreach (var menuCode in assignedMenus)
+        {
+            claims.Add(new Claim("menu", menuCode));
+        }
+
+        // 🚀 5. Add SecurityStamp for session revocation tracking
+        claims.Add(new Claim("security_stamp", user.SecurityStamp ?? Guid.NewGuid().ToString()));
+
         var token = new JwtSecurityToken(
             issuer: _configuration["Jwt:Issuer"],
             audience: _configuration["Jwt:Audience"],

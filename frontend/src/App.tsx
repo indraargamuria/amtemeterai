@@ -7,7 +7,9 @@ import { CustomersPage } from "./pages/Customers"
 import { DeliveriesPage, DeliveryDetailPage } from "./pages/Deliveries"
 import { DeliveryReceivePage } from "./pages/Public"
 import { InvoicesPage } from "./pages/Invoices"
+import { UserAccessManagementPage } from "./pages/UserAccessManagement"
 import { DashboardLayout } from "./shared/layouts"
+import { SecuritySessionGuard } from "./shared/components/SecuritySessionGuard"
 
 function AppRoutes() {
   const { isAuthenticated } = useAuth()
@@ -71,6 +73,16 @@ function AppRoutes() {
           </ProtectedRoute>
         }
       />
+      <Route
+        path="/admin/uam"
+        element={
+          <ProtectedRoute>
+            <DashboardLayout>
+              <UserAccessManagementPage />
+            </DashboardLayout>
+          </ProtectedRoute>
+        }
+      />
 
       {/* Catch all - redirect to home if authenticated, login if not */}
       <Route path="*" element={
@@ -84,7 +96,9 @@ function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <AppRoutes />
+        <SecuritySessionGuard>
+          <AppRoutes />
+        </SecuritySessionGuard>
       </AuthProvider>
     </BrowserRouter>
   )

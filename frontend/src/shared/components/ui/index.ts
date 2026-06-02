@@ -12,3 +12,4 @@ export {
   TableCell,
 } from "./Table"
 export { Pagination } from "./Pagination"
+export { Checkbox } from "./Checkbox"

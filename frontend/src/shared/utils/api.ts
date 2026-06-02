@@ -1,3 +1,5 @@
+import { useMemo } from "react"
+
 // import { useAuth } from "../contexts/AuthContext"
 
 const API_URL = import.meta.env.VITE_API_URL
@@ -67,15 +69,16 @@ export async function authDelete(url: string) {
 
 /**
  * Hook to get the authenticated fetch function
+ * Returns a stable object to prevent infinite re-renders
  */
 export function useApi() {
-  return {
+  // Use useMemo to return the same object reference on every render
+  return useMemo(() => ({
     get: authGet,
     post: authPost,
     patch: authPatch,
     delete: authDelete,
-    fetch: createAuthenticatedFetch(),
-  }
+  }), [])
 }
 
 // =========================

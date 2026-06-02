@@ -7,12 +7,70 @@ interface DashboardLayoutProps {
   children: React.ReactNode
 }
 
-const menuItems = [
-  { path: "/", label: "Dashboard" },
-  { path: "/customers", label: "Customers" },
-  { path: "/deliveries", label: "Deliveries" },
-  // { path: "/invoices", label: "Invoices" },
+interface MenuItem {
+  path: string
+  label: string
+  accessCode?: string
+}
+
+const menuItems: MenuItem[] = [
+  { path: "/", label: "Dashboard", accessCode: "dashboard" },
+  { path: "/customers", label: "Customers", accessCode: "customers" },
+  { path: "/deliveries", label: "Deliveries", accessCode: "deliveries" },
+  { path: "/invoices", label: "Invoices", accessCode: "invoices" },
+  { path: "/admin/uam", label: "User Management", accessCode: "uam" },
 ]
+
+// Helper to decode JWT payload
+function decodeJWT(token: string): any {
+  try {
+    const base64Url = token.split(".")[1]
+    const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/")
+    const jsonPayload = decodeURIComponent(
+      atob(base64)
+        .split("")
+        .map((c) => `%${("00" + c.charCodeAt(0).toString(16)).slice(-2)}`)
+        .join("")
+    )
+    return JSON.parse(jsonPayload)
+  } catch {
+    return {}
+  }
+}
+
+// Helper to get user claims from JWT
+function getUserClaims() {
+  const token = localStorage.getItem("auth_token")
+  if (!token) return null
+
+  const payload = decodeJWT(token)
+  const roles = payload["http://schemas.microsoft.com/ws/2008/06/identity/claims/role"] || []
+  const menus = payload["menu"] || []
+
+  return {
+    roles: Array.isArray(roles) ? roles : [roles],
+    menus: Array.isArray(menus) ? menus : [menus],
+  }
+}
+
+// Filter menu items based on user permissions
+function filterMenuItems(items: MenuItem[]): MenuItem[] {
+  const claims = getUserClaims()
+  if (!claims) return []
+
+  // Sysadmin bypass - show all menus
+  if (claims.roles.includes("sysadmin")) {
+    return items
+  }
+
+  // Filter by menu access codes
+  return items.filter((item) => {
+    // Items without accessCode are always shown
+    if (!item.accessCode) return true
+    // Check if user has this menu permission
+    return claims.menus.includes(item.accessCode)
+  })
+}
 
 export function DashboardLayout({ children }: DashboardLayoutProps) {
   const location = useLocation()
@@ -23,6 +81,9 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     logout()
     navigate("/login")
   }
+
+  // Get filtered menu items
+  const visibleMenuItems = filterMenuItems(menuItems)
 
   // Get user initial for avatar
   const userInitial = user?.fullName
@@ -48,7 +109,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
         {/* Navigation */}
         <nav className="flex-1 px-3">
           <ul className="space-y-0.5">
-            {menuItems.map((item) => {
+            {visibleMenuItems.map((item) => {
               const isActive = location.pathname === item.path
               return (
                 <li key={item.path}>
