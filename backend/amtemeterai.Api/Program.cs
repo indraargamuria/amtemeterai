@@ -126,7 +126,7 @@ builder.Services.AddAuthorization();
 var app = builder.Build();
 
 // ==========================================
-// 🚀 FIXED EXECUTION LIFECYCLE FOR SEEDING & TEST ACCOUNTS
+// 🚀 FIXED EXECUTION LIFECYCLE FOR SEEDING, PLANTS & TEST ACCOUNTS
 // ==========================================
 using (var scope = app.Services.CreateScope())
 {
@@ -141,6 +141,54 @@ using (var scope = app.Services.CreateScope())
 
         logger.LogInformation("Seeding dynamic RBAC Matrix structural tables...");
         await DbInitializer.SeedRbacAsync(services);
+
+        // --- NEW: SEED MASTER DATA PLANTS FROM image_e157da.png ---
+        logger.LogInformation("Syncing ERP master data operational plant codes...");
+        var plantSeeds = new List<Plant>
+        {
+            new() { PlantCode = "0001", PlantName = "Werk 0001" },
+            new() { PlantCode = "0003", PlantName = "Plant 0003 (is-ht-sw)" },
+            new() { PlantCode = "B1C1", PlantName = "Cotton Processing - Tangerang" },
+            new() { PlantCode = "B1C2", PlantName = "Cotton Processing - Salatiga" },
+            new() { PlantCode = "B1D1", PlantName = "Digital Print Tangerang" },
+            new() { PlantCode = "B1E1", PlantName = "Energy - Tangerang" },
+            new() { PlantCode = "B1E2", PlantName = "Energy - Salatiga" },
+            new() { PlantCode = "B1F1", PlantName = "FP Tangerang" },
+            new() { PlantCode = "B1F2", PlantName = "FP Encap" },
+            new() { PlantCode = "B1F3", PlantName = "FP Salatiga" },
+            new() { PlantCode = "B1F5", PlantName = "FP Bandung" },
+            new() { PlantCode = "B1G1", PlantName = "Garment Tangerang KB" },
+            new() { PlantCode = "B1G2", PlantName = "Garment Tangerang Non KB" },
+            new() { PlantCode = "B1G3", PlantName = "Garment Salatiga KB" },
+            new() { PlantCode = "B1G5", PlantName = "Garment Intimate Salatiga" },
+            new() { PlantCode = "B1G6", PlantName = "Garment Denim Tangerang Non KB" },
+            new() { PlantCode = "B1K1", PlantName = "Knitting Tangerang" },
+            new() { PlantCode = "B1S1", PlantName = "Spinning Salatiga" },
+            new() { PlantCode = "B1S2", PlantName = "Spinning Ungaran" },
+            new() { PlantCode = "B1S3", PlantName = "Spinning Bandung" },
+            new() { PlantCode = "B1T1", PlantName = "B1T1-Trading & Supporting - Ja" },
+            new() { PlantCode = "B1T2", PlantName = "Trading & Support Tangerang" },
+            new() { PlantCode = "B1T3", PlantName = "Trading & Support Salatiga" },
+            new() { PlantCode = "B1T5", PlantName = "Trading & Support Tangerang KA" },
+            new() { PlantCode = "B1T6", PlantName = "Trading & Support Bandung" },
+            new() { PlantCode = "B1T7", PlantName = "Trading Fumira" },
+            new() { PlantCode = "B1W1", PlantName = "Weaving Tangerang" },
+            new() { PlantCode = "B1W2", PlantName = "Weaving Salatiga" },
+            new() { PlantCode = "B1W3", PlantName = "Weaving Bandung" },
+            new() { PlantCode = "B1Y1", PlantName = "Yarn Processing Tangerang" },
+            new() { PlantCode = "B1Y2", PlantName = "Yarn Processing Bandung" },
+            new() { PlantCode = "Z999", PlantName = "Plant" }
+        };
+
+        foreach (var p in plantSeeds)
+        {
+            if (!await db.Plant.AnyAsync(x => x.PlantCode == p.PlantCode))
+            {
+                await db.Plant.AddAsync(p);
+            }
+        }
+        await db.SaveChangesAsync();
+        logger.LogInformation("ERP plant codes successfully updated in reference tables.");
 
         var userManager = services.GetRequiredService<UserManager<ApplicationUser>>();
         var roleManager = services.GetRequiredService<RoleManager<IdentityRole>>();
@@ -160,13 +208,11 @@ using (var scope = app.Services.CreateScope())
             await userManager.CreateAsync(adminUser, "Admin@123");
         }
 
-        // Move admin cleanly to sysadmin role if it's trapped in the legacy 'Admin' role
         if (!await userManager.IsInRoleAsync(adminUser, "sysadmin"))
         {
             await userManager.AddToRoleAsync(adminUser, "sysadmin");
             logger.LogInformation("Admin account successfully linked to 'sysadmin' role matrix.");
             
-            // Clean up old string role reference if it exists
             if (await userManager.IsInRoleAsync(adminUser, "Admin"))
             {
                 await userManager.RemoveFromRoleAsync(adminUser, "Admin");
@@ -183,11 +229,11 @@ using (var scope = app.Services.CreateScope())
 
         foreach (var account in dummyAccounts)
         {
-            var existingDummy = await userManager.FindByEmailAsync(account.Email);
-            if (existingDummy == null)
+            var testUser = await userManager.FindByEmailAsync(account.Email);
+            if (testUser == null)
             {
                 logger.LogInformation("Provisioning dynamic test profile: {Email}", account.Email);
-                var testUser = new ApplicationUser
+                testUser = new ApplicationUser
                 {
                     UserName = account.Email,
                     Email = account.Email,
@@ -201,29 +247,27 @@ using (var scope = app.Services.CreateScope())
                     await userManager.AddToRoleAsync(testUser, account.Role);
                     logger.LogInformation("Assigned {Email} to role '{Role}' cleanly.", account.Email, account.Role);
                 }
-                else
-                {
-                    logger.LogWarning("Failed to provision dummy account {Email}: {Errors}", 
-                        account.Email, string.Join(", ", createResult.Errors.Select(e => e.Description)));
-                }
             }
         }
 
-        // --- C. CLEAN UP LEGACY STRUCTURAL ROLES FROM INITIAL ENGINE (Optional) ---
-        string[] oldRoles = { "Admin", "User" };
-        foreach (var oldRole in oldRoles)
+        // --- C. OPTIONAL: MOCK PRE-ASSIGNED USER PLANTS FOR TESTING ---
+        // Let's connect our newly seeded dummy testers to some specific plants for testing purposes
+        var financeUser = await userManager.FindByEmailAsync("finance@amtemeterai.com");
+        if (financeUser != null)
         {
-            var roleNode = await roleManager.FindByNameAsync(oldRole);
-            if (roleNode != null && !db.UserRoles.Any(ur => ur.RoleId == roleNode.Id))
+            // E.g., Assigning Finance to Garment Tangerang Non KB (B1G2)
+            if (!await db.UserPlant.AnyAsync(up => up.UserId == financeUser.Id && up.PlantCode == "B1G2"))
             {
-                await roleManager.DeleteAsync(roleNode);
-                logger.LogInformation("Removed obsolete system role: {OldRole}", oldRole);
+                await db.UserPlant.AddAsync(new UserPlant { UserId = financeUser.Id, PlantCode = "B1G2" });
+                await db.SaveChangesAsync();
+                logger.LogInformation("Mapped finance@amtemeterai.com to test plant B1G2.");
             }
         }
+
     }
     catch (Exception ex)
     {
-        logger.LogError(ex, "A fatal exception was thrown during the critical database initialization pipeline sequence.");
+        logger.LogError(ex, "A fatal exception was thrown during the database initialization sequence.");
     }
 }
 

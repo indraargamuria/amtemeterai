@@ -25,6 +25,9 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<RolePermission> RolePermissions { get; set; } = null!;
     public DbSet<MenuPermission> MenuPermissions { get; set; } = null!;
 
+    public DbSet<Plant> Plant { get; set; } = null!;
+    public DbSet<UserPlant> UserPlant { get; set; } = null!;
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
@@ -158,5 +161,28 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
                   .HasForeignKey(mp => mp.PermissionId)
                   .OnDelete(DeleteBehavior.Cascade);
         });
+
+        // Configure Composite Key for the Configuration Matrix
+        modelBuilder.Entity<UserPlant>()
+            .HasKey(up => new { up.UserId, up.PlantCode });
+
+        // Link UserPlant -> User
+        modelBuilder.Entity<UserPlant>()
+            .HasOne(up => up.User)
+            .WithMany() 
+            .HasForeignKey(up => up.UserId);
+
+        // Link UserPlant -> Plant
+        modelBuilder.Entity<UserPlant>()
+            .HasOne(up => up.Plant)
+            .WithMany()
+            .HasForeignKey(up => up.PlantCode);
+
+        // Explicitly map DeliveryHeader's existing 'Plant' string property to our new Plant table
+        modelBuilder.Entity<DeliveryHeader>()
+            .HasOne<Plant>()
+            .WithMany()
+            .HasForeignKey(d => d.Plant) // Assuming DeliveryHeader already has a string property named 'Plant'
+            .IsRequired(false); // Make it optional or required based on your ERP data constraints
     }
 }
