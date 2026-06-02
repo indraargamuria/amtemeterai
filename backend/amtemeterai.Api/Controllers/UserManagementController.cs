@@ -13,13 +13,16 @@ namespace amtemeterai.Api.Controllers;
 public class UserManagementController : ControllerBase
 {
     private readonly UserManager<ApplicationUser> _userManager;
+    private readonly RoleManager<IdentityRole> _roleManager;
     private readonly AppDbContext _context;
 
     public UserManagementController(
         UserManager<ApplicationUser> userManager,
+        RoleManager<IdentityRole> roleManager,
         AppDbContext context)
     {
         _userManager = userManager;
+        _roleManager = roleManager;
         _context = context;
     }
 
@@ -45,7 +48,7 @@ public class UserManagementController : ControllerBase
     }
 
     /// <summary>
-    /// Get user's plant assignment matrix
+    /// Get user's unified assignment matrix (Plants + Roles)
     /// </summary>
     [HttpGet("users/{id}/matrix")]
     public async Task<ActionResult> GetUserMatrix(string id)
@@ -56,10 +59,14 @@ public class UserManagementController : ControllerBase
             return NotFound(new { message = "User not found" });
         }
 
+        // Get assigned plants
         var assignedPlants = await _context.UserPlant
             .Where(up => up.UserId == id)
             .Select(up => up.PlantCode)
             .ToListAsync();
+
+        // Get assigned roles
+        var assignedRoles = await _userManager.GetRolesAsync(user);
 
         // Get all available plants for the UI
         var allPlants = await _context.Plant
@@ -71,18 +78,30 @@ public class UserManagementController : ControllerBase
             })
             .ToListAsync();
 
+        // Get all available roles for the UI
+        var allRoles = await _roleManager.Roles
+            .OrderBy(r => r.Name)
+            .Select(r => new
+            {
+                r.Id,
+                r.Name
+            })
+            .ToListAsync();
+
         return Ok(new
         {
             userId = user.Id,
             fullName = user.FullName,
             email = user.Email,
             assignedPlants,
-            allPlants
+            assignedRoles,
+            allPlants,
+            allRoles
         });
     }
 
     /// <summary>
-    /// Update user's plant assignment matrix
+    /// Update user's unified assignment matrix (Plants + Roles)
     /// </summary>
     [HttpPost("users/{id}/matrix")]
     public async Task<ActionResult> UpdateUserMatrix(string id, [FromBody] UpdateUserMatrixDto dto)
@@ -93,6 +112,14 @@ public class UserManagementController : ControllerBase
             return NotFound(new { message = "User not found" });
         }
 
+        // Prevent sysadmin from removing their own sysadmin role
+        var currentUserId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+        if (currentUserId == id && !dto.SelectedRoles.Contains("sysadmin"))
+        {
+            return BadRequest(new { message = "Cannot remove your own sysadmin role" });
+        }
+
+        // === Plants Sync ===
         // Remove existing plant assignments
         var existingAssignments = await _context.UserPlant
             .Where(up => up.UserId == id)
@@ -118,6 +145,39 @@ public class UserManagementController : ControllerBase
             });
         }
 
+        // === Roles Sync ===
+        // Get current roles
+        var currentRoles = await _userManager.GetRolesAsync(user);
+
+        // Remove all current roles
+        if (currentRoles.Any())
+        {
+            var removeResult = await _userManager.RemoveFromRolesAsync(user, currentRoles);
+            if (!removeResult.Succeeded)
+            {
+                return BadRequest(new { message = "Failed to remove existing roles" });
+            }
+        }
+
+        // Add new roles
+        if (dto.SelectedRoles.Any())
+        {
+            // Verify all roles exist
+            foreach (var roleName in dto.SelectedRoles)
+            {
+                if (!await _roleManager.RoleExistsAsync(roleName))
+                {
+                    return BadRequest(new { message = $"Role '{roleName}' does not exist" });
+                }
+            }
+
+            var addResult = await _userManager.AddToRolesAsync(user, dto.SelectedRoles);
+            if (!addResult.Succeeded)
+            {
+                return BadRequest(new { message = "Failed to assign new roles" });
+            }
+        }
+
         // Update security stamp to invalidate existing tokens
         await _userManager.UpdateSecurityStampAsync(user);
 
@@ -127,15 +187,17 @@ public class UserManagementController : ControllerBase
         {
             message = "User permissions updated successfully",
             userId = user.Id,
-            plantCount = dto.SelectedPlants.Count
+            plantCount = dto.SelectedPlants.Count,
+            roleCount = dto.SelectedRoles.Count
         });
     }
 }
 
 /// <summary>
-/// DTO for updating user plant matrix
+/// DTO for updating user unified matrix (Plants + Roles)
 /// </summary>
 public class UpdateUserMatrixDto
 {
     public List<string> SelectedPlants { get; set; } = new();
+    public List<string> SelectedRoles { get; set; } = new();
 }

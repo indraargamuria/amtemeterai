@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom"
 import { AuthProvider, useAuth } from "./shared/contexts/AuthContext"
 import { ProtectedRoute } from "./shared/components/ProtectedRoute"
+import { RouteGuard } from "./shared/components/RouteGuard"
 import { LoginPage } from "./pages/Login"
 import { DashboardPage } from "./pages/Dashboard"
 import { CustomersPage } from "./pages/Customers"
@@ -8,6 +9,7 @@ import { DeliveriesPage, DeliveryDetailPage } from "./pages/Deliveries"
 import { DeliveryReceivePage } from "./pages/Public"
 import { InvoicesPage } from "./pages/Invoices"
 import { UserAccessManagementPage } from "./pages/UserAccessManagement"
+import { UnauthorizedPage } from "./pages/Unauthorized"
 import { DashboardLayout } from "./shared/layouts"
 import { SecuritySessionGuard } from "./shared/components/SecuritySessionGuard"
 
@@ -22,14 +24,19 @@ function AppRoutes() {
       } />
       <Route path="/receive/:token" element={<DeliveryReceivePage />} />
 
-      {/* Protected Routes - require authentication */}
+      {/* Unauthorized Page */}
+      <Route path="/unauthorized" element={<UnauthorizedPage />} />
+
+      {/* Protected Routes - require authentication + permission check */}
       <Route
         path="/"
         element={
           <ProtectedRoute>
-            <DashboardLayout>
-              <DashboardPage />
-            </DashboardLayout>
+            <RouteGuard>
+              <DashboardLayout>
+                <DashboardPage />
+              </DashboardLayout>
+            </RouteGuard>
           </ProtectedRoute>
         }
       />
@@ -37,9 +44,11 @@ function AppRoutes() {
         path="/customers"
         element={
           <ProtectedRoute>
-            <DashboardLayout>
-              <CustomersPage />
-            </DashboardLayout>
+            <RouteGuard>
+              <DashboardLayout>
+                <CustomersPage />
+              </DashboardLayout>
+            </RouteGuard>
           </ProtectedRoute>
         }
       />
@@ -47,9 +56,11 @@ function AppRoutes() {
         path="/deliveries"
         element={
           <ProtectedRoute>
-            <DashboardLayout>
-              <DeliveriesPage />
-            </DashboardLayout>
+            <RouteGuard>
+              <DashboardLayout>
+                <DeliveriesPage />
+              </DashboardLayout>
+            </RouteGuard>
           </ProtectedRoute>
         }
       />
@@ -57,9 +68,11 @@ function AppRoutes() {
         path="/deliveries/:deliveryId"
         element={
           <ProtectedRoute>
-            <DashboardLayout>
-              <DeliveryDetailPage />
-            </DashboardLayout>
+            <RouteGuard>
+              <DashboardLayout>
+                <DeliveryDetailPage />
+              </DashboardLayout>
+            </RouteGuard>
           </ProtectedRoute>
         }
       />
@@ -67,9 +80,11 @@ function AppRoutes() {
         path="/invoices"
         element={
           <ProtectedRoute>
-            <DashboardLayout>
-              <InvoicesPage />
-            </DashboardLayout>
+            <RouteGuard>
+              <DashboardLayout>
+                <InvoicesPage />
+              </DashboardLayout>
+            </RouteGuard>
           </ProtectedRoute>
         }
       />
@@ -77,9 +92,11 @@ function AppRoutes() {
         path="/admin/uam"
         element={
           <ProtectedRoute>
-            <DashboardLayout>
-              <UserAccessManagementPage />
-            </DashboardLayout>
+            <RouteGuard>
+              <DashboardLayout>
+                <UserAccessManagementPage />
+              </DashboardLayout>
+            </RouteGuard>
           </ProtectedRoute>
         }
       />
