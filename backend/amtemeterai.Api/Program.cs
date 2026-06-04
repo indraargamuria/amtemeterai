@@ -245,7 +245,16 @@ using (var scope = app.Services.CreateScope())
                 if (createResult.Succeeded)
                 {
                     await userManager.AddToRoleAsync(testUser, account.Role);
-                    logger.LogInformation("Assigned {Email} to role '{Role}' cleanly.", account.Email, account.Role);
+                    logger.LogInformation("Created {Email} and assigned to role '{Role}'.", account.Email, account.Role);
+                }
+            }
+            else
+            {
+                // Ensure existing user has the correct role assigned
+                if (!await userManager.IsInRoleAsync(testUser, account.Role))
+                {
+                    await userManager.AddToRoleAsync(testUser, account.Role);
+                    logger.LogInformation("Assigned existing {Email} to role '{Role}'.", account.Email, account.Role);
                 }
             }
         }

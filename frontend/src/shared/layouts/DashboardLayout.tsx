@@ -17,7 +17,7 @@ const menuItems: MenuItem[] = [
   { path: "/", label: "Dashboard", accessCode: "dashboard" },
   { path: "/customers", label: "Customers", accessCode: "customers" },
   { path: "/deliveries", label: "Deliveries", accessCode: "deliveries" },
-  { path: "/invoices", label: "Invoices", accessCode: "invoices" },
+  // { path: "/invoices", label: "Invoices", accessCode: "invoices" },
   { path: "/admin/uam", label: "User Management", accessCode: "uam" },
 ]
 

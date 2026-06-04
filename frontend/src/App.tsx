@@ -4,7 +4,6 @@ import { ProtectedRoute } from "./shared/components/ProtectedRoute"
 import { RouteGuard } from "./shared/components/RouteGuard"
 import { LoginPage } from "./pages/Login"
 import { DashboardPage } from "./pages/Dashboard"
-import { DashboardRedirectPage } from "./pages/DashboardRedirect"
 import { CustomersPage } from "./pages/Customers"
 import { DeliveriesPage, DeliveryDetailPage } from "./pages/Deliveries"
 import { DeliveryReceivePage } from "./pages/Public"
@@ -28,17 +27,19 @@ function AppRoutes() {
       {/* Unauthorized Page */}
       <Route path="/unauthorized" element={<UnauthorizedPage />} />
 
-      {/* Root Route - Dynamic Redirect based on permissions */}
+      {/* Dashboard Route - Protected with permission check */}
       <Route
         path="/"
         element={
           <ProtectedRoute>
-            <DashboardRedirectPage />
+            <RouteGuard>
+              <DashboardLayout>
+                <DashboardPage />
+              </DashboardLayout>
+            </RouteGuard>
           </ProtectedRoute>
         }
       />
-
-      {/* Dashboard Route - Protected with permission check */}
       <Route
         path="/dashboard"
         element={
