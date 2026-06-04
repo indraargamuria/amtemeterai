@@ -5,6 +5,9 @@ interface User {
   id: string
   email: string
   fullName?: string
+  roles?: string[]
+  permissions?: string[]
+  plants?: string[]
 }
 
 interface AuthContextType {
@@ -34,7 +37,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (storedToken && storedUser) {
       try {
         setToken(storedToken)
-        setUser(JSON.parse(storedUser))
+        const parsedUser = JSON.parse(storedUser)
+
+        // If stored user doesn't have claims, decode from token
+        if (!parsedUser.roles || !parsedUser.permissions || !parsedUser.plants) {
+          const payload = decodeJWT(storedToken)
+          const roles = payload["http://schemas.microsoft.com/ws/2008/06/identity/claims/role"] || []
+          const permissions = payload["permission"] || []
+          const plants = payload["plant"] || []
+
+          parsedUser.roles = Array.isArray(roles) ? roles : [roles]
+          parsedUser.permissions = Array.isArray(permissions) ? permissions : [permissions]
+          parsedUser.plants = Array.isArray(plants) ? plants : [plants]
+
+          // Update stored user with claims
+          localStorage.setItem(USER_KEY, JSON.stringify(parsedUser))
+        }
+
+        setUser(parsedUser)
       } catch {
         // Invalid stored user, clear everything
         localStorage.removeItem(TOKEN_KEY)
@@ -62,12 +82,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const data = await response.json()
 
-    // Decode JWT to get user ID
+    // Decode JWT to get user claims
     const payload = decodeJWT(data.token)
+    const roles = payload["http://schemas.microsoft.com/ws/2008/06/identity/claims/role"] || []
+    const permissions = payload["permission"] || []
+    const plants = payload["plant"] || []
+
     const userData: User = {
       id: payload.nameid,
       email: data.email,
       fullName: data.fullName,
+      roles: Array.isArray(roles) ? roles : [roles],
+      permissions: Array.isArray(permissions) ? permissions : [permissions],
+      plants: Array.isArray(plants) ? plants : [plants],
     }
 
     // Store in state and localStorage

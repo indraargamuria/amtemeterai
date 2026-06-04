@@ -13,6 +13,7 @@ import {
 } from "../../shared/components/ui/Table"
 import { Pagination } from "../../shared/components/ui/Pagination"
 import { useApi } from "../../shared/utils/api"
+import { useAuth } from "../../shared/contexts/AuthContext"
 
 interface DeliveryHeader {
   deliveryId: number
@@ -49,6 +50,7 @@ const ITEMS_PER_PAGE = 10
 
 export function DeliveriesPage() {
   const navigate = useNavigate()
+  const { user } = useAuth()
   const [currentPage, setCurrentPage] = useState(1)
   const [deliveries, setDeliveries] = useState<DeliveryHeader[]>([])
   const [loading, setLoading] = useState(true)
@@ -62,6 +64,10 @@ export function DeliveriesPage() {
   // const [fileInput, _setFileInput] = useState<HTMLInputElement | null>(null)
 
   const api = useApi()
+
+  // Get user's assigned plants and sysadmin status
+  const assignedPlants: string[] = user?.plants || []
+  const isSysAdmin = user?.roles?.includes('sysadmin') || false
 
   // const handleFileUpload = async (deliveryId: number) => {
   //   const file = fileInput?.files?.[0]
@@ -122,6 +128,21 @@ export function DeliveriesPage() {
   const filteredAndSortedDeliveries = useMemo(() => {
     let filtered = [...deliveries]
 
+    // 🚀 NEW: Plant-Level Security Filter (apply before other filters for efficiency)
+    // Sysadmin bypass: show all plants
+    // Standard operators: only show deliveries matching their assigned plants
+    if (!isSysAdmin && assignedPlants.length > 0) {
+      filtered = filtered.filter((d) => {
+        // Only include deliveries where plant matches one of the user's assigned plants
+        // If delivery has no plant assigned, exclude it for security
+        if (!d.plant) return false
+        return assignedPlants.includes(d.plant)
+      })
+    } else if (!isSysAdmin && assignedPlants.length === 0) {
+      // Non-sysadmin user with no plants assigned - show nothing for security
+      filtered = []
+    }
+
     // Apply search filter
     if (searchQuery) {
       const query = searchQuery.toLowerCase()
@@ -179,7 +200,7 @@ export function DeliveriesPage() {
     })
 
     return filtered
-  }, [deliveries, searchQuery, sortField, sortOrder, complianceFilter, pipelineFilter, showDiscrepancyOnly])
+  }, [deliveries, searchQuery, sortField, sortOrder, complianceFilter, pipelineFilter, showDiscrepancyOnly, assignedPlants, isSysAdmin])
 
   const totalPages = Math.ceil(filteredAndSortedDeliveries.length / ITEMS_PER_PAGE)
   const startIndex = (currentPage - 1) * ITEMS_PER_PAGE
