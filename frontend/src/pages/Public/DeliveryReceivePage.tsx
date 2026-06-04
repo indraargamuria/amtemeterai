@@ -44,7 +44,9 @@ interface DeliveryDetail {
   invoiced: boolean
   photos?: DeliveryPhoto[]
   lines: DeliveryLine[]
-  customerPONumber?: string
+  customerName?: string | null
+  buyerPONumber?: string | null
+  orderNumber?: string | null
 }
 
 interface LineFormState {
@@ -658,34 +660,56 @@ export function DeliveryReceivePage() {
           </div>
         )}
 
-        {/* Delivery Info Card */}
+        {/* Delivery Info Card - Consolidated with all fields */}
         <Card className="border-slate-200 shadow-sm bg-white">
           <CardHeader className="px-4 py-3 border-b border-slate-100">
-            <CardTitle className="text-sm font-semibold text-slate-800">Delivery Details</CardTitle>
+            <CardTitle className="text-sm font-semibold text-slate-800 flex items-center gap-2">
+              <FileText className="w-4 h-4 text-slate-800" />
+              Delivery Details
+            </CardTitle>
           </CardHeader>
-          <CardContent className="p-4">
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          <CardContent className="p-4 space-y-4">
+            {/* Top Row: Primary Details Split */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1">
                 <p className="text-[10px] font-medium uppercase tracking-wider text-slate-400">Delivery Number</p>
                 <p className="text-sm font-semibold text-[#1d2351] font-mono">{delivery.deliveryNumber}</p>
               </div>
               <div className="space-y-1">
-                <p className="text-[10px] font-medium uppercase tracking-wider text-slate-400">Customer PO</p>
-                <p className="text-sm font-semibold text-slate-700 font-mono">{delivery.customerPONumber || "—"}</p>
+                <p className="text-[10px] font-medium uppercase tracking-wider text-slate-400">Customer Name</p>
+                <p className="text-sm font-semibold text-slate-700">{delivery.customerName || "—"}</p>
+              </div>
+            </div>
+
+            {/* Middle Row: Meta Parameters with a top border */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-4 border-t border-slate-100">
+              <div className="space-y-1">
+                <p className="text-[10px] font-medium uppercase tracking-wider text-slate-400">Buyer PO Number</p>
+                <p className="text-sm font-semibold text-slate-700 font-mono">{delivery.buyerPONumber || "—"}</p>
+              </div>
+              <div className="space-y-1">
+                <p className="text-[10px] font-medium uppercase tracking-wider text-slate-400">Order Number</p>
+                <p className="text-sm font-semibold text-slate-700 font-mono">{delivery.orderNumber || "—"}</p>
               </div>
               <div className="space-y-1">
                 <p className="text-[10px] font-medium uppercase tracking-wider text-slate-400">Delivery Date</p>
-                <p className="text-sm font-medium text-slate-600">{formatDate(delivery.deliveryDate)}</p>
+                <p className="text-sm font-semibold text-slate-700">{formatDate(delivery.deliveryDate)}</p>
               </div>
               <div className="space-y-1">
-                <p className="text-[10px] font-medium uppercase tracking-wider text-slate-400">Items</p>
-                <p className="text-sm font-semibold text-slate-700">{delivery.lines.length} line items</p>
+                <p className="text-[10px] font-medium uppercase tracking-wider text-slate-400">Total Items</p>
+                <p className="text-sm font-semibold text-slate-700">
+                  <strong className="font-semibold">{delivery.lines.length}</strong> <span className="text-slate-400">items</span>
+                </p>
               </div>
             </div>
+
+            {/* Bottom Row: Wrapped Shipping Notes container */}
             {delivery.deliveryRemarks && (
-              <div className="mt-4 pt-4 border-t border-slate-100">
-                <p className="text-[10px] font-medium uppercase tracking-wider text-slate-400 mb-1">Shipping Notes</p>
-                <p className="text-xs text-slate-600">{delivery.deliveryRemarks}</p>
+              <div className="mt-4 pt-4 border-t border-slate-100 space-y-2">
+                <p className="text-[10px] font-medium uppercase tracking-wider text-slate-400">Shipping Notes</p>
+                <div className="bg-slate-50 border border-slate-100 rounded-xl p-3">
+                  <p className="text-sm font-semibold text-slate-600">{delivery.deliveryRemarks}</p>
+                </div>
               </div>
             )}
           </CardContent>
