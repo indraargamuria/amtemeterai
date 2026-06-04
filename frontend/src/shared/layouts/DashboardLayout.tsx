@@ -10,15 +10,16 @@ interface DashboardLayoutProps {
 interface MenuItem {
   path: string
   label: string
-  accessCode?: string
+  requiredPermission: string
+  sysAdminOnly?: boolean
 }
 
 const menuItems: MenuItem[] = [
-  { path: "/", label: "Dashboard", accessCode: "dashboard" },
-  { path: "/customers", label: "Customers", accessCode: "customers" },
-  { path: "/deliveries", label: "Deliveries", accessCode: "deliveries" },
-  // { path: "/invoices", label: "Invoices", accessCode: "invoices" },
-  { path: "/admin/uam", label: "User Management", accessCode: "uam" },
+  { path: "/", label: "Dashboard", requiredPermission: "dashboard:read" },
+  { path: "/customers", label: "Customers", requiredPermission: "customer:read" },
+  { path: "/deliveries", label: "Deliveries", requiredPermission: "delivery:read" },
+  { path: "/invoices", label: "Invoices", requiredPermission: "invoice:read" },
+  { path: "/admin/uam", label: "User Management", requiredPermission: "uam:read", sysAdminOnly: true },
 ]
 
 // Helper to decode JWT payload
@@ -45,11 +46,11 @@ function getUserClaims() {
 
   const payload = decodeJWT(token)
   const roles = payload["http://schemas.microsoft.com/ws/2008/06/identity/claims/role"] || []
-  const menus = payload["menu"] || []
+  const permissions = payload["permission"] || []
 
   return {
     roles: Array.isArray(roles) ? roles : [roles],
-    menus: Array.isArray(menus) ? menus : [menus],
+    permissions: Array.isArray(permissions) ? permissions : [permissions],
   }
 }
 
@@ -63,12 +64,12 @@ function filterMenuItems(items: MenuItem[]): MenuItem[] {
     return items
   }
 
-  // Filter by menu access codes
+  // Filter by permission requirements
   return items.filter((item) => {
-    // Items without accessCode are always shown
-    if (!item.accessCode) return true
-    // Check if user has this menu permission
-    return claims.menus.includes(item.accessCode)
+    // Sysadmin-only items are hidden for non-sysadmin users
+    if (item.sysAdminOnly) return false
+    // Check if user has the required permission
+    return claims.permissions.includes(item.requiredPermission)
   })
 }
 

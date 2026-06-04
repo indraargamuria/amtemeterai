@@ -184,6 +184,19 @@ public class AccountController : ControllerBase
             .Distinct()
             .ToListAsync();
 
+        // 🚀 4a. Get assigned permission keys for granular permission checks
+        var assignedPermissions = await _context.Permissions
+            .Where(p => rolePermissionIds.Contains(p.Id))
+            .Select(p => p.PermissionKey)
+            .Distinct()
+            .ToListAsync();
+
+        foreach (var permissionKey in assignedPermissions)
+        {
+            claims.Add(new Claim("permission", permissionKey));
+        }
+
+        // 🚀 4b. Get assigned menu codes for sidebar visibility
         var assignedMenus = await _context.MenuPermissions
             .Where(mp => rolePermissionIds.Contains(mp.PermissionId))
             .Select(mp => mp.Menu!.MenuKey)
@@ -195,7 +208,7 @@ public class AccountController : ControllerBase
             claims.Add(new Claim("menu", menuCode));
         }
 
-        // 🚀 5. Add SecurityStamp for session revocation tracking
+        // 🚀 6. Add SecurityStamp for session revocation tracking
         claims.Add(new Claim("security_stamp", user.SecurityStamp ?? Guid.NewGuid().ToString()));
 
         var token = new JwtSecurityToken(

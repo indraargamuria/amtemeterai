@@ -25,7 +25,6 @@ public static class DbInitializer
             }
         }
 
-        // Get Role Objects for later mapping
         var adminRole = await roleManager.FindByNameAsync("sysadmin");
         var financeRole = await roleManager.FindByNameAsync("finance");
         var warehouseRole = await roleManager.FindByNameAsync("warehouse");
@@ -34,20 +33,24 @@ public static class DbInitializer
         // 2. SEED PERMISSIONS
         var defaultPermissions = new List<Permission>
         {
-            // Dashboard Permissions
+            // Dashboard (Id: 1)
             new() { Id = 1, PermissionKey = "dashboard:read", Description = "View dashboard with KPIs and analytics", Category = "Dashboard", DisplayOrder = 1 },
 
-            // Customer Permissions
+            // Customers (Ids: 2, 3)
             new() { Id = 2, PermissionKey = "customer:read", Description = "View customer list and profiles", Category = "Customers", DisplayOrder = 2 },
             new() { Id = 3, PermissionKey = "customer:sync", Description = "Sync customer data from ERP system", Category = "Customers", DisplayOrder = 3 },
 
-            // Invoice Permissions
+            // Invoices (Ids: 4, 5)
             new() { Id = 4, PermissionKey = "invoice:read", Description = "View invoice records", Category = "Invoices", DisplayOrder = 4 },
             new() { Id = 5, PermissionKey = "invoice:sync", Description = "Sync invoices from ERP system", Category = "Invoices", DisplayOrder = 5 },
 
-            // Delivery Permissions
+            // Deliveries (Ids: 6, 7)
             new() { Id = 6, PermissionKey = "delivery:read", Description = "View delivery headers and details", Category = "Deliveries", DisplayOrder = 6 },
-            new() { Id = 7, PermissionKey = "delivery:sync", Description = "Sync deliveries from ERP system", Category = "Deliveries", DisplayOrder = 7 }
+            new() { Id = 7, PermissionKey = "delivery:sync", Description = "Sync deliveries from ERP system", Category = "Deliveries", DisplayOrder = 7 },
+
+            // User Management / UAM (Ids: 8, 9)
+            new() { Id = 8, PermissionKey = "uam:read", Description = "View system roles and permission matrices", Category = "Access Control", DisplayOrder = 8 },
+            new() { Id = 9, PermissionKey = "uam:sync", Description = "Modify and write role permissions to database", Category = "Access Control", DisplayOrder = 9 }
         };
 
         foreach (var perm in defaultPermissions)
@@ -81,11 +84,11 @@ public static class DbInitializer
         // 4. SEED MENU PERMISSIONS (Establish baseline rules to show/hide menus)
         var menuPermissions = new List<MenuPermission>
         {
-            new() { MenuId = 1, PermissionId = 1 }, // Dashboard Menu requires dashboard:read
-            new() { MenuId = 2, PermissionId = 2 }, // Customers Menu requires customer:read
-            new() { MenuId = 3, PermissionId = 4 }, // Invoices Menu requires invoice:read
-            new() { MenuId = 4, PermissionId = 6 }, // Deliveries Menu requires delivery:read
-            new() { MenuId = 5, PermissionId = 3 }  // Access Management requires customer:sync
+            new() { MenuId = 1, PermissionId = 1 }, // Dashboard requires dashboard:read
+            new() { MenuId = 2, PermissionId = 2 }, // Customers requires customer:read
+            new() { MenuId = 3, PermissionId = 4 }, // Invoices requires invoice:read
+            new() { MenuId = 4, PermissionId = 6 }, // Deliveries requires delivery:read
+            new() { MenuId = 5, PermissionId = 8 }  // Access Management requires uam:read 
         };
 
         foreach (var mp in menuPermissions)
@@ -97,11 +100,11 @@ public static class DbInitializer
         }
         await context.SaveChangesAsync();
 
-        // 5. SEED INITIAL ROLE PERMISSIONS MATRIX (Initial system mapping)
+        // 5. SEED INITIAL ROLE PERMISSIONS MATRIX
         if (adminRole != null)
         {
-            // Sysadmin gets all permissions automatically
-            for (int i = 1; i <= 7; i++)
+            // Sysadmin gets all permissions (Ids 1 through 9), showing all menus
+            for (int i = 1; i <= 9; i++)
             {
                 await AssignPermissionToRoleAsync(context, adminRole.Id, i);
             }
@@ -109,26 +112,22 @@ public static class DbInitializer
 
         if (financeRole != null)
         {
-            // Finance can read/sync customers & invoices, and view dashboard, but cannot see deliveries
+            // Finance only gets access to dashboard and customer
             await AssignPermissionToRoleAsync(context, financeRole.Id, 1); // dashboard:read
             await AssignPermissionToRoleAsync(context, financeRole.Id, 2); // customer:read
-            await AssignPermissionToRoleAsync(context, financeRole.Id, 3); // customer:sync
-            await AssignPermissionToRoleAsync(context, financeRole.Id, 4); // invoice:read
-            await AssignPermissionToRoleAsync(context, financeRole.Id, 5); // invoice:sync
         }
 
         if (warehouseRole != null)
         {
-            // Warehouse can ONLY see delivery routes (no dashboard, customers, or invoices)
+            // Warehouse only gets access to delivery
             await AssignPermissionToRoleAsync(context, warehouseRole.Id, 6); // delivery:read
         }
 
         if (salesRole != null)
         {
-            // Sales can view dashboard, customer lists, and invoices, but cannot execute sync tools or see deliveries
+            // Sales only gets access to dashboard and customer
             await AssignPermissionToRoleAsync(context, salesRole.Id, 1); // dashboard:read
             await AssignPermissionToRoleAsync(context, salesRole.Id, 2); // customer:read
-            await AssignPermissionToRoleAsync(context, salesRole.Id, 4); // invoice:read
         }
 
         await context.SaveChangesAsync();
