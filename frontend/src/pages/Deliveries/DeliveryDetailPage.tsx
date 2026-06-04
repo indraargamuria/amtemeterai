@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { useParams, useNavigate } from "react-router-dom"
 import QRCode from "qrcode"
 import { Button } from "../../shared/components/ui/Button"
@@ -13,6 +13,7 @@ import {
   TableHeader,
   TableRow,
 } from "../../shared/components/ui/Table"
+import { Pagination } from "../../shared/components/ui/Pagination"
 import { useApi } from "../../shared/utils/api"
 
 interface DeliveryLine {
@@ -65,6 +66,8 @@ interface DeliveryDetail {
   lines: DeliveryLine[]
 }
 
+const LINES_PER_PAGE = 10
+
 export function DeliveryDetailPage() {
   const { deliveryId } = useParams<{ deliveryId: string }>()
   const navigate = useNavigate()
@@ -74,8 +77,24 @@ export function DeliveryDetailPage() {
   const [qrCode, setQrCode] = useState<string | null>(null)
   const [copySuccess, setCopySuccess] = useState(false)
   const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null)
+  const [linePage, setLinePage] = useState(1)
 
   const api = useApi()
+
+  // Calculate pagination for delivery lines
+  const totalLines = delivery?.lines?.length || 0
+  const totalLinePages = Math.ceil(totalLines / LINES_PER_PAGE)
+
+  const paginatedLines = useMemo(() => {
+    if (!delivery?.lines) return []
+    const startIndex = (linePage - 1) * LINES_PER_PAGE
+    return delivery.lines.slice(startIndex, startIndex + LINES_PER_PAGE)
+  }, [delivery?.lines, linePage])
+
+  // Reset line page when delivery changes
+  useEffect(() => {
+    setLinePage(1)
+  }, [deliveryId])
 
   useEffect(() => {
     const fetchDeliveryDetail = async () => {
@@ -508,7 +527,9 @@ export function DeliveryDetailPage() {
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-base font-bold text-brand-blue tracking-tight">Fulfillment Line Items</h3>
           <span className="text-xs text-brand-blue/50 font-medium">
-            Showing {delivery.lines.length} items total
+            {totalLines > 0
+              ? `Showing ${paginatedLines.length} of ${totalLines} items (Page ${linePage} of ${totalLinePages})`
+              : "No items"}
           </span>
         </div>
 
@@ -540,7 +561,7 @@ export function DeliveryDetailPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {delivery.lines.length === 0 ? (
+              {totalLines === 0 ? (
                 <TableRow>
                   <TableCell
                     colSpan={7}
@@ -550,7 +571,7 @@ export function DeliveryDetailPage() {
                   </TableCell>
                 </TableRow>
               ) : (
-                delivery.lines.map((line) => (
+                paginatedLines.map((line) => (
                   <TableRow
                     key={line.deliveryLineNumber}
                     className="hover:bg-brand-blue/[0.01] transition-colors"
@@ -604,6 +625,17 @@ export function DeliveryDetailPage() {
             </TableBody>
           </Table>
         </div>
+
+        {/* Pagination for Delivery Lines */}
+        {totalLinePages > 1 && (
+          <div className="mt-4 flex justify-center">
+            <Pagination
+              currentPage={linePage}
+              totalPages={totalLinePages}
+              onPageChange={setLinePage}
+            />
+          </div>
+        )}
       </div>
 
       {/* Light Overlay Popup Modal */}

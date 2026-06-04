@@ -95,9 +95,9 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   const userEmail = user?.email || "admin@amtemeterai.com"
 
   return (
-    <div className="min-h-screen flex bg-white">
-      {/* Sidebar - Light Theme */}
-      <aside className="w-64 bg-white min-h-screen flex flex-col border-r border-brand-blue/5">
+    <div className="min-h-screen bg-white">
+      {/* Sidebar - Fixed to viewport */}
+      <aside className="fixed top-0 left-0 bottom-0 z-40 w-64 h-screen border-r border-brand-blue/5 bg-white flex flex-col">
         {/* Logo */}
         <div className="p-6">
           <Link to="/" className="block">
@@ -107,8 +107,8 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
           </Link>
         </div>
 
-        {/* Navigation */}
-        <nav className="flex-1 px-3">
+        {/* Navigation - Scrollable if needed */}
+        <nav className="flex-1 overflow-y-auto px-3">
           <ul className="space-y-0.5">
             {visibleMenuItems.map((item) => {
               const isActive = location.pathname === item.path
@@ -131,8 +131,8 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
           </ul>
         </nav>
 
-        {/* User section */}
-        <div className="p-4 border-t border-brand-blue/5">
+        {/* User section - Always visible at bottom */}
+        <div className="p-4 border-t border-brand-blue/5 bg-white">
           <div className="flex items-center gap-3 px-2">
             <div className="w-8 h-8 rounded-full bg-brand-blue/10 flex items-center justify-center">
               <span className="text-xs font-semibold text-brand-blue">{userInitial}</span>
@@ -164,8 +164,8 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
         </div>
       </aside>
 
-      {/* Main Content */}
-      <main className="flex-1 overflow-auto bg-brand-blue/[0.02]">
+      {/* Main Content - With left margin to account for fixed sidebar */}
+      <main className="ml-64 min-h-screen overflow-auto bg-brand-blue/[0.02]">
         <div className="p-8 max-w-6xl mx-auto">{children}</div>
       </main>
     </div>

@@ -243,6 +243,13 @@ export function DeliveryReceivePage() {
   const handleReceiveAllClean = () => {
     if (!delivery) return
 
+    // Validation: Check if receiver name is provided
+    if (!receiverName.trim()) {
+      setToastType("error")
+      setShowToast(true)
+      return
+    }
+
     // Generate the baseline lines immediately
     const cleanLines = delivery.lines.map((line) => ({
       deliveryLineNumber: line.deliveryLineNumber,
@@ -326,6 +333,13 @@ export function DeliveryReceivePage() {
   const handleValidationCheck = (e: React.FormEvent | null, overrideLines?: LineFormState[]) => {
     if (e) e.preventDefault()
     if (!delivery) return
+
+    // Validation: Check if receiver name is provided
+    if (!receiverName.trim()) {
+      setToastType("error")
+      setShowToast(true)
+      return
+    }
 
     const variancesList: VarianceSummary[] = []
     const targetLines = overrideLines || lines
@@ -677,6 +691,44 @@ export function DeliveryReceivePage() {
           </CardContent>
         </Card>
 
+        {/* Receiver Info - Moved above Quick Actions for validation flow */}
+        <Card className="border-slate-200 shadow-sm bg-white">
+          <CardHeader className="px-4 py-3 border-b border-slate-100">
+            <CardTitle className="text-sm font-semibold text-slate-800 flex items-center gap-2">
+              <FileText className="w-4 h-4 text-slate-500" />
+              Receiver Information
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-4 space-y-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="receiverName" className="text-xs font-medium text-slate-600">Receiver Name <span className="text-red-500">*</span></Label>
+              <Input
+                id="receiverName"
+                value={receiverName}
+                onChange={(e) => setReceiverName(e.target.value)}
+                disabled={delivery.invoiced || submitted || submitting}
+                placeholder="Enter your full name"
+                className="h-10 text-sm border-slate-300 focus:border-[#1d2351] focus:ring-[#1d2351]"
+                required
+              />
+              {!receiverName.trim() && (
+                <p className="text-xs text-red-600 font-medium mt-1">Receiver name is required before applying actions or submitting.</p>
+              )}
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="receiverNotes" className="text-xs font-medium text-slate-600">Additional Notes</Label>
+              <Input
+                id="receiverNotes"
+                value={receiverNotes}
+                onChange={(e) => setReceiverNotes(e.target.value)}
+                disabled={delivery.invoiced || submitted || submitting}
+                placeholder="Any additional delivery notes..."
+                className="h-10 text-sm border-slate-300 focus:border-[#1d2351] focus:ring-[#1d2351]"
+              />
+            </div>
+          </CardContent>
+        </Card>
+
         {/* Quick Actions */}
         {!delivery.invoiced && !submitted && (
           <div className="bg-[#1d2351]/5 border border-[#1d2351]/10 rounded-lg p-4 flex items-center justify-between gap-4">
@@ -687,6 +739,9 @@ export function DeliveryReceivePage() {
               <div>
                 <h3 className="text-sm font-semibold text-[#1d2351]">Full Receipt</h3>
                 <p className="text-xs text-slate-600 mt-0.5">All items received without discrepancies</p>
+                {!receiverName.trim() && (
+                  <p className="text-xs text-red-600 font-medium mt-1">Enter receiver name above to enable this action</p>
+                )}
               </div>
             </div>
             <Button
@@ -694,7 +749,7 @@ export function DeliveryReceivePage() {
               size="sm"
               className="bg-[#1d2351] hover:bg-[#2a3266] text-white shadow-sm"
               onClick={handleReceiveAllClean}
-              disabled={submitting}
+              disabled={submitting || !receiverName.trim()}
             >
               {submitting ? "Posting..." : "Apply to All"}
             </Button>
@@ -863,41 +918,6 @@ export function DeliveryReceivePage() {
                 })
               )}
             </div>
-          </Card>
-
-          {/* Receiver Info */}
-          <Card className="border-slate-200 shadow-sm bg-white">
-            <CardHeader className="px-4 py-3 border-b border-slate-100">
-              <CardTitle className="text-sm font-semibold text-slate-800 flex items-center gap-2">
-                <FileText className="w-4 h-4 text-slate-500" />
-                Receiver Information
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-4 space-y-4">
-              <div className="space-y-1.5">
-                <Label htmlFor="receiverName" className="text-xs font-medium text-slate-600">Receiver Name <span className="text-red-500">*</span></Label>
-                <Input
-                  id="receiverName"
-                  value={receiverName}
-                  onChange={(e) => setReceiverName(e.target.value)}
-                  disabled={delivery.invoiced || submitted || submitting}
-                  placeholder="Enter your full name"
-                  className="h-10 text-sm border-slate-300 focus:border-[#1d2351] focus:ring-[#1d2351]"
-                  required
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="receiverNotes" className="text-xs font-medium text-slate-600">Additional Notes</Label>
-                <Input
-                  id="receiverNotes"
-                  value={receiverNotes}
-                  onChange={(e) => setReceiverNotes(e.target.value)}
-                  disabled={delivery.invoiced || submitted || submitting}
-                  placeholder="Any additional delivery notes..."
-                  className="h-10 text-sm border-slate-300 focus:border-[#1d2351] focus:ring-[#1d2351]"
-                />
-              </div>
-            </CardContent>
           </Card>
 
           {/* Photo Upload */}
