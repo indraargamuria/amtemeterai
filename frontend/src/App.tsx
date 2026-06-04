@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom"
 import { AuthProvider, useAuth } from "./shared/contexts/AuthContext"
 import { ProtectedRoute } from "./shared/components/ProtectedRoute"
 import { RouteGuard } from "./shared/components/RouteGuard"
+import { RootRouteGuard } from "./shared/components/RootRouteGuard"
 import { LoginPage } from "./pages/Login"
 import { DashboardPage } from "./pages/Dashboard"
 import { CustomersPage } from "./pages/Customers"
@@ -27,16 +28,18 @@ function AppRoutes() {
       {/* Unauthorized Page */}
       <Route path="/unauthorized" element={<UnauthorizedPage />} />
 
-      {/* Dashboard Route - Protected with permission check */}
+      {/* Dashboard Route - Protected with permission check and root guard */}
       <Route
         path="/"
         element={
           <ProtectedRoute>
-            <RouteGuard>
-              <DashboardLayout>
-                <DashboardPage />
-              </DashboardLayout>
-            </RouteGuard>
+            <RootRouteGuard>
+              <RouteGuard>
+                <DashboardLayout>
+                  <DashboardPage />
+                </DashboardLayout>
+              </RouteGuard>
+            </RootRouteGuard>
           </ProtectedRoute>
         }
       />
