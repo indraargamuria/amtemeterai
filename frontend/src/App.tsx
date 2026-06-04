@@ -89,7 +89,7 @@ function AppRoutes() {
           </ProtectedRoute>
         }
       />
-      <Route
+      {/* <Route
         path="/invoices"
         element={
           <ProtectedRoute>
@@ -100,7 +100,7 @@ function AppRoutes() {
             </RouteGuard>
           </ProtectedRoute>
         }
-      />
+      /> */}
       <Route
         path="/admin/uam"
         element={

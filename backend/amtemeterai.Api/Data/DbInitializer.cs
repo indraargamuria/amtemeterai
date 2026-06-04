@@ -102,27 +102,28 @@ public static class DbInitializer
             }
         }
 
-        // if (financeRole != null)
-        // {
-        //     // Finance can read/sync customers & invoices, but cannot see deliveries
-        //     await AssignPermissionToRoleAsync(context, financeRole.Id, 1); // customer:read
-        //     await AssignPermissionToRoleAsync(context, financeRole.Id, 2); // customer:sync
-        //     await AssignPermissionToRoleAsync(context, financeRole.Id, 3); // invoice:read
-        //     await AssignPermissionToRoleAsync(context, financeRole.Id, 4); // invoice:sync
-        // }
+        if (financeRole != null)
+        {
+            // Finance can read/sync customers & invoices, but cannot see deliveries
+            await AssignPermissionToRoleAsync(context, financeRole.Id, 1); // customer:read
+            await AssignPermissionToRoleAsync(context, financeRole.Id, 2); // customer:sync
+            await AssignPermissionToRoleAsync(context, financeRole.Id, 5); // invoice:read
+            await AssignPermissionToRoleAsync(context, financeRole.Id, 6); // invoice:sync
+        }
 
-        // if (warehouseRole != null)
-        // {
-        //     // Warehouse can ONLY see delivery routes (Can't read customer profiles or sync)
-        //     await AssignPermissionToRoleAsync(context, warehouseRole.Id, 5); // delivery:read
-        // }
+        if (warehouseRole != null)
+        {
+            // Warehouse can ONLY see delivery routes (Can't read customer profiles or sync)
+            await AssignPermissionToRoleAsync(context, warehouseRole.Id, 5); // delivery:read
+        }
 
-        // if (salesRole != null)
-        // {
-        //     // Sales can look up customer lists and look up invoices, but cannot execute sync tools
-        //     await AssignPermissionToRoleAsync(context, salesRole.Id, 1); // customer:read
-        //     await AssignPermissionToRoleAsync(context, salesRole.Id, 3); // invoice:read
-        // }
+        if (salesRole != null)
+        {
+            // Sales can look up customer lists and look up invoices, but cannot execute sync tools
+            await AssignPermissionToRoleAsync(context, salesRole.Id, 1); // customer:read
+            await AssignPermissionToRoleAsync(context, salesRole.Id, 3); // invoice:read
+            await AssignPermissionToRoleAsync(context, salesRole.Id, 5); // invoice:read
+        }
 
         await context.SaveChangesAsync();
     }
