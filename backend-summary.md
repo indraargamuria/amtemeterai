@@ -293,6 +293,7 @@ Extends `IdentityUser` with custom fields:
 | DeliveryNumber | string (Unique) | Delivery identifier |
 | DeliveryDate | DateTime | Delivery date |
 | DeliveryRemarks | string? | Delivery remarks (nullable) |
+| ShipToAddress | string? | Ship to address |
 | OrderNumber | string? | Order number from ERP |
 | BuyerPONumber | string? | Buyer PO number |
 | ReceiverToken | Guid | Unique token for receiver access |

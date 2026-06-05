@@ -205,6 +205,7 @@ public class DeliveriesController : ControllerBase
             DeliveryNumber = delivery.DeliveryNumber,
             DeliveryDate = delivery.DeliveryDate,
             DeliveryRemarks = delivery.DeliveryRemarks,
+            ShipToAddress = delivery.ShipToAddress,
             OrderNumber = delivery.OrderNumber,
             BuyerPONumber = delivery.BuyerPONumber,
             CustomerCode = delivery.Customer?.CustomerCode ?? "UNKNOWN",
@@ -219,10 +220,10 @@ public class DeliveriesController : ControllerBase
             Plant = delivery.Plant,
             SalesPersonName = delivery.SalesPersonName,
             SalesPersonEmail = delivery.SalesPersonEmail,
-            
+
             CancelReason = delivery.CancelReason,
             IsCanceled = delivery.Status == DeliveryHeader.ReceiverStatus.Canceled,
-            
+
             Type = (int)delivery.Type,
             Status = delivery.Status.HasValue ? (int)delivery.Status.Value : null,
 
@@ -240,15 +241,16 @@ public class DeliveriesController : ControllerBase
                 DeliveryLineNumber = l.DeliveryLineNumber,
                 DeliveryItemCode = l.DeliveryItemCode,
                 DeliveryItemDescription = l.DeliveryItemDescription,
+                BatchNumber = l.BatchNumber,
                 SalesQuantity = l.SalesQuantity,
                 SalesUOM = l.SalesUOM,
                 PackQuantity = l.PackQuantity,
                 PackUOM = l.PackUOM,
-                
+
                 PackQuantityDelivered = l.PackQuantityDelivered,
                 PackQuantityReturned = l.PackQuantityReturned,
                 PackQuantityRejected = l.PackQuantityRejected,
-                
+
                 LineComment = l.LineComment
             }).ToList()
         };
@@ -274,6 +276,7 @@ public class DeliveriesController : ControllerBase
             DeliveryNumber = data.DeliveryNumber,
             DeliveryDate = data.DeliveryDate,
             DeliveryRemarks = data.DeliveryRemarks,
+            ShipToAddress = data.ShipToAddress,
             CustomerCode = data.Customer?.CustomerCode ?? "UNKNOWN",
             CustomerName = data.Customer?.CustomerName ?? "UNKNOWN",
             OrderNumber = data.OrderNumber,
@@ -289,6 +292,7 @@ public class DeliveriesController : ControllerBase
                 DeliveryLineNumber = l.DeliveryLineNumber,
                 DeliveryItemCode = l.DeliveryItemCode,
                 DeliveryItemDescription = l.DeliveryItemDescription,
+                BatchNumber = l.BatchNumber,
                 SalesQuantity = l.SalesQuantity,
                 SalesUOM = l.SalesUOM,
                 PackQuantity = l.PackQuantity,
@@ -347,6 +351,7 @@ public class DeliveriesController : ControllerBase
             DeliveryNumber = dto.DeliveryNumber,
             DeliveryDate = dto.DeliveryDate,
             DeliveryRemarks = dto.DeliveryRemarks,
+            ShipToAddress = dto.ShipToAddress,
             Plant = dto.Plant,
             SalesPersonName = dto.SalesPersonName,
             SalesPersonEmail = dto.SalesPersonEmail,
@@ -409,6 +414,7 @@ public class DeliveriesController : ControllerBase
 
         existing.DeliveryDate = dto.DeliveryDate;
         existing.DeliveryRemarks = dto.DeliveryRemarks;
+        existing.ShipToAddress = dto.ShipToAddress;
         existing.Plant = dto.Plant;
         existing.SalesPersonName = dto.SalesPersonName;
         existing.SalesPersonEmail = dto.SalesPersonEmail;

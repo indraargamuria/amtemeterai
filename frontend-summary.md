@@ -290,7 +290,8 @@ Pending Delivery → Fully Received → Invoiced
 
 ### Features
 - Detailed delivery information view
-- Line items breakdown
+- Ship to address display
+- Line items breakdown with batch number
 - Photo gallery
 - GPS location data
 - Proof of delivery documents
@@ -365,6 +366,8 @@ Pending Delivery → Fully Received → Invoiced
 - **Public access** via delivery token
 - **PIN verification** for access
 - **Delivery confirmation** workflow
+- **Ship to address display**
+- **Line items with batch number**
 - **Photo upload** capability
 - **GPS location** capture
 - **Variance percent calculation** for quantity discrepancies

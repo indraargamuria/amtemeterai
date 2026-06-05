@@ -20,6 +20,7 @@ interface DeliveryLine {
   deliveryLineNumber: string
   deliveryItemCode: string
   deliveryItemDescription: string
+  batchNumber?: string | null
   salesQuantity: number
   salesUOM: string
   packQuantity: number
@@ -42,6 +43,7 @@ interface DeliveryDetail {
   deliveryNumber: string
   deliveryDate: string
   deliveryRemarks: string | null
+  shipToAddress?: string | null
   customerCode: string
   customerName: string
   receiverToken: string
@@ -309,6 +311,15 @@ export function DeliveryDetailPage() {
                 )}
               </div>
 
+              {delivery.shipToAddress && (
+                <div className="space-y-1">
+                  <p className="text-xs font-medium text-brand-blue/50 uppercase tracking-wider">
+                    Ship To Address
+                  </p>
+                  <p className="text-sm text-brand-blue/80">{delivery.shipToAddress}</p>
+                </div>
+              )}
+
               {delivery.deliveryRemarks && (
                 <div className="space-y-1">
                   <p className="text-xs font-medium text-brand-blue/50 uppercase tracking-wider">
@@ -537,25 +548,28 @@ export function DeliveryDetailPage() {
           <Table>
             <TableHeader className="bg-brand-blue/[0.02]">
               <TableRow>
-                <TableHead className="text-xs font-semibold uppercase tracking-wider text-brand-blue/60 w-[18%]">
+                <TableHead className="text-xs font-semibold uppercase tracking-wider text-brand-blue/60 w-[15%]">
                   Item / SKU
                 </TableHead>
-                <TableHead className="text-xs font-semibold uppercase tracking-wider text-brand-blue/60 w-[32%]">
+                <TableHead className="text-xs font-semibold uppercase tracking-wider text-brand-blue/60 w-[12%]">
+                  Batch
+                </TableHead>
+                <TableHead className="text-xs font-semibold uppercase tracking-wider text-brand-blue/60 w-[28%]">
                   Description
                 </TableHead>
-                <TableHead className="text-xs font-semibold uppercase tracking-wider text-brand-blue/60 text-right w-[12%]">
+                <TableHead className="text-xs font-semibold uppercase tracking-wider text-brand-blue/60 text-right w-[11%]">
                   Dispatched
                 </TableHead>
-                <TableHead className="text-xs font-semibold uppercase tracking-wider text-brand-blue/60 text-right w-[12%]">
+                <TableHead className="text-xs font-semibold uppercase tracking-wider text-brand-blue/60 text-right w-[11%]">
                   Received
                 </TableHead>
-                <TableHead className="text-xs font-semibold uppercase tracking-wider text-brand-blue/60 text-right w-[12%]">
+                <TableHead className="text-xs font-semibold uppercase tracking-wider text-brand-blue/60 text-right w-[11%]">
                   Rejected
                 </TableHead>
-                <TableHead className="text-xs font-semibold uppercase tracking-wider text-brand-blue/60 text-right w-[12%]">
+                <TableHead className="text-xs font-semibold uppercase tracking-wider text-brand-blue/60 text-right w-[11%]">
                   Returned
                 </TableHead>
-                <TableHead className="text-xs font-semibold uppercase tracking-wider text-brand-blue/60 w-[14%]">
+                <TableHead className="text-xs font-semibold uppercase tracking-wider text-brand-blue/60 w-[11%]">
                   Remarks / Variance
                 </TableHead>
               </TableRow>
@@ -564,7 +578,7 @@ export function DeliveryDetailPage() {
               {totalLines === 0 ? (
                 <TableRow>
                   <TableCell
-                    colSpan={7}
+                    colSpan={8}
                     className="text-center py-12 text-sm text-brand-blue/40 italic"
                   >
                     No dynamic dispatch line items attached to this delivery record.
@@ -578,6 +592,9 @@ export function DeliveryDetailPage() {
                   >
                     <TableCell className="py-3.5 font-semibold text-sm text-brand-blue">
                       {line.deliveryItemCode}
+                    </TableCell>
+                    <TableCell className="py-3.5 text-sm text-brand-blue/70">
+                      {line.batchNumber || <span className="text-brand-blue/30 italic">-</span>}
                     </TableCell>
                     <TableCell className="py-3.5 text-sm text-brand-blue/80">
                       {line.deliveryItemDescription || (

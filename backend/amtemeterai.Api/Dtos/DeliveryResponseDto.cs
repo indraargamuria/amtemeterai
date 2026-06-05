@@ -7,6 +7,7 @@ public class DeliveryResponseDto
     public DateTime DeliveryDate { get; set; }
 
     public string? DeliveryRemarks { get; set; }
+    public string? ShipToAddress { get; set; }
 
     public string? OrderNumber { get; set; }
     public string? BuyerPONumber { get; set; }

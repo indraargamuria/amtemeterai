@@ -22,6 +22,7 @@ interface DeliveryLine {
   deliveryLineNumber: string
   deliveryItemCode: string
   deliveryItemDescription: string
+  batchNumber?: string | null
   salesQuantity: number
   salesUOM: string
   packQuantity: number
@@ -37,6 +38,7 @@ interface DeliveryDetail {
   deliveryNumber: string
   deliveryDate: string
   deliveryRemarks: string | null
+  shipToAddress?: string | null
   receiverToken: string
   receiverName: string | null
   receiverNotes: string | null
@@ -712,6 +714,16 @@ export function DeliveryReceivePage() {
                 </div>
               </div>
             )}
+
+            {/* Ship To Address */}
+            {delivery.shipToAddress && (
+              <div className="mt-4 pt-4 border-t border-slate-100 space-y-2">
+                <p className="text-[10px] font-medium uppercase tracking-wider text-slate-400">Ship To Address</p>
+                <div className="bg-blue-50 border border-blue-100 rounded-xl p-3">
+                  <p className="text-sm font-semibold text-slate-700">{delivery.shipToAddress}</p>
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -863,6 +875,12 @@ export function DeliveryReceivePage() {
                           </div>
                           <div className="flex items-center gap-3 text-xs text-slate-500">
                             <span>Delivery: <strong className="text-slate-700">{line.packQuantity} {line.packUOM}</strong></span>
+                            {line.batchNumber && (
+                              <>
+                                <span>•</span>
+                                <span>Batch: <strong className="text-slate-700">{line.batchNumber}</strong></span>
+                              </>
+                            )}
                             {isModified && (
                               <>
                                 <span>•</span>
