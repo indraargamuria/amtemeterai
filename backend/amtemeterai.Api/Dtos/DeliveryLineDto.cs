@@ -5,6 +5,8 @@ public class DeliveryLineDto
     public string DeliveryLineNumber { get; set; } = null!;
     public string DeliveryItemCode { get; set; } = null!;
     public string DeliveryItemDescription { get; set; } = null!;
+    
+    public string? BatchNumber { get; set; }
 
     public decimal SalesQuantity { get; set; }
     public string SalesUOM { get; set; } = null!;

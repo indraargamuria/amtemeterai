@@ -361,6 +361,7 @@ public class DeliveriesController : ControllerBase
             DeliveryLineNumber = l.DeliveryLineNumber,
             DeliveryItemCode = l.DeliveryItemCode,
             DeliveryItemDescription = l.DeliveryItemDescription,
+            BatchNumber = l.BatchNumber,
             SalesQuantity = l.SalesQuantity,
             SalesUOM = l.SalesUOM,
             PackQuantity = l.PackQuantity,
@@ -422,6 +423,7 @@ public class DeliveriesController : ControllerBase
             DeliveryLineNumber = l.DeliveryLineNumber,
             DeliveryItemCode = l.DeliveryItemCode,
             DeliveryItemDescription = l.DeliveryItemDescription,
+            BatchNumber = l.BatchNumber,
             SalesQuantity = l.SalesQuantity,
             SalesUOM = l.SalesUOM,
             PackQuantity = l.PackQuantity,
@@ -566,16 +568,27 @@ public class DeliveriesController : ControllerBase
                 CustomerCode = data.Customer?.CustomerCode ?? string.Empty,
                 DeliveryNumber = data.DeliveryNumber,
                 ReceiverName = data.ReceiverName ?? string.Empty,
-                ReceiverStatus = hasDiscrepancy ? "2" : "1", 
+                ReceiverStatus = hasDiscrepancy ? "2" : "1",
                 ReceiverNotes = data.ReceiverNotes ?? string.Empty,
                 // 🚀 FIX FOR CS8604: Wrap the collection inside a null-coalescing guard fallback
-                Lines = (data.Lines ?? Enumerable.Empty<DeliveryLine>()).Select(l => new SapDeliveryLinePayload
+                Lines = (data.Lines ?? Enumerable.Empty<DeliveryLine>()).Select(l =>
                 {
-                    DeliveryLineNumber = l.DeliveryLineNumber,
-                    DeliveredQuantity = l.PackQuantityDelivered,
-                    RejectedQuantity = l.PackQuantityRejected,
-                    ReturnedQuantity = l.PackQuantityReturned,
-                    LineComment = l.LineComment ?? ""
+                    // Calculate variance percent based on DeliveryReceivePage formula
+                    // variancePercent = ((delivered + returned + rejected - packQuantity) / packQuantity) * 100
+                    // Returns numeric value only (e.g., 200 for 200%, 12.5 for 12.5%)
+                    decimal totalActual = l.PackQuantityDelivered + l.PackQuantityReturned + l.PackQuantityRejected;
+                    decimal rawVariance = totalActual - l.PackQuantity;
+                    decimal percentCalc = l.PackQuantity > 0 ? (rawVariance / l.PackQuantity) * 100 : 0;
+
+                    return new SapDeliveryLinePayload
+                    {
+                        DeliveryLineNumber = l.DeliveryLineNumber,
+                        DeliveredQuantity = l.PackQuantityDelivered,
+                        RejectedQuantity = l.PackQuantityRejected,
+                        ReturnedQuantity = l.PackQuantityReturned,
+                        LineComment = l.LineComment ?? "",
+                        VariancePercent = percentCalc
+                    };
                 }).ToList()
             };
             var jsonOptions = new JsonSerializerOptions { WriteIndented = true };

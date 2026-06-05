@@ -37,4 +37,7 @@ public class SapDeliveryLinePayload
 
     [System.Text.Json.Serialization.JsonPropertyName("lineComment")]
     public string LineComment { get; set; } = string.Empty;
+
+    [System.Text.Json.Serialization.JsonPropertyName("variancePercent")]
+    public decimal VariancePercent { get; set; }
 }

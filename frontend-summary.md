@@ -2,7 +2,7 @@
 
 ## Overview
 
-The frontend is a modern **React 19** application built with **TypeScript** and **Vite**. It provides a premium, enterprise-grade user interface for managing e-Meterai operations, customer data, deliveries, invoices, and user access management. The application implements a dynamic **Role-Based Access Control (RBAC)** system with JWT-based authentication and real-time session monitoring.
+The frontend is a modern **React 19** application built with **TypeScript** and **Vite**. It provides a premium, enterprise-grade user interface for managing e-Meterai operations, customer data, deliveries, invoices, and user access management. The application implements a dynamic **Role-Based Access Control (RBAC)** system with permission-based authorization, JWT-based authentication, and real-time session monitoring.
 
 ---
 
@@ -29,7 +29,7 @@ The frontend is a modern **React 19** application built with **TypeScript** and 
 1. User enters credentials on `/login` page
 2. Frontend calls `POST /api/account/login`
 3. Server validates and returns JWT token
-4. Token decoded to extract user claims (roles, menus, plants)
+4. Token decoded to extract user claims (roles, permissions, plants)
 5. Token and user data stored in `localStorage`
 6. User redirected to appropriate landing page based on permissions
 
@@ -43,14 +43,20 @@ The frontend is a modern **React 19** application built with **TypeScript** and 
 The JWT token includes these claims:
 ```typescript
 {
-  "nameid": "user-id",           // User ID
-  "email": "user@example.com",   // User email
-  "unique_name": "Full Name",     // Full name
-  "jti": "guid-token-id",        // Token ID
-  "role": ["sysadmin", "finance"], // Assigned roles
-  "plant": ["B1G2", "B1F1"],     // Assigned plants
-  "menu": ["customers", "invoices"], // Accessible menus
-  "security_stamp": "stamp-value" // Session revocation tracking
+  "nameid": "user-id",                    // User ID
+  "email": "user@example.com",           // User email
+  "unique_name": "Full Name",            // Full name
+  "jti": "guid-token-id",                // Token ID
+  "role": ["sysadmin", "finance"],       // Assigned roles
+  "plant": ["B1G2", "B1F1"],             // Assigned plants
+  "permission": [                        // Granular permissions
+    "dashboard:read",
+    "customer:read",
+    "delivery:read",
+    "invoice:read",
+    "uam:read"
+  ],
+  "security_stamp": "stamp-value"        // Session revocation tracking
 }
 ```
 
@@ -60,21 +66,24 @@ The JWT token includes these claims:
 
 ## RBAC Implementation
 
-### System Roles
-| Role | Description | Access Level |
-|------|-------------|--------------|
-| `sysadmin` | System Administrator | Full access to all features and UAM |
-| `finance` | Finance Staff | Customer/invoice read & sync |
-| `warehouse` | Warehouse Staff | Delivery read-only |
-| `sales` | Sales Staff | Customer/invoice/delivery read-only |
+### Permission-Based Access Control
+The application uses **permission-based access control** where each route requires specific permission keys:
 
-### Menu Access Codes
-| Route | Access Code | Description |
-|-------|-------------|-------------|
-| `/customers` | `customers` | Customer management page |
-| `/deliveries` | `deliveries` | Delivery tracking page |
-| `/invoices` | `invoices` | Invoice processing page |
-| `/admin/uam` | `uam` | User Access Management (sysadmin only) |
+| Route | Required Permission | Description |
+|-------|---------------------|-------------|
+| `/`, `/dashboard` | `dashboard:read` | Dashboard with KPIs |
+| `/customers` | `customer:read` | Customer management |
+| `/deliveries` | `delivery:read` | Delivery tracking |
+| `/invoices` | `invoice:read` | Invoice processing |
+| `/admin/uam` | `uam:read` | User Access Management |
+
+### System Roles
+| Role | Description | Default Permissions |
+|------|-------------|-------------------|
+| `sysadmin` | System Administrator | Full access to all permissions |
+| `finance` | Finance Staff | customer:read, invoice:read |
+| `sales` | Sales Staff | customer:read, delivery:read, invoice:read |
+| `warehouse` | Warehouse Staff | delivery:read |
 
 ### Route Protection Hierarchy
 
@@ -87,8 +96,11 @@ The JWT token includes these claims:
 │  ProtectedRoute                                               │
 │  └─ Checks if user is authenticated                          │
 ├─────────────────────────────────────────────────────────────┤
+│  RootRouteGuard (for / route only)                          │
+│  └─ Redirects users without dashboard:read to first available│
+├─────────────────────────────────────────────────────────────┤
 │  RouteGuard                                                   │
-│  └─ Checks if user has menu access for current route         │
+│  └─ Checks if user has permission for current route          │
 ├─────────────────────────────────────────────────────────────┤
 │  DashboardLayout                                              │
 │  └─ Filters sidebar menu based on user permissions           │
@@ -101,18 +113,19 @@ The JWT token includes these claims:
 ```typescript
 // Logic:
 1. Decode JWT token from localStorage
-2. Extract roles and menus claims
+2. Extract roles and permissions claims
 3. If sysadmin role → allow all routes
-4. Check if route has required access code
-5. Verify user has the required menu permission
+4. Check if route has required permission
+5. Verify user has the required permission
 ```
 
 #### `getUserClaims(): UserClaims | null`
 ```typescript
 // Returns:
 {
-  roles: string[],  // User's assigned roles
-  menus: string[]   // User's accessible menu codes
+  roles: string[],       // User's assigned roles
+  permissions: string[], // User's permission keys
+  menus: string[]       // Legacy menu codes (for compatibility)
 }
 ```
 
@@ -128,14 +141,34 @@ frontend/src/
 │
 ├── pages/                         # Page Components
 │   ├── Login/                     # Login page with split-screen design
+│   │   ├── LoginPage.tsx         # Login form component
+│   │   └── index.ts              # Export barrel
 │   ├── Dashboard/                 # Dashboard with KPIs and charts
+│   │   ├── DashboardPage.tsx     # Main dashboard component
+│   │   └── index.ts              # Export barrel
 │   ├── Customers/                 # Customer management with sync
+│   │   ├── CustomersPage.tsx     # Customer list and sync
+│   │   └── index.ts              # Export barrel
 │   ├── Deliveries/                # Delivery tracking and details
-│   ├── Invoices/                  # Invoice processing (commented out)
+│   │   ├── DeliveriesPage.tsx    # Delivery list with filtering
+│   │   ├── DeliveryDetailPage.tsx # Individual delivery details
+│   │   └── index.ts              # Export barrel
+│   ├── Invoices/                  # Invoice processing
+│   │   ├── InvoicesPage.tsx       # Invoice list and stamping
+│   │   └── index.ts              # Export barrel
 │   ├── UserAccessManagement/      # Admin UAM for RBAC management
+│   │   ├── UserAccessManagementPage.tsx # User & role configuration
+│   │   └── index.ts              # Export barrel
 │   ├── Public/                    # Public delivery receive page
+│   │   ├── DeliveryReceivePage.tsx # Public delivery confirmation
+│   │   ├── Obsolete.tsx          # Legacy component
+│   │   └── index.ts              # Export barrel
 │   ├── Unauthorized/              # Access denied page
+│   │   ├── UnauthorizedPage.tsx  # 403 unauthorized page
+│   │   └── index.ts              # Export barrel
 │   └── DashboardRedirect/         # Dynamic landing route resolver
+│       ├── DashboardRedirectPage.tsx # Legacy redirect logic
+│       └── index.ts              # Export barrel
 │
 ├── shared/
 │   ├── components/
@@ -147,19 +180,22 @@ frontend/src/
 │   │   │   ├── Badge.tsx          # Status/label badges
 │   │   │   ├── Checkbox.tsx       # Form checkbox
 │   │   │   ├── Label.tsx          # Form labels
-│   │   │   └── Pagination.tsx     # Page navigation
-│   │   ├── ProtectedRoute.tsx     # Authentication check wrapper
-│   │   ├── RouteGuard.tsx         # Permission-based route guard
+│   │   │   ├── Pagination.tsx     # Page navigation
+│   │   │   └── index.ts           # Export barrel
+│   │   ├── ProtectedRoute.tsx    # Authentication check wrapper
+│   │   ├── RouteGuard.tsx        # Permission-based route guard
+│   │   ├── RootRouteGuard.tsx    # Root route permission guard
 │   │   └── SecuritySessionGuard.tsx # Session monitoring component
 │   ├── contexts/
 │   │   └── AuthContext.tsx        # Authentication state context
 │   ├── layouts/
-│   │   └── DashboardLayout.tsx    # Main dashboard layout with sidebar
+│   │   ├── DashboardLayout.tsx   # Main dashboard layout with sidebar
+│   │   └── index.ts              # Export barrel
 │   └── utils/
-│       ├── api.ts                 # API integration layer
-│       ├── routePermissions.ts    # RBAC permission utilities
-│       ├── routeResolver.ts       # Dynamic landing route logic
-│       └── cn.ts                  # Class name utility (tailwind-merge)
+│       ├── api.ts                # API integration layer
+│       ├── routePermissions.ts   # RBAC permission utilities
+│       ├── routeResolver.ts      # Dynamic landing route logic
+│       └── cn.ts                 # Class name utility (tailwind-merge)
 │
 └── assets/                        # Static assets
     ├── amtlogo.png                # Application logo
@@ -192,6 +228,7 @@ Password: Admin@123
 - **KPI Cards:** Total Deliveries, Pending Invoice, Rejection Rate
 - **Delivery Trends Chart:** 30-day delivery data visualization
 - **Activity Feed:** Recent system events with timestamps
+- **ERP Connectivity Status:** Visual indicator of system connection
 - **Real-time updates:** Data refreshed on mount
 
 ### API Endpoints Used
@@ -204,25 +241,78 @@ Password: Admin@123
 ### Features
 - **Customer directory** with ERP sync capability
 - **Search & filter** by name, code, email, or PIN
-- **Sortable columns** with visual indicators
+- **Sortable columns** with visual indicators (code, name, email, PIN)
 - **Pagination** for large datasets
 - **Analytics cards:** Total customers, verified domains, missing emails
 - **Sync from ERP** with status messaging
 
 ### Required Permission
 - `customer:read` - To view customers page
-- `customer:sync` - To execute sync operation
+
+### API Endpoints Used
+- `GET /api/customers` - List all customers
+- `POST /api/customers/sync` - Sync from ERP
 
 ## Deliveries (`/deliveries`)
 
 ### Features
 - **Delivery list** with status indicators
-- **Search and filtering** capabilities
-- **Delivery detail view** with photos and GPS data
-- **Sort by** date, customer, status
+- **Plant-level security filtering** (non-sysadmin users see only assigned plants)
+- **Compliance type filtering:** All, BC, Non-BC
+- **Pipeline status filtering:** Active, Canceled, All
+- **Discrepancy filter:** Show only problematic deliveries
+- **Search** by delivery number, customer, salesperson, or cancellation reason
+- **Sort** by delivery date, delivery number, or status
+- **Cancellation tracking** with reason display
+- **Photos count indicator** for each delivery
+- **Geographic routing** (district, city/province display)
+- **Destination owner** (plant and salesperson info)
 
 ### Required Permission
 - `delivery:read` - To view deliveries
+
+### Delivery Status Flow
+```
+Pending Delivery → Fully Received → Invoiced
+                  ↓
+            Partial / Discrepancy
+```
+
+### Cancellation Status
+- Canceled deliveries display with special styling (strikethrough, reduced opacity)
+- Cancel reason shown in status column
+- Invoiced badge hidden for canceled deliveries
+
+### API Endpoints Used
+- `GET /api/deliveries` - List all deliveries
+
+## Delivery Detail (`/deliveries/:deliveryId`)
+
+### Features
+- Detailed delivery information view
+- Line items breakdown
+- Photo gallery
+- GPS location data
+- Proof of delivery documents
+
+## Invoices (`/invoices`)
+
+### Features
+- **Invoice list** with status indicators
+- **Document upload** for invoice printouts (PDF/image)
+- **e-Meterai stamping** with status tracking
+- **Invoice detail panel** with document links
+- **Summary cards:** Total invoices, Pending stamps, Stamped
+- **Status tracking:** Draft, Stamped, Sync Failed, Synced to SAP, Canceled
+- **Stamping status:** Not Stamped, Pending, Stamped, Failed
+
+### Required Permission
+- `invoice:read` - To view invoices page
+
+### API Endpoints Used
+- `GET /api/invoices` - List all invoices
+- `POST /api/invoices/{id}/upload-printout` - Upload invoice document
+- `POST /api/invoices/{id}/stamp` - Trigger e-Meterai stamping
 
 ## User Access Management (`/admin/uam`)
 
@@ -234,6 +324,7 @@ Password: Admin@123
 - **System role assignment** with role descriptions
 - **Visual change indicators** for unsaved changes
 - **Save feedback** with success/error messages
+- **User sub-tabs:** Plant Authorizations, System Role Access
 
 #### Role Menu Matrix Tab
 - **Role selection** with color-coded badges
@@ -243,7 +334,7 @@ Password: Admin@123
 - **Real-time updates** via security stamp
 
 ### Required Permission
-- `sysadmin` role required
+- `uam:read` and `sysadmin` role
 
 ### API Endpoints Used
 - `GET /api/admin/uam/users` - List all users
@@ -276,6 +367,22 @@ Password: Admin@123
 - **Delivery confirmation** workflow
 - **Photo upload** capability
 - **GPS location** capture
+- **Variance percent calculation** for quantity discrepancies
+
+### Variance Percent Calculation
+The variance percent is calculated on each line item:
+```typescript
+const delivered = parseFloat(lineState.delivered) || 0
+const returned = parseFloat(lineState.returned) || 0
+const rejected = parseFloat(lineState.rejected) || 0
+const totalActual = delivered + returned + rejected
+
+const rawVariance = totalActual - line.packQuantity
+const percentCalc = ((rawVariance / line.packQuantity) * 100).toFixed(2)
+const displayPercent = rawVariance > 0 ? `+${percentCalc}%` : `${percentCalc}%`
+```
+
+This same calculation is replicated on the backend when syncing to SAP ERP.
 
 ---
 
@@ -318,6 +425,11 @@ uploadInvoicePrintout(id, file)  // POST /api/invoices/{id}/upload-printout
 stampInvoice(id)                 // POST /api/invoices/{id}/stamp
 ```
 
+### Delivery APIs
+```typescript
+uploadDeliveryPrintout(id, file) // POST /api/deliveries/{id}/upload-printout
+```
+
 ---
 
 # Routing Architecture
@@ -335,6 +447,7 @@ stampInvoice(id)                 // POST /api/invoices/{id}/stamp
 /customers                      // Customer management
 /deliveries                     // Delivery list
 /deliveries/:deliveryId         // Delivery details
+/invoices                       // Invoice processing
 /admin/uam                      // User Access Management (sysadmin only)
 
 // Error Routes
@@ -345,19 +458,31 @@ stampInvoice(id)                 // POST /api/invoices/{id}/stamp
 ## Dynamic Landing Route (`resolveDefaultLandingRoute()`)
 
 ```typescript
-// Route Priority List (ordered by preference)
-1. deliveries → /deliveries
-2. customers → /customers
-3. invoices → /invoices
-
 // Logic:
 if (user has 'sysadmin' role) {
   return '/admin/uam'
 }
+else if (user has 'dashboard:read' permission) {
+  return '/'
+}
 else {
-  return first available route from priority list
+  // Check permissions in priority order
+  if (user has 'customer:read') return '/customers'
+  if (user has 'invoice:read') return '/invoices'
+  if (user has 'delivery:read') return '/deliveries'
+  return '/unauthorized'
 }
 ```
+
+## Root Route Protection
+
+The `RootRouteGuard` intercepts access to `/` and handles users without `dashboard:read` permission:
+
+1. Check if user has `dashboard:read` → allow through
+2. Check if user has `delivery:read` → redirect to `/deliveries`
+3. Check if user has `customer:read` → redirect to `/customers`
+4. Check if user has `invoice:read` → redirect to `/invoices`
+5. No permissions → redirect to `/unauthorized`
 
 ---
 
@@ -433,16 +558,16 @@ bg-brand-blue/20           /* Selected states */
 
 ## Menu Filtering Logic
 
-The sidebar menu is dynamically filtered based on user's menu claims:
+The sidebar menu is dynamically filtered based on user's permission claims:
 
 ```typescript
 // Menu Items Configuration
 const menuItems = [
-  { path: "/", label: "Dashboard", accessCode: "dashboard" },
-  { path: "/customers", label: "Customers", accessCode: "customers" },
-  { path: "/deliveries", label: "Deliveries", accessCode: "deliveries" },
-  { path: "/invoices", label: "Invoices", accessCode: "invoices" },
-  { path: "/admin/uam", label: "User Management", accessCode: "uam" }
+  { path: "/", label: "Dashboard", requiredPermission: "dashboard:read" },
+  { path: "/customers", label: "Customers", requiredPermission: "customer:read" },
+  { path: "/deliveries", label: "Deliveries", requiredPermission: "delivery:read" },
+  { path: "/invoices", label: "Invoices", requiredPermission: "invoice:read" },
+  { path: "/admin/uam", label: "User Management", requiredPermission: "uam:read", sysAdminOnly: true }
 ]
 
 // Filter Logic
@@ -451,10 +576,11 @@ if (user.roles.includes('sysadmin')) {
   return menuItems
 }
 
-// Filter by menu access codes
-return menuItems.filter(item =>
-  !item.accessCode || user.menus.includes(item.accessCode)
-)
+// Filter by permission requirements
+return menuItems.filter(item => {
+  if (item.sysAdminOnly) return false
+  return user.permissions.includes(item.requiredPermission)
+})
 ```
 
 ## Active State Styling
@@ -469,6 +595,15 @@ return menuItems.filter(item =>
 ## Authentication Context (`AuthContext`)
 
 ```typescript
+interface User {
+  id: string
+  email: string
+  fullName?: string
+  roles?: string[]
+  permissions?: string[]
+  plants?: string[]
+}
+
 interface AuthContextType {
   user: User | null
   token: string | null
@@ -479,11 +614,18 @@ interface AuthContextType {
 }
 ```
 
+### Claim Extraction
+On login, the following claims are extracted from the JWT:
+- `nameid` → User ID
+- `role` → Assigned roles (array)
+- `permission` → Permission keys (array)
+- `plant` → Assigned plants (array)
+
 ## Local State Management
 - **No global state library** - Uses React's built-in state
 - **Context API** for authentication only
 - **Component-level state** for page-specific data
-- **localStorage** for token persistence
+- **localStorage** for token and user persistence
 
 ---
 
@@ -496,9 +638,14 @@ interface AuthContextType {
 - **Action:** Automatic logout and redirect to login
 
 ## Route Protection
-- **Multi-layer protection:** Session guard → Protected route → Route guard
+- **Multi-layer protection:** Session guard → Protected route → Root guard → Route guard
 - **Automatic redirects:** Unauthorized users sent to login or unauthorized page
 - **Token validation:** On every API call via 401 handling
+
+## Plant-Level Data Security
+- **Delivery filtering:** Non-sysadmin users only see deliveries from assigned plants
+- **Plant claim validation:** Deliveries without plant assignment are hidden for non-admin users
+- **Empty plant assignment:** Non-sysadmin users with no plants see no deliveries
 
 ## Data Protection
 - **JWT Claims:** All permissions embedded in token
@@ -552,8 +699,8 @@ npm run lint      # Run ESLint
 ## Optimization Techniques
 - **Memoization:** `useMemo` for filtered/sorted data
 - **Stable References:** `useMemo` for API object
-- **Pagination:** Large datasets paginated client-side
-- **Code Splitting:** Lazy loading for route components (future)
+- **Pagination:** Large datasets paginated client-side (10 items per page)
+- **Efficient filtering:** Multiple filter conditions combined in single pass
 
 ## Data Fetching Patterns
 - **Parallel requests:** `Promise.all()` for independent data
@@ -647,9 +794,14 @@ The frontend is built into the Docker image and served by Nginx.
 - Check `/api/account/me` response
 
 ### Menu items missing
-- Verify user has menu claims in JWT
+- Verify user has permission claims in JWT
 - Check route permissions configuration
 - Ensure RBAC seeded correctly on backend
+
+### Deliveries not showing
+- Check if user has plants assigned
+- Verify plant claims in JWT token
+- Sysadmin users should see all plants
 
 ---
 
@@ -657,7 +809,8 @@ The frontend is built into the Docker image and served by Nginx.
 
 The AmtemeterAI frontend is a modern, enterprise-grade React application with:
 - **Premium UI/UX** following brand guidelines
-- **Dynamic RBAC** with multi-layer route protection
+- **Permission-based RBAC** with multi-layer route protection
+- **Plant-level data security** for operational users
 - **Real-time session monitoring** for security
 - **Responsive design** with mobile-first approach
 - **Clean architecture** with separation of concerns

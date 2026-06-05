@@ -2,7 +2,7 @@
 
 ## Overview
 
-The backend is built with **ASP.NET Core 8.0** using **Entity Framework Core** with **PostgreSQL** database. It provides RESTful APIs for managing customers, deliveries, invoices, and e-Meterai operations in the delivery management system with **JWT Bearer Token Authentication** and a **Dynamic Role-Based Access Control (RBAC)** system. The system includes advanced features such as photo evidence management, GPS location tracking, document storage via MinIO, activity logging, Peruri PDS integration for e-Meterai stamping, and plant-level data security.
+The backend is built with **ASP.NET Core 8.0** using **Entity Framework Core** with **PostgreSQL** database. It provides RESTful APIs for managing customers, deliveries, invoices, and e-Meterai operations in the delivery management system with **JWT Bearer Token Authentication** and a **Dynamic Role-Based Access Control (RBAC)** system. The system includes advanced features such as photo evidence management, GPS location tracking, document storage via MinIO, activity logging, Peruri PDS integration for e-Meterai stamping, plant-level data security, delivery cancellation, and PIN-based access verification.
 
 ---
 
@@ -36,15 +36,16 @@ The API uses **JWT (JSON Web Token)** Bearer authentication for securing endpoin
 2. Server validates credentials and generates a JWT token with dynamic claims
 3. Client includes the token in the `Authorization` header: `Bearer {token}`
 4. Server validates the token on each protected request
+5. Frontend polls `/api/account/me` every 60 seconds for session validation
 
 ### Default Accounts
 
 | Role | Email | Password | Description |
 |------|-------|----------|-------------|
 | sysadmin | admin@amtemeterai.com | Admin@123 | Full system access |
-| finance | finance@amtemeterai.com | Testing@123 | Finance operations |
-| warehouse | warehouse@amtemeterai.com | Testing@123 | Warehouse operations |
-| sales | sales@amtemeterai.com | Testing@123 | Sales operations |
+| finance | finance@amtemeterai.com | Testing@123 | Finance operations (dashboard:read, customer:read) |
+| warehouse | warehouse@amtemeterai.com | Testing@123 | Warehouse operations (delivery:read) |
+| sales | sales@amtemeterai.com | Testing@123 | Sales operations (dashboard:read, customer:read, invoice:read, delivery:read) |
 
 ### JWT Configuration
 ```json
@@ -71,7 +72,8 @@ The JWT token includes the following dynamic claims:
     "jti": "guid-token-id",
     "role": ["sysadmin", "finance"],
     "plant": ["B1G2", "B1F1"],
-    "menu": ["customers", "invoices", "deliveries"],
+    "permission": ["dashboard:read", "customer:read", "delivery:read", "invoice:read", "uam:read"],
+    "menu": ["dashboard", "customers", "invoices", "deliveries", "uam"],
     "security_stamp": "security-stamp-value"
   }
 }
@@ -83,6 +85,7 @@ The JWT token includes the following dynamic claims:
 - `unique_name` - Full name
 - `role` - Assigned system roles (multiple)
 - `plant` - Assigned plant codes for data filtering (multiple)
+- `permission` - Granular permission keys for authorization checks (multiple)
 - `menu` - Accessible menu keys based on permissions (multiple)
 - `security_stamp` - Session revocation tracking
 
@@ -106,9 +109,9 @@ Four system roles are seeded by default:
 | Role | Description | Access Level |
 |------|-------------|--------------|
 | `sysadmin` | System Administrator | Full access to all features and configurations |
-| `finance` | Finance Staff | Customer/invoice read & sync, no delivery access |
-| `warehouse` | Warehouse Staff | Delivery read-only access |
-| `sales` | Sales Staff | Customer/invoice read-only, no sync operations |
+| `finance` | Finance Staff | Dashboard read, Customer read |
+| `warehouse` | Warehouse Staff | Delivery read |
+| `sales` | Sales Staff | Dashboard read, Customer read, Invoice read, Delivery read |
 
 ## Permission Matrix
 
@@ -116,21 +119,24 @@ Four system roles are seeded by default:
 
 | ID | Permission Key | Description | Category |
 |----|----------------|-------------|----------|
-| 1 | `customer:read` | View customer list and profiles | Customers |
-| 2 | `customer:sync` | Sync customer data from ERP system | Customers |
-| 3 | `invoice:read` | View invoice records | Invoices |
-| 4 | `invoice:sync` | Sync invoices from ERP system | Invoices |
-| 5 | `delivery:read` | View delivery headers and details | Deliveries |
-| 6 | `delivery:sync` | Sync deliveries from ERP system | Deliveries |
+| 1 | `dashboard:read` | View dashboard with KPIs and analytics | Dashboard |
+| 2 | `customer:read` | View customer list and profiles | Customers |
+| 3 | `customer:sync` | Sync customer data from ERP system | Customers |
+| 4 | `invoice:read` | View invoice records | Invoices |
+| 5 | `invoice:sync` | Sync invoices from ERP system | Invoices |
+| 6 | `delivery:read` | View delivery headers and details | Deliveries |
+| 7 | `delivery:sync` | Sync deliveries from ERP system | Deliveries |
+| 8 | `uam:read` | View system roles and permission matrices | Access Control |
+| 9 | `uam:sync` | Modify and write role permissions to database | Access Control |
 
 ### Default Role Permissions
 
 | Role | Permissions |
 |------|-------------|
-| `sysadmin` | All permissions (1-6) |
-| `finance` | customer:read, customer:sync, invoice:read, invoice:sync |
+| `sysadmin` | All permissions (1-9) |
+| `finance` | dashboard:read, customer:read |
 | `warehouse` | delivery:read |
-| `sales` | customer:read, invoice:read, delivery:read |
+| `sales` | dashboard:read, customer:read, invoice:read, delivery:read |
 
 ## Application Menus
 
@@ -138,10 +144,11 @@ Four system roles are seeded by default:
 
 | ID | Menu Key | Label | Path | Icon | Required Permission |
 |----|----------|-------|------|------|---------------------|
-| 1 | `customers` | Customers | `/customers` | Users | customer:read |
-| 2 | `invoices` | Invoices | `/invoices` | FileText | invoice:read |
-| 3 | `deliveries` | Deliveries | `/deliveries` | Package | delivery:read |
-| 4 | `settings` | Access Management | `/settings/rbac` | ShieldAlert | customer:sync |
+| 1 | `dashboard` | Dashboard | `/` | LayoutDashboard | dashboard:read |
+| 2 | `customers` | Customers | `/customers` | Users | customer:read |
+| 3 | `invoices` | Invoices | `/invoices` | FileText | invoice:read |
+| 4 | `deliveries` | Deliveries | `/deliveries` | Package | delivery:read |
+| 5 | `uam` | Access Management | `/admin/uam` | ShieldAlert | uam:read |
 
 ### Menu Visibility Logic
 Menus are shown/hidden based on user's role permissions:
@@ -181,11 +188,12 @@ public class UserPlant
 - Plant claims are embedded in JWT token during login
 - Data queries filter by user's assigned plants
 - System administrators (sysadmin role) bypass plant filtering
+- Non-sysadmin users without plant assignments see no data
 
 ### Seeded Plants
 The system seeds 32 plant codes including:
 - `0001` - Werk 0001
-- `B1G2` - Cotton Processing - Tangerang
+- `B1G2` - Garment Tangerang Non KB
 - `B1F1` - FP Tangerang
 - `B1S1` - Spinning Salatiga
 - `Z999` - Plant
@@ -285,6 +293,8 @@ Extends `IdentityUser` with custom fields:
 | DeliveryNumber | string (Unique) | Delivery identifier |
 | DeliveryDate | DateTime | Delivery date |
 | DeliveryRemarks | string? | Delivery remarks (nullable) |
+| OrderNumber | string? | Order number from ERP |
+| BuyerPONumber | string? | Buyer PO number |
 | ReceiverToken | Guid | Unique token for receiver access |
 | ReceiverName | string? | Name of receiver (nullable) |
 | ReceiverNotes | string? | Receiver notes (nullable) |
@@ -294,23 +304,25 @@ Extends `IdentityUser` with custom fields:
 | SalesPersonName | string? | Sales person name |
 | SalesPersonEmail | string? | Sales person email |
 | Type | DeliveryType (Enum) | Delivery type (BC=1, NonBC=2) |
-| Status | ReceiverStatus? (Enum) | Receiver status (FullyReceived=1, PartialReceived=2) |
+| Status | ReceiverStatus? (Enum) | Receiver status (FullyReceived=1, PartialReceived=2, Canceled=3) |
 | Latitude | double? | GPS latitude coordinate |
 | Longitude | double? | GPS longitude coordinate |
 | Province | string? | Administrative province |
 | CityRegency | string? | Administrative city/regency |
 | District | string? | Administrative district |
 | FormattedAddress | string? | Full formatted address string |
+| CancelReason | string? | Reason for cancellation |
 
 **Relationships:**
 - Many-to-One with `Customer`
 - One-to-Many with `DeliveryLine` (Lines)
 - One-to-Many with `Document` (Photos)
+- One-to-Many with `Invoice`
 
 **Enums:**
 ```csharp
 public enum DeliveryType { BC = 1, NonBC = 2 }
-public enum ReceiverStatus { FullyReceived = 1, PartialReceived = 2 }
+public enum ReceiverStatus { FullyReceived = 1, PartialReceived = 2, Canceled = 3 }
 ```
 
 ## DeliveryLine
@@ -322,6 +334,7 @@ public enum ReceiverStatus { FullyReceived = 1, PartialReceived = 2 }
 | DeliveryLineNumber | string | - | Line number |
 | DeliveryItemCode | string | - | Item code |
 | DeliveryItemDescription | string | - | Item description |
+| BatchNumber | string? | - | Batch number |
 | SalesQuantity | decimal | 18,2 | Sales quantity |
 | SalesUOM | string | - | Sales unit of measure |
 | PackQuantity | decimal | 18,2 | Pack quantity |
@@ -413,24 +426,38 @@ backend/amtemeterai.Api/
 │   ├── CustomerResponseDto.cs
 │   ├── DeliveryHeaderDto.cs
 │   ├── DeliveryResponseDto.cs
+│   ├── DeliveryLineResponseDto.cs
+│   ├── DeliveryPhotoResponseDto.cs
+│   ├── DeliveryEditConfirmationDto.cs
 │   ├── InvoiceResponseDto.cs
-│   └── UpdateUserMatrixDto.cs      # RBAC user assignment
+│   ├── InvoiceCreateDto.cs
+│   ├── PinRequestDto.cs
+│   ├── RequestPinDto.cs
+│   ├── CancelDeliveryDto.cs
+│   ├── SapDeliveryConfirmationDto.cs
+│   ├── GoogleGeocodeResponse.cs
+│   └── GeoLocationResult.cs
 ├── Data/                           # Database Context
 │   ├── AppDbContext.cs
 │   ├── AppDbContextFactory.cs
 │   └── DbInitializer.cs           # RBAC & Master Data Seeding
 ├── Services/                       # Business Logic Layer
 │   ├── CustomerService.cs
+│   ├── ICustomerSource.cs
+│   ├── DummyCustomerSource.cs
+│   ├── ErpCustomerSource.cs
 │   ├── IStorageService.cs
 │   ├── MinioStorageService.cs
 │   ├── IPeriuriPdsService.cs       # e-Meterai integration
 │   ├── PeriuriPdsService.cs
 │   ├── IEmailService.cs
-│   └── EmailService.cs
+│   ├── EmailService.cs
+│   └── BillingBackgroundService.cs
 ├── Helpers/                        # Helper Utilities
 │   └── QrCodeHelper.cs
 ├── Config/                         # Configuration Options
-│   └── SapOptions.cs
+│   ├── SapOptions.cs
+│   └── SmtpSettings.cs
 ├── Migrations/                     # Database Migrations
 └── Program.cs                       # Application Entry Point
 ```
@@ -476,7 +503,7 @@ http://localhost/api/swagger
 
 **Notes:**
 - New users are automatically assigned the `sales` role
-- Token includes role, plant, and menu claims
+- Token includes role, plant, permission, and menu claims
 
 ### Login
 **Endpoint:** `POST /api/account/login`
@@ -514,6 +541,10 @@ Authorization: Bearer {token}
   "fullName": "System Administrator"
 }
 ```
+
+**Notes:**
+- Returns a new token with updated claims
+- Used by frontend for session validation polling
 
 ---
 
@@ -710,7 +741,8 @@ Authorization: Bearer {token}
     "customerId": 1,
     "customerCode": "CUST001",
     "customerName": "PT Maju Jaya Logistics",
-    "customerEmail": "contact@majujaya.co.id"
+    "customerEmail": "contact@majujaya.co.id",
+    "customerPin": "123456"
   }
 ]
 ```
@@ -754,6 +786,8 @@ Authorization: Bearer {token}
 
 **Authorization:** `delivery:read` permission required
 
+**Plant-Level Security:** Non-sysadmin users only see deliveries from their assigned plants
+
 **Response Body:**
 ```json
 [
@@ -765,17 +799,61 @@ Authorization: Bearer {token}
     "customerName": "PT Maju Jaya Logistics",
     "received": false,
     "invoiced": false,
-    "plant": "JAKARTA",
+    "plant": "B1G2",
     "cityRegency": "Jakarta Selatan",
-    "province": "DKI Jakarta"
+    "province": "DKI Jakarta",
+    "type": 1,
+    "status": 1,
+    "isCanceled": false,
+    "cancelReason": null,
+    "salesPersonName": "John Doe",
+    "salesPersonEmail": "john@example.com",
+    "photosCount": 3
   }
 ]
 ```
+
+### Get Delivery by ID
+**Endpoint:** `GET /api/deliveries/{deliveryId}`
+
+**Authorization:** `delivery:read` permission required
+
+**Plant-Level Security:** Users can only view deliveries from their assigned plants
+
+**Response:** Full delivery details with lines and photos
 
 ### Create Delivery
 **Endpoint:** `POST /api/deliveries`
 
 **Authorization:** `delivery:sync` permission required
+
+**Request Body:**
+```json
+{
+  "customerCode": "CUST001",
+  "deliveryNumber": "DLV1001",
+  "deliveryDate": "2025-05-03T10:00:00",
+  "deliveryRemarks": "Urgent delivery",
+  "plant": "B1G2",
+  "salesPersonName": "John Doe",
+  "salesPersonEmail": "john@example.com",
+  "orderNumber": "SO12345",
+  "buyerPONumber": "PO67890",
+  "type": 1,
+  "lines": [
+    {
+      "deliveryLineNumber": "1",
+      "deliveryItemCode": "ITEM001",
+      "deliveryItemDescription": "Product A",
+      "batchNumber": "BATCH123",
+      "salesQuantity": 100,
+      "salesUOM": "PCS",
+      "packQuantity": 10,
+      "packUOM": "ROLL"
+    }
+  ]
+}
+```
 
 **Response Body:**
 ```json
@@ -786,12 +864,135 @@ Authorization: Bearer {token}
 }
 ```
 
+### Update Delivery (by Token)
+**Endpoint:** `PATCH /api/deliveries/{token}`
+
+**Authorization:** None (public access via receiver token)
+
+**Request:** Multipart form data with delivery confirmation, photos, and GPS coordinates
+
+**Notes:**
+- Validates PIN before allowing access
+- Records delivery confirmation with GPS coordinates
+- Performs reverse geocoding for address
+- Syncs to SAP ERP
+
 ### Get Delivery by Token (Public)
 **Endpoint:** `GET /api/deliveries/{token}`
 
 **Authorization:** None (public access via receiver token)
 
 **Response:** Delivery details with lines and photos
+
+### Verify PIN
+**Endpoint:** `POST /api/deliveries/{token}/verify-pin`
+
+**Authorization:** None (public access)
+
+**Request Body:**
+```json
+{
+  "pin": "123456"
+}
+```
+
+**Response:**
+```json
+{
+  "valid": true
+}
+```
+
+### Request PIN
+**Endpoint:** `POST /api/deliveries/public/request-pin`
+
+**Authorization:** None (public access)
+
+**Request Body:**
+```json
+{
+  "receiverToken": "guid-token"
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Verification PIN dispatched successfully.",
+  "sentTo": "j***@example.com"
+}
+```
+
+**Notes:**
+- Sends PIN to customer's email
+- Email address is masked in response
+
+### Cancel Delivery
+**Endpoint:** `POST /api/deliveries/cancel/{deliveryNumber}`
+
+**Authorization:** Required
+
+**Request Body:**
+```json
+{
+  "reason": "Customer request cancellation"
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Delivery DLV1001 has been successfully canceled and reason recorded."
+}
+```
+
+**Business Rules:**
+- Cannot cancel invoiced deliveries
+- Cannot cancel already confirmed deliveries
+- Sets status to Canceled
+- Clears receiver token
+- Records cancellation reason
+
+### Upload Delivery Printout
+**Endpoint:** `POST /api/deliveries/{deliveryId}/upload-printout`
+
+**Authorization:** Required
+
+**Request:** Multipart form data with file
+
+**Response:**
+```json
+{
+  "documentId": 1,
+  "fileName": "delivery.pdf",
+  "storageKey": "deliveries/1/printouts/{guid}.pdf",
+  "downloadUrl": "http://localhost:8080/api/deliveries/files/download?key=...",
+  "uploadedAt": "2025-05-20T10:30:00Z"
+}
+```
+
+### Download File
+**Endpoint:** `GET /api/deliveries/files/download?key={storageKey}`
+
+**Authorization:** None (public access for delivery photos)
+
+**Response:** File stream
+
+### Seed Test Deliveries (Dev Only)
+**Endpoint:** `POST /api/deliveries/dev/seed-deliveries`
+
+**Authorization:** Development only
+
+**Response:**
+```json
+{
+  "created": 20,
+  "status": "All deliveries are on-going (not delivered)",
+  "message": "Successfully seeded 20 deliveries with 85 total lines"
+}
+```
 
 ---
 
@@ -817,10 +1018,18 @@ Authorization: Bearer {token}
     "serialNumber": "EM-2025-123456",
     "stampingStatus": 3,
     "stampingStatusText": "Stamped",
+    "hasPrintoutDocument": true,
     "stampedDocumentUrl": "http://localhost:8080/api/deliveries/files/download?key=..."
   }
 ]
 ```
+
+### Get Invoice by ID
+**Endpoint:** `GET /api/invoices/{id}`
+
+**Authorization:** `invoice:read` permission required
+
+**Response:** Full invoice details
 
 ### Create Invoice
 **Endpoint:** `POST /api/invoices`
@@ -837,6 +1046,12 @@ Authorization: Bearer {token}
   "deliveryHeaderId": 1
 }
 ```
+
+**Response:** Created invoice with location header
+
+**Notes:**
+- Marks linked delivery as invoiced
+- Cannot link to already invoiced delivery
 
 ### Upload Invoice Printout
 **Endpoint:** `POST /api/invoices/{id}/upload-printout`
@@ -862,10 +1077,12 @@ Authorization: Bearer {token}
 **Authorization:** `invoice:sync` permission required
 
 **Process:**
-1. Downloads the invoice printout from MinIO
-2. Calls Peruri PDS API to stamp the PDF
-3. Uploads the stamped PDF back to MinIO
-4. Updates invoice with serial number and status
+1. Validates invoice has printout
+2. Sets stamping status to Pending
+3. Downloads the invoice printout from MinIO
+4. Calls Peruri PDS API to stamp the PDF
+5. Uploads the stamped PDF back to MinIO
+6. Updates invoice with serial number and status
 
 **Response:**
 ```json
@@ -904,18 +1121,6 @@ Authorization: Bearer {token}
 4. Peruri returns serial number and stamp coordinates
 5. Stamped PDF is stored and linked to invoice
 
-### Stamp Coordinates
-```csharp
-public record StampCoordinates
-{
-    public int PageNumber { get; init; }  // Page to stamp (default: 1)
-    public double X { get; init; }        // X coordinate
-    public double Y { get; init; }        // Y coordinate
-    public double Width { get; init; }    // Stamp width
-    public double Height { get; init; }   // Stamp height
-}
-```
-
 ## SAP ERP Integration
 
 ### Configuration
@@ -948,11 +1153,34 @@ public record StampCoordinates
       "deliveredQuantity": 10.00,
       "rejectedQuantity": 0.00,
       "returnedQuantity": 0.00,
-      "lineComment": "Good condition"
+      "lineComment": "Good condition",
+      "variancePercent": 0.0
     }
   ]
 }
 ```
+
+**VariancePercent Calculation:**
+```csharp
+decimal totalActual = PackQuantityDelivered + PackQuantityReturned + PackQuantityRejected;
+decimal rawVariance = totalActual - PackQuantity;
+decimal percentCalc = PackQuantity > 0 ? (rawVariance / PackQuantity) * 100 : 0;
+// Returns numeric value only (e.g., 200 for 200%, 12.5 for 12.5%)
+```
+
+## Google Maps Geocoding
+
+### Configuration
+```json
+"GoogleMaps": {
+  "ApiKey": "${GOOGLE_MAPS_API_KEY}"
+}
+```
+
+### Reverse Geocoding
+- Called when delivery is confirmed with GPS coordinates
+- Converts lat/lng to Province, CityRegency, District, and FormattedAddress
+- Results stored in delivery record
 
 ## MinIO/S3 Storage
 
@@ -968,8 +1196,28 @@ public record StampCoordinates
 
 ### Storage Key Patterns
 - Delivery Photos: `deliveries/{deliveryId}/photos/{guid}.{ext}`
+- Delivery Printouts: `deliveries/{deliveryId}/printouts/{guid}.{ext}`
 - Invoice Printouts: `invoices/{invoiceId}/printouts/{guid}.{ext}`
 - Stamped Invoices: `invoices/{invoiceId}/stamped/{guid}_stamped.pdf`
+
+## Email Service
+
+### Configuration
+```json
+"SmtpSettings": {
+  "Host": "${SMTP_HOST}",
+  "Port": 587,
+  "EnableSsl": true,
+  "UserName": "${SMTP_USERNAME}",
+  "Password": "${SMTP_PASSWORD}",
+  "FromEmail": "noreply@amtemeterai.com",
+  "FromName": "AmtemeterAI System"
+}
+```
+
+### Email Types
+- PIN Request Email - Sends customer PIN for delivery access
+- Delivery Confirmation Email - Sent after delivery is confirmed
 
 ---
 
@@ -998,8 +1246,8 @@ public record StampCoordinates
 
 ### Seed Sequence
 1. **System Roles** - Create sysadmin, finance, warehouse, sales roles
-2. **Permissions** - Create 6 default permissions
-3. **Application Menus** - Create 4 default menu items
+2. **Permissions** - Create 9 default permissions
+3. **Application Menus** - Create 5 default menu items
 4. **Menu Permissions** - Link menus to required permissions
 5. **Role Permissions** - Assign permissions to roles
 
@@ -1009,7 +1257,7 @@ public record StampCoordinates
 - Role: `sysadmin`
 
 ### Test Accounts
-- `finance@amtemeterai.com` (Password: `Testing@123`) - finance role
+- `finance@amtemeterai.com` (Password: `Testing@123`) - finance role, assigned to plant B1G2
 - `warehouse@amtemeterai.com` (Password: `Testing@123`) - warehouse role
 - `sales@amtemeterai.com` (Password: `Testing@123`) - sales role
 
@@ -1027,15 +1275,18 @@ public record StampCoordinates
 - **Plant-Level Filtering:** Data isolation by plant assignment
 - **Role-Based Menu Visibility:** UI adapts to user permissions
 - **API-Level Authorization:** `[Authorize(Roles = "sysadmin")]` attributes
+- **Permission-Based Authorization:** Granular permission checks via `permission` claims
 
 ## Data Security
 - **Financial Lock:** Deliveries cannot be modified after invoicing
 - **PIN Verification:** Server-side validation for delivery access
 - **Activity Logging:** Audit trail for all significant operations
+- **Plant-Level Data Isolation:** Non-sysadmin users only see assigned plant data
 
 ## Session Management
 - **Security Stamp Update:** When roles/plants change, existing tokens invalidated
 - **Token Claims:** All permissions embedded in token for efficient auth checks
+- **Session Polling:** Frontend polls `/api/account/me` for validation
 
 ---
 
@@ -1113,7 +1364,7 @@ api:
 | 201 Created | Resource created successfully |
 | 400 Bad Request | Invalid request data, resource not found, or business rule violation |
 | 401 Unauthorized | Invalid credentials or token |
-| 403 Forbidden | Insufficient permissions |
+| 403 Forbidden | Insufficient permissions or plant access |
 | 404 Not Found | Resource not found |
 | 409 Conflict | Resource already exists |
 | 500 Internal Server Error | Server or storage error |
@@ -1138,11 +1389,21 @@ api:
 ## Delivery Confirmation
 - Accessible only via `ReceiverToken`
 - Guard: Rejects updates if delivery is invoiced
+- Guard: Rejects updates if delivery is already canceled
 - Sets `Received = true` on update
 - Auto-calculates status (FullyReceived/PartialReceived)
 - Updates GPS coordinates and reverse geocodes
 - Uploads/deletes photos in MinIO
 - Syncs confirmation to SAP ERP
+- Sends confirmation email to customer
+
+## Delivery Cancellation
+- Can only be performed before delivery is received
+- Cannot cancel invoiced deliveries
+- Sets status to Canceled
+- Clears receiver token
+- Records cancellation reason
+- Logs cancellation activity
 
 ## Invoice Stamping
 - Downloads printout PDF from MinIO
@@ -1155,6 +1416,13 @@ api:
 - Replaces all role assignments for user
 - Updates security stamp (invalidates existing tokens)
 - Affects all active sessions for the user
+
+## PIN Request Workflow
+- Validates receiver token
+- Checks customer has email and PIN configured
+- Sends PIN to customer's email
+- Masks email address in response
+- Logs PIN request activity
 
 ---
 
@@ -1211,7 +1479,13 @@ Task<PeriuriStampingStatusResponse> CheckStampingStatusAsync(string transactionI
 ### IEmailService Interface
 ```csharp
 Task SendEmailAsync(string to, string subject, string htmlBody);
-Task SendDeliveryConfirmationAsync(string email, string deliveryNumber, string receiverName);
+Task SendDeliveryConfirmationEmailAsync(int deliveryId);
+Task SendPinEmailAsync(string to, string pin, string deliveryNumber);
+```
+
+### ICustomerSource Interface
+```csharp
+Task<IEnumerable<Customer>> GetCustomersAsync();
 ```
 
 ---
@@ -1225,3 +1499,19 @@ Task SendDeliveryConfirmationAsync(string email, string deliveryNumber, string r
 | `npm run dev:frontend` | Runs frontend only (`npm run dev` in frontend directory) |
 
 ---
+
+# Summary
+
+The AmtemeterAI backend is a modern, enterprise-grade ASP.NET Core application with:
+- **Dynamic RBAC** with permission-based authorization
+- **Plant-level data security** for operational users
+- **JWT authentication** with session monitoring
+- **Real-time ERP integration** with SAP
+- **e-Meterai stamping** via Peruri PDS
+- **Document storage** via MinIO
+- **GPS tracking** with reverse geocoding
+- **Activity logging** for audit trails
+- **Email notifications** for delivery confirmations
+- **PIN-based access** for public delivery links
+- **Delivery cancellation** workflow
+- **Production-ready** Docker deployment
