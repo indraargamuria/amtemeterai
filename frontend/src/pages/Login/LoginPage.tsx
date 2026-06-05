@@ -190,7 +190,7 @@ export function LoginPage() {
             </Button>
           </form>
 
-          {/* Demo Credentials with subtle animation */}
+          {/* Demo Credentials with subtle animation
           <div
             className={`mt-8 transition-all duration-700 ease-out ${
               isMounted ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'
@@ -224,7 +224,7 @@ export function LoginPage() {
                 </div>
               </div>
             </details>
-          </div>
+          </div> */}
 
           {/* Footer with copyright */}
           <div
