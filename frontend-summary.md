@@ -39,6 +39,15 @@ The frontend is a modern **React 19** application built with **TypeScript** and 
 - **Automatic Logout:** On 401 responses or security stamp changes
 - **Token Refresh:** Automatic when new token received from `/api/account/me`
 
+### Auth Response DTO
+```typescript
+interface AuthResponseDto {
+  token: string
+  email: string
+  fullName: string
+}
+```
+
 ### JWT Token Structure
 The JWT token includes these claims:
 ```typescript
@@ -108,6 +117,35 @@ The application uses **permission-based access control** where each route requir
 ```
 
 ### Permission Checks
+
+#### Route Permission Constants
+```typescript
+export const routePermissions: Record<string, string> = {
+  '/': 'dashboard:read',
+  '/dashboard': 'dashboard:read',
+  '/customers': 'customer:read',
+  '/deliveries': 'delivery:read',
+  '/invoices': 'invoice:read',
+  '/admin/uam': 'uam:read',
+}
+
+export const sysAdminOnlyRoutes = new Set(['/admin/uam'])
+```
+
+#### JWT Decoding
+```typescript
+function decodeJWT(token: string): any {
+  const base64Url = token.split('.')[1]
+  const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/')
+  const jsonPayload = decodeURIComponent(
+    atob(base64)
+      .split('')
+      .map((c) => `%${('00' + c.charCodeAt(0).toString(16)).slice(-2)}`)
+      .join('')
+  )
+  return JSON.parse(jsonPayload)
+}
+```
 
 #### `hasRouteAccess(pathname: string): boolean`
 ```typescript
@@ -395,6 +433,26 @@ Pending Delivery → Fully Received → Invoiced
 - Hidden when variance is 0% (perfect match)
 - Formula: `((delivered + returned + rejected - packQuantity) / packQuantity) * 100`
 
+### Variance Summary Interface
+```typescript
+interface VarianceSummary {
+  lineNumber: string
+  itemCode: string
+  description: string
+  scheduled: number
+  actualTotal: number
+  variancePercent: string
+  uom: string
+}
+```
+
+### Variance Modal
+- Triggered before form submission when discrepancies are detected
+- Shows summary of all line items with variance
+- Displays scheduled quantity vs actual total
+- Shows variance percentage with color coding (green/red)
+- Allows user to review before confirming submission
+
 ### Variance Percent Calculation
 The variance percent is calculated on each line item:
 ```typescript
@@ -410,6 +468,103 @@ const displayPercent = rawVariance > 0 ? `+${percentCalc}%` : `${percentCalc}%`
 
 This same calculation is replicated on the backend when syncing to SAP ERP.
 
+### Photo Upload Features
+- **Max photos:** 5 per delivery
+- **Max file size:** 5MB per photo
+- **Supported formats:** JPEG, PNG, etc.
+- **Camera capture:** Direct from device camera
+- **File picker:** Choose from gallery
+- **Preview:** Thumbnail display before submission
+- **Delete option:** Remove photos before submission
+
+### GPS Location Features
+- **Automatic capture:** On page load (with permission)
+- **High accuracy:** Uses enableHighAccuracy option
+- **Timeout:** 5 seconds for location request
+- **Fallback:** Graceful handling if permission denied
+
+### "Apply to All" Flow
+
+The "Apply to All" button in the Quick Actions section allows users to quickly set all line items to their scheduled quantities (delivered = packQuantity, returned/rejected = 0, no comments).
+
+#### Flow States
+
+1. **Staged Post (Local State)**
+   - Clicking "Apply to All" updates local component state only
+   - User must still click "Post Goods Receipt" button to commit changes
+   - No automatic submission occurs
+
+2. **Info Pop-up Reminder**
+   - After clicking "Apply to All", a blue info banner appears at the top
+   - Message: "Apply to All Ready - All items set to scheduled quantities. Click 'Post Goods Receipt' at the bottom to confirm and submit."
+   - Auto-dismisses after 8 seconds or manually dismissible
+
+3. **Guardrail Modal (Data Overwrite Protection)**
+   - Triggered when user has manually entered discrepancies before clicking "Apply to All"
+   - Detects manual modifications via `issuesCount > 0`
+   - Shows warning modal with:
+     - Alert icon and "Warning: Manual Changes Detected" title
+     - Count of affected items
+     - Message explaining that manual entries will be overwritten
+     - Two buttons: "Keep Manual Changes" (cancel) and "Overwrite & Apply" (confirm)
+   - Prevents accidental loss of manually entered data
+
+#### Implementation Details
+
+```typescript
+// State for new modals
+const [showGuardrailModal, setShowGuardrailModal] = useState(false)
+const [showApplyAllReminder, setShowApplyAllReminder] = useState(false)
+
+// Guardrail check function
+const handleReceiveAllClean = (skipGuardrail = false) => {
+  // Check for receiver name
+  if (!receiverName.trim()) {
+    // Show error toast
+    return
+  }
+
+  // Guardrail: Check for manual discrepancies
+  if (!skipGuardrail && issuesCount > 0) {
+    setShowGuardrailModal(true)
+    return
+  }
+
+  // Apply clean values (staged - not committed)
+  const cleanLines = delivery.lines.map((line) => ({
+    deliveryLineNumber: line.deliveryLineNumber,
+    delivered: line.packQuantity.toString(),
+    returned: "0",
+    rejected: "0",
+    lineComment: "",
+  }))
+
+  setLines(cleanLines)
+  setShowApplyAllReminder(true) // Show info pop-up
+}
+```
+
+#### Issue Detection Logic
+
+```typescript
+const checkIsIssueLine = (lineState: LineFormState, originalPackQuantity: number) => {
+  const delivered = parseFloat(lineState.delivered) || 0
+  const returned = parseFloat(lineState.returned) || 0
+  const rejected = parseFloat(lineState.rejected) || 0
+  return returned > 0 || rejected > 0 ||
+         (delivered + returned + rejected) !== originalPackQuantity ||
+         lineState.lineComment.trim() !== ""
+}
+
+const issuesCount = useMemo(() => {
+  if (!delivery) return 0
+  return lines.filter(l => {
+    const orig = delivery.lines.find(ol => ol.deliveryLineNumber === l.deliveryLineNumber)
+    return orig ? checkIsIssueLine(l, orig.packQuantity) : false
+  }).length
+}, [delivery, lines])
+```
+
 ---
 
 # API Integration Layer
@@ -418,6 +573,33 @@ This same calculation is replicated on the backend when syncing to SAP ERP.
 
 ### `createAuthenticatedFetch()`
 Creates a fetch function that automatically includes JWT token in Authorization header.
+
+```typescript
+export function createAuthenticatedFetch() {
+  const token = localStorage.getItem("auth_token")
+
+  return async (url: string, options: RequestInit = {}) => {
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+    }
+
+    if (token) {
+      headers.Authorization = `Bearer ${token}`
+    }
+
+    const response = await fetch(`${API_URL}${url}`, { ...options, headers })
+
+    // Handle 401 Unauthorized - token expired or invalid
+    if (response.status === 401) {
+      localStorage.removeItem("auth_token")
+      localStorage.removeItem("auth_user")
+      window.location.href = "/login"
+    }
+
+    return response
+  }
+}
+```
 
 ### HTTP Method Helpers
 ```typescript
@@ -449,6 +631,28 @@ getInvoiceById(id)               // GET /api/invoices/{id}
 createInvoice(data)              // POST /api/invoices
 uploadInvoicePrintout(id, file)  // POST /api/invoices/{id}/upload-printout
 stampInvoice(id)                 // POST /api/invoices/{id}/stamp
+```
+
+### Invoice Interface
+```typescript
+interface Invoice {
+  invoiceID: number
+  invoiceNumber: string
+  customerNumber: string
+  customerName?: string
+  invoiceAmount: number
+  invoicedDate: string
+  status: number
+  statusText: string
+  deliveryHeaderId?: number
+  deliveryNumber?: string
+  serialNumber?: string
+  stampingStatus: number
+  stampingStatusText: string
+  hasPrintoutDocument: boolean
+  stampedDocumentUrl?: string
+  createdAt: string
+}
 ```
 
 ### Delivery APIs
@@ -483,6 +687,32 @@ uploadDeliveryPrintout(id, file) // POST /api/deliveries/{id}/upload-printout
 
 ## Dynamic Landing Route (`resolveDefaultLandingRoute()`)
 
+### Route Priority List
+```typescript
+const routePriorityList: Array<{ permission: string; path: string }> = [
+  { permission: 'customer:read', path: '/customers' },
+  { permission: 'invoice:read', path: '/invoices' },
+  { permission: 'delivery:read', path: '/deliveries' },
+]
+```
+
+### Resolution Logic
+
+#### DecodedUserToken Interface
+```typescript
+export interface DecodedUserToken {
+  roles: string[]
+  permissions: string[]
+}
+```
+
+#### isRootDashboardPath Function
+```typescript
+export function isRootDashboardPath(pathname: string): boolean {
+  const normalizedPath = pathname.replace(/\/$/, '') // Strip trailing slashes
+  return normalizedPath === '' || normalizedPath === '/dashboard'
+}
+```
 ```typescript
 // Logic:
 if (user has 'sysadmin' role) {
@@ -658,10 +888,27 @@ On login, the following claims are extracted from the JWT:
 # Security Features
 
 ## Session Monitoring
-- **Polling Interval:** 60 seconds
+- **Polling Interval:** 60 seconds (configurable via `POLLING_INTERVAL`)
 - **Endpoint:** `GET /api/account/me`
 - **Detects:** Security stamp changes, token expiry
 - **Action:** Automatic logout and redirect to login
+- **Token Update:** If a new token is received, it updates `localStorage`
+
+### SecuritySessionGuard Behavior
+```typescript
+// On mount:
+1. Initial session check via /api/account/me
+2. Set up 60-second polling interval
+
+// On each poll:
+3. Fetch current user data with existing token
+4. On 401 response: Clear localStorage, logout, redirect to /login
+5. On success: Update token if new one received
+6. On error: Silently fail, retry on next interval
+
+// On unmount:
+7. Clear polling interval
+```
 
 ## Route Protection
 - **Multi-layer protection:** Session guard → Protected route → Root guard → Route guard

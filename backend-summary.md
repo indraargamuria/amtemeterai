@@ -454,7 +454,7 @@ backend/amtemeterai.Api/
 │   ├── PeriuriPdsService.cs
 │   ├── IEmailService.cs
 │   ├── EmailService.cs
-│   └── BillingBackgroundService.cs
+│   └── BillingBackgroundService.cs # Background invoice creation
 ├── Helpers/                        # Helper Utilities
 │   └── QrCodeHelper.cs
 ├── Config/                         # Configuration Options
@@ -1135,6 +1135,10 @@ Authorization: Bearer {token}
 }
 ```
 
+**Properties:**
+- `BaseUrl`: Peruri PDS API base URL
+- `ApiKey`: Authentication API key for stamping requests
+
 ### Stamping Flow
 1. Upload invoice printout via `/api/invoices/{id}/upload-printout`
 2. Call `/api/invoices/{id}/stamp` to initiate stamping
@@ -1211,9 +1215,17 @@ decimal percentCalc = PackQuantity > 0 ? (rawVariance / PackQuantity) * 100 : 0;
   "Endpoint": "minio:9000",
   "AccessKey": "${MINIO_ACCESS_KEY}",
   "SecretKey": "${MINIO_SECRET_KEY}",
-  "BucketName": "amtemeterai-documents"
+  "BucketName": "amtemeterai-documents",
+  "Secure": false
 }
 ```
+
+**Properties:**
+- `Endpoint`: MinIO server address (host:port format)
+- `AccessKey`: S3-compatible access key
+- `SecretKey`: S3-compatible secret key
+- `BucketName`: Storage bucket name
+- `Secure`: Use HTTPS (true) or HTTP (false)
 
 ### Storage Key Patterns
 - Delivery Photos: `deliveries/{deliveryId}/photos/{guid}.{ext}`
@@ -1226,19 +1238,52 @@ decimal percentCalc = PackQuantity > 0 ? (rawVariance / PackQuantity) * 100 : 0;
 ### Configuration
 ```json
 "SmtpSettings": {
-  "Host": "${SMTP_HOST}",
+  "Server": "${SMTP_SERVER}",
   "Port": 587,
   "EnableSsl": true,
-  "UserName": "${SMTP_USERNAME}",
+  "Username": "${SMTP_USERNAME}",
   "Password": "${SMTP_PASSWORD}",
-  "FromEmail": "noreply@amtemeterai.com",
-  "FromName": "AmtemeterAI System"
+  "SenderEmail": "noreply@amtemeterai.com",
+  "SenderName": "AmtemeterAI System"
 }
 ```
 
 ### Email Types
 - PIN Request Email - Sends customer PIN for delivery access
 - Delivery Confirmation Email - Sent after delivery is confirmed
+
+## Billing Background Service
+
+### Overview
+A background service that automatically creates invoices for received deliveries after a configurable delay period.
+
+### Configuration
+```json
+"BillingSync": {
+  "DelayMinutes": 30,
+  "CheckIntervalMinutes": 5
+}
+```
+
+### Process Flow
+1. **Periodic Check**: Service runs every `CheckIntervalMinutes` (default: 5 minutes)
+2. **Find Eligible Deliveries**: Finds deliveries that:
+   - Have been received (Status: FullyReceived or PartialReceived)
+   - Were received before the cutoff time (UTC now - `DelayMinutes`)
+   - Are not yet invoiced
+3. **Create Invoice**: For each eligible delivery:
+   - Builds SAP billing payload
+   - Calls SAP billing API (simulated in current implementation)
+   - Creates Invoice record with `Draft` status
+   - Marks delivery as `Invoiced`
+   - Logs activity as `BillingSyncSuccess` or `BillingSyncFailed`
+4. **Error Handling**: Failed deliveries are logged but don't stop the process
+
+### Business Rules
+- Only processes deliveries received at least `DelayMinutes` ago
+- Creates invoice numbers in format: `INV-{yyyyMMdd}-{DeliveryID:D6}`
+- Calculates invoice amount from delivery lines
+- Marks delivery as invoiced after successful invoice creation
 
 ---
 
@@ -1535,4 +1580,5 @@ The AmtemeterAI backend is a modern, enterprise-grade ASP.NET Core application w
 - **Email notifications** for delivery confirmations
 - **PIN-based access** for public delivery links
 - **Delivery cancellation** workflow
+- **Background billing service** for automatic invoice creation
 - **Production-ready** Docker deployment

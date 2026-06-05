@@ -124,6 +124,8 @@ export function DeliveryReceivePage() {
   // Modal state
   const [showVarianceModal, setShowVarianceModal] = useState(false)
   const [pendingVariances, setPendingVariances] = useState<VarianceSummary[]>()
+  const [showGuardrailModal, setShowGuardrailModal] = useState(false)
+  const [showApplyAllReminder, setShowApplyAllReminder] = useState(false)
 
   const cameraInputRef = useRef<HTMLInputElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -213,6 +215,13 @@ export function DeliveryReceivePage() {
     }
   }, [showToast])
 
+  useEffect(() => {
+    if (showApplyAllReminder) {
+      const timer = setTimeout(() => setShowApplyAllReminder(false), 8000)
+      return () => clearTimeout(timer)
+    }
+  }, [showApplyAllReminder])
+
   // ============================================================================
   // COMPUTED VALUES
   // ============================================================================
@@ -255,13 +264,20 @@ export function DeliveryReceivePage() {
   // HANDLERS
   // ============================================================================
 
-  const handleReceiveAllClean = () => {
+  const handleReceiveAllClean = (skipGuardrail = false) => {
     if (!delivery) return
 
     // Validation: Check if receiver name is provided
     if (!receiverName.trim()) {
       setToastType("error")
       setShowToast(true)
+      return
+    }
+
+    // Guardrail: Check if user has manually entered discrepancies before clicking "Apply to All"
+    // Only show guardrail if not already skipped and there are manual modifications
+    if (!skipGuardrail && issuesCount > 0) {
+      setShowGuardrailModal(true)
       return
     }
 
@@ -274,13 +290,11 @@ export function DeliveryReceivePage() {
       lineComment: "",
     }))
 
-    // Sync the local component state layout
+    // Sync the local component state layout (staged - not committed)
     setLines(cleanLines)
-    setToastType("success")
-    setShowToast(true)
 
-    // Fire the validation layout sequence using the freshly computed lines array
-    handleValidationCheck(null, cleanLines)
+    // Show info pop-up reminder to click "Post"
+    setShowApplyAllReminder(true)
   }
 
   const toggleRowExpansion = (lineNumber: string) => {
@@ -849,10 +863,10 @@ export function DeliveryReceivePage() {
               type="button"
               size="sm"
               className="bg-[#1d2351] hover:bg-[#2a3266] text-white shadow-sm"
-              onClick={handleReceiveAllClean}
+              onClick={() => handleReceiveAllClean(false)}
               disabled={submitting || !receiverName.trim()}
             >
-              {submitting ? "Posting..." : "Apply to All"}
+              Apply to All
             </Button>
           </div>
         )}
@@ -1207,6 +1221,31 @@ export function DeliveryReceivePage() {
         </div>
       )}
 
+      {/* Apply to All Info Pop-up */}
+      {showApplyAllReminder && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 animate-in slide-in-from-top-4 fade-in duration-300">
+          <div className="bg-blue-600 border border-blue-700 rounded-lg shadow-xl p-4 flex items-start gap-3 min-w-[320px]">
+            <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center shrink-0">
+              <CheckCircle className="w-4 h-4 text-white" />
+            </div>
+            <div className="flex-1">
+              <h4 className="text-sm font-semibold text-white">
+                "Apply to All" Ready
+              </h4>
+              <p className="text-xs text-blue-100 mt-0.5">
+                All items set to scheduled quantities. Click <strong>"Post Goods Receipt"</strong> at the bottom to confirm and submit.
+              </p>
+            </div>
+            <button
+              onClick={() => setShowApplyAllReminder(false)}
+              className="text-blue-200 hover:text-white shrink-0"
+            >
+              ×
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Variance Modal */}
       {showVarianceModal && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
@@ -1257,6 +1296,53 @@ export function DeliveryReceivePage() {
                   onClick={() => processFormSubmission()}
                 >
                   Confirm & Post
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* Guardrail Modal - Warning before overwriting manual discrepancies */}
+      {showGuardrailModal && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <Card className="w-full max-w-md shadow-2xl bg-white">
+            <CardHeader className="p-4 border-b border-slate-100 flex items-start gap-3">
+              <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center shrink-0">
+                <AlertTriangle className="w-5 h-5 text-red-700" />
+              </div>
+              <div className="space-y-0.5">
+                <CardTitle className="text-base font-semibold text-slate-900">Warning: Manual Changes Detected</CardTitle>
+                <p className="text-xs text-slate-500">You have entered manual discrepancies on {issuesCount} item(s)</p>
+              </div>
+            </CardHeader>
+            <CardContent className="p-4 space-y-4">
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+                <p className="text-sm text-amber-900">
+                  Clicking <strong>"Apply to All"</strong> will overwrite all your manual entries and reset all items to their scheduled quantities.
+                </p>
+              </div>
+              <p className="text-xs text-slate-600">
+                Are you sure you want to proceed? This action cannot be undone.
+              </p>
+              <div className="flex gap-3 pt-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="flex-1 h-10 border-slate-300 text-slate-700 hover:bg-slate-50"
+                  onClick={() => setShowGuardrailModal(false)}
+                >
+                  Keep Manual Changes
+                </Button>
+                <Button
+                  type="button"
+                  className="flex-1 h-10 bg-red-600 hover:bg-red-700 text-white"
+                  onClick={() => {
+                    setShowGuardrailModal(false)
+                    handleReceiveAllClean(true) // Skip guardrail on confirmation
+                  }}
+                >
+                  Overwrite & Apply
                 </Button>
               </div>
             </CardContent>
