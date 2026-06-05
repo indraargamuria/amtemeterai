@@ -184,5 +184,23 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
             .WithMany()
             .HasForeignKey(d => d.Plant) // Assuming DeliveryHeader already has a string property named 'Plant'
             .IsRequired(false); // Make it optional or required based on your ERP data constraints
+
+        // ============================================================================
+        // 🚀 GLOBAL UTC DATETIME CONVERTER FOR POSTGRESQL
+        // ============================================================================
+        foreach (var entityType in modelBuilder.Model.GetEntityTypes())
+        {
+            var properties = entityType.GetProperties()
+                .Where(p => p.ClrType == typeof(DateTime) || p.ClrType == typeof(DateTime?));
+
+            foreach (var property in properties)
+            {
+                property.SetValueConverter(new Microsoft.EntityFrameworkCore.Storage.ValueConversion.ValueConverter<DateTime, DateTime>(
+                    v => v.Kind == DateTimeKind.Utc ? v : DateTime.SpecifyKind(v, DateTimeKind.Utc),
+                    v => v.Kind == DateTimeKind.Utc ? v : DateTime.SpecifyKind(v, DateTimeKind.Utc)
+                ));
+            }
+        }
     }
+
 }

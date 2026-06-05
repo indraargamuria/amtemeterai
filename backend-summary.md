@@ -294,12 +294,13 @@ Extends `IdentityUser` with custom fields:
 | DeliveryDate | DateTime | Delivery date |
 | DeliveryRemarks | string? | Delivery remarks (nullable) |
 | ShipToAddress | string? | Ship to address |
-| OrderNumber | string? | Order number from ERP |
-| BuyerPONumber | string? | Buyer PO number |
+| OrderNumber | string? | Order number from ERP (hidden from warehouse role) |
+| BuyerPONumber | string? | Buyer PO number (hidden from warehouse role) |
 | ReceiverToken | Guid | Unique token for receiver access |
 | ReceiverName | string? | Name of receiver (nullable) |
 | ReceiverNotes | string? | Receiver notes (nullable) |
 | Received | bool | Delivery received status |
+| ReceiveDate | DateTime? | Date when delivery was confirmed (nullable) |
 | Invoiced | bool | Invoice status |
 | Plant | string? | Plant/location identifier |
 | SalesPersonName | string? | Sales person name |
@@ -789,6 +790,10 @@ Authorization: Bearer {token}
 
 **Plant-Level Security:** Non-sysadmin users only see deliveries from their assigned plants
 
+**Role-Based Data Filtering:**
+- **Warehouse role users:** `customerCode` and `customerName` are returned as empty strings (confidential)
+- **Other roles:** Full customer information is included
+
 **Response Body:**
 ```json
 [
@@ -799,6 +804,7 @@ Authorization: Bearer {token}
     "customerCode": "CUST001",
     "customerName": "PT Maju Jaya Logistics",
     "received": false,
+    "receiveDate": null,
     "invoiced": false,
     "plant": "B1G2",
     "cityRegency": "Jakarta Selatan",
@@ -820,6 +826,10 @@ Authorization: Bearer {token}
 **Authorization:** `delivery:read` permission required
 
 **Plant-Level Security:** Users can only view deliveries from their assigned plants
+
+**Role-Based Data Filtering:**
+- **Warehouse role users:** `customerCode`, `customerName`, `orderNumber`, and `buyerPONumber` are hidden/empty
+- **Other roles:** All fields including `orderNumber` and `buyerPONumber` are included
 
 **Response:** Full delivery details with lines and photos
 
@@ -870,11 +880,21 @@ Authorization: Bearer {token}
 
 **Authorization:** None (public access via receiver token)
 
-**Request:** Multipart form data with delivery confirmation, photos, and GPS coordinates
+**Request:** Multipart form data with delivery confirmation, photos, GPS coordinates, and receive date
+
+**Request Fields:**
+- `ReceiverName` (required): Name of the person receiving the delivery
+- `ReceiverNotes` (optional): Additional notes about the delivery
+- `ReceiveDate` (optional): Date when delivery was received (defaults to current UTC timestamp if not provided, validated to prevent future dates)
+- `Latitude`/`Longitude`: GPS coordinates
+- `Lines[]`: Array of line item confirmations
+- `NewPhotoFiles`: Photos to upload
+- `KeysToDelete`: Photos to delete
 
 **Notes:**
 - Validates PIN before allowing access
 - Records delivery confirmation with GPS coordinates
+- Sets `receiveDate` to provided date or current UTC timestamp when delivery is confirmed
 - Performs reverse geocoding for address
 - Syncs to SAP ERP
 
@@ -883,7 +903,7 @@ Authorization: Bearer {token}
 
 **Authorization:** None (public access via receiver token)
 
-**Response:** Delivery details with lines and photos
+**Response:** Delivery details with lines and photos, including `receiveDate` if delivery has been confirmed
 
 ### Verify PIN
 **Endpoint:** `POST /api/deliveries/{token}/verify-pin`

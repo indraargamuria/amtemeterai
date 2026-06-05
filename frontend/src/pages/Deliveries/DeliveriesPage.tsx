@@ -125,6 +125,11 @@ export function DeliveriesPage() {
     return sortOrder === "asc" ? "↑" : "↓"
   }
 
+  // 🚀 ROLE FILTER CHECK: Derive warehouse context status directly from Auth profile claims context
+  const isWarehouse = useMemo(() => {
+    return user?.roles?.includes('warehouse') || false
+  }, [user])
+
   const filteredAndSortedDeliveries = useMemo(() => {
     let filtered = [...deliveries]
 
@@ -149,8 +154,8 @@ export function DeliveriesPage() {
       filtered = filtered.filter(
         (d) =>
           d.deliveryNumber.toLowerCase().includes(query) ||
-          d.customerName.toLowerCase().includes(query) ||
-          d.customerCode.toLowerCase().includes(query) ||
+          (!isWarehouse && d.customerName.toLowerCase().includes(query)) ||
+          (!isWarehouse && d.customerCode.toLowerCase().includes(query)) ||
           (d.salesPersonName?.toLowerCase().includes(query) ?? false) ||
           (d.cancelReason?.toLowerCase().includes(query) ?? false)
       )
@@ -200,7 +205,7 @@ export function DeliveriesPage() {
     })
 
     return filtered
-  }, [deliveries, searchQuery, sortField, sortOrder, complianceFilter, pipelineFilter, showDiscrepancyOnly, assignedPlants, isSysAdmin])
+  }, [deliveries, searchQuery, sortField, sortOrder, complianceFilter, pipelineFilter, showDiscrepancyOnly, assignedPlants, isSysAdmin, isWarehouse])
 
   const totalPages = Math.ceil(filteredAndSortedDeliveries.length / ITEMS_PER_PAGE)
   const startIndex = (currentPage - 1) * ITEMS_PER_PAGE
@@ -349,7 +354,7 @@ export function DeliveriesPage() {
                   />
                 </svg>
                 <Input
-                  placeholder="Search by delivery number, customer, salesperson, or cancellation reason..."
+                  placeholder={isWarehouse ? "Search by delivery number, salesperson, or cancellation reason..." : "Search by delivery number, customer, salesperson, or cancellation reason..."}
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="pl-10 bg-brand-blue/5"
@@ -462,9 +467,14 @@ export function DeliveriesPage() {
               >
                 Delivery / Date {getSortIcon("deliveryDate")}
               </TableHead>
-              <TableHead className="font-medium text-brand-blue/50 uppercase text-xs tracking-wider">
-                Customer
-              </TableHead>
+              
+              {/* 🚀 CONDITIONAL HEADER: Drop Customer column dynamically if the warehouse role matches */}
+              {!isWarehouse && (
+                <TableHead className="font-medium text-brand-blue/50 uppercase text-xs tracking-wider">
+                  Customer
+                </TableHead>
+              )}
+
               <TableHead className="font-medium text-brand-blue/50 uppercase text-xs tracking-wider">
                 Compliance
               </TableHead>
@@ -491,13 +501,13 @@ export function DeliveriesPage() {
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={8} className="text-center text-brand-blue/60 py-12">
+                <TableCell colSpan={isWarehouse ? 7 : 8} className="text-center text-brand-blue/60 py-12">
                   Loading deliveries...
                 </TableCell>
               </TableRow>
             ) : filteredAndSortedDeliveries.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={8} className="text-center text-brand-blue/60 py-12">
+                <TableCell colSpan={isWarehouse ? 7 : 8} className="text-center text-brand-blue/60 py-12">
                   {deliveries.length === 0
                     ? "No deliveries found"
                     : "No deliveries match your filter criteria"}
@@ -526,21 +536,23 @@ export function DeliveriesPage() {
                     </div>
                   </TableCell>
 
-                  {/* Combined Customer Column */}
-                  <TableCell className="py-4">
-                    {delivery.customerCode && delivery.customerName ? (
-                      <div className="flex items-center gap-2">
-                        <Badge variant="badge" className={`font-normal ${delivery.isCanceled ? "text-slate-400 bg-slate-100" : "text-brand-blue/70"}`}>
-                          {delivery.customerCode}
-                        </Badge>
-                        <span className={`text-sm ${delivery.isCanceled ? "text-slate-500" : "text-brand-blue/80"}`}>
-                          {delivery.customerName}
-                        </span>
-                      </div>
-                    ) : (
-                      <span className="text-sm text-brand-blue/40 italic">Confidential</span>
-                    )}
-                  </TableCell>
+                  {/* 🚀 CONDITIONAL ROW DATA: Complete truncation of Customer metrics for warehouse handlers */}
+                  {!isWarehouse && (
+                    <TableCell className="py-4">
+                      {delivery.customerCode && delivery.customerName ? (
+                        <div className="flex items-center gap-2">
+                          <Badge variant="badge" className={`font-normal ${delivery.isCanceled ? "text-slate-400 bg-slate-100" : "text-brand-blue/70"}`}>
+                            {delivery.customerCode}
+                          </Badge>
+                          <span className={`text-sm ${delivery.isCanceled ? "text-slate-500" : "text-brand-blue/80"}`}>
+                            {delivery.customerName}
+                          </span>
+                        </div>
+                      ) : (
+                        <span className="text-sm text-brand-blue/40 italic">Confidential</span>
+                      )}
+                    </TableCell>
+                  )}
 
                   {/* Compliance Type Column */}
                   <TableCell className="py-4">

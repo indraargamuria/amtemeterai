@@ -274,21 +274,20 @@ export function DeliveryDetailPage() {
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="space-y-1">
-                <p className="text-xs font-medium text-brand-blue/50 uppercase tracking-wider">
-                  Customer
-                </p>
-                {delivery.customerCode && delivery.customerName ? (
+              {/* Customer Section - Hidden completely for warehouse role */}
+              {(delivery.customerCode || delivery.customerName) && (
+                <div className="space-y-1">
+                  <p className="text-xs font-medium text-brand-blue/50 uppercase tracking-wider">
+                    Customer
+                  </p>
                   <div className="flex items-center gap-2">
                     <Badge variant="badge" className="text-brand-blue/70 font-normal text-xs">
                       {delivery.customerCode}
                     </Badge>
                     <span className="text-sm text-brand-blue/80">{delivery.customerName}</span>
                   </div>
-                ) : (
-                  <span className="text-sm text-brand-blue/40 italic">-</span>
-                )}
-              </div>
+                </div>
+              )}
 
               {/* Buyer PO Number - Only shown if user has access (non-warehouse) */}
               {delivery.buyerPONumber && (
@@ -608,9 +607,12 @@ export function DeliveryDetailPage() {
                 <TableHead className="text-xs font-semibold uppercase tracking-wider text-brand-blue/60 text-right w-[10%]">
                   Returned
                 </TableHead>
-                <TableHead className="text-xs font-semibold uppercase tracking-wider text-brand-blue/60 text-right w-[9%]">
-                  Variance
-                </TableHead>
+                {/* Variance column - only shown when delivery is received */}
+                {delivery.received && (
+                  <TableHead className="text-xs font-semibold uppercase tracking-wider text-brand-blue/60 text-right w-[9%]">
+                    Variance
+                  </TableHead>
+                )}
                 <TableHead className="text-xs font-semibold uppercase tracking-wider text-brand-blue/60 w-[10%]">
                   Remarks
                 </TableHead>
@@ -620,7 +622,7 @@ export function DeliveryDetailPage() {
               {totalLines === 0 ? (
                 <TableRow>
                   <TableCell
-                    colSpan={9}
+                    colSpan={delivery.received ? 9 : 8}
                     className="text-center py-12 text-sm text-brand-blue/40 italic"
                   >
                     No dynamic dispatch line items attached to this delivery record.
@@ -679,23 +681,26 @@ export function DeliveryDetailPage() {
                           {delivery.status === 3 ? 0 : line.packQuantityReturned} {line.packUOM}
                         </span>
                       </TableCell>
-                      <TableCell className="py-3.5 text-sm text-right font-semibold">
-                        {delivery.status === 3 ? (
-                          <span className="text-rose-500/80 font-medium">—</span>
-                        ) : (
-                          <span
-                            className={
-                              isShort
-                                ? "text-rose-600 font-bold bg-rose-50 px-2 py-0.5 rounded"
-                                : isOver
-                                ? "text-emerald-600 font-bold bg-emerald-50 px-2 py-0.5 rounded"
-                                : "text-brand-blue/40"
-                            }
-                          >
-                            {displayVariance}
-                          </span>
-                        )}
-                      </TableCell>
+                      {/* Variance cell - only shown when delivery is received */}
+                      {delivery.received && (
+                        <TableCell className="py-3.5 text-sm text-right font-semibold">
+                          {delivery.status === 3 ? (
+                            <span className="text-rose-500/80 font-medium">—</span>
+                          ) : (
+                            <span
+                              className={
+                                isShort
+                                  ? "text-rose-600 font-bold bg-rose-50 px-2 py-0.5 rounded"
+                                  : isOver
+                                  ? "text-emerald-600 font-bold bg-emerald-50 px-2 py-0.5 rounded"
+                                  : "text-brand-blue/40"
+                              }
+                            >
+                              {displayVariance}
+                            </span>
+                          )}
+                        </TableCell>
+                      )}
                       <TableCell className="py-3.5 text-xs text-brand-blue/60 font-medium">
                         {delivery.status === 3 ? (
                           <span className="text-rose-500/80 font-medium">Link Revoked</span>

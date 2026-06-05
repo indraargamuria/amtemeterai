@@ -43,6 +43,7 @@ interface DeliveryDetail {
   receiverName: string | null
   receiverNotes: string | null
   received: boolean
+  receiveDate?: string | null
   invoiced: boolean
   photos?: DeliveryPhoto[]
   lines: DeliveryLine[]
@@ -97,6 +98,8 @@ export function DeliveryReceivePage() {
   // Form state
   const [receiverName, setReceiverName] = useState("")
   const [receiverNotes, setReceiverNotes] = useState("")
+  const [receiveDate, setReceiveDate] = useState("")
+  const [receiveDateError, setReceiveDateError] = useState<string | null>(null)
   const [lines, setLines] = useState<LineFormState[]>([])
   const [photoFiles, setPhotoFiles] = useState<File[]>([])
   const [photoErrors, setPhotoErrors] = useState<string[]>([])
@@ -183,6 +186,14 @@ export function DeliveryReceivePage() {
 
   useEffect(() => {
     if (delivery && !submitted) {
+      // Initialize receiveDate to today if not already received
+      if (!delivery.received) {
+        const today = new Date().toISOString().split('T')[0]
+        setReceiveDate(today)
+      } else if (delivery.receiveDate) {
+        setReceiveDate(delivery.receiveDate.split('T')[0])
+      }
+
       setLines(
         delivery.lines.map((line) => ({
           deliveryLineNumber: line.deliveryLineNumber,
@@ -285,6 +296,7 @@ export function DeliveryReceivePage() {
       const formData = new FormData()
       formData.append("ReceiverName", receiverName || "")
       if (receiverNotes) formData.append("ReceiverNotes", receiverNotes)
+      if (receiveDate) formData.append("ReceiveDate", receiveDate)
       if (latitude !== null) formData.append("Latitude", latitude.toString())
       if (longitude !== null) formData.append("Longitude", longitude.toString())
 
@@ -340,6 +352,25 @@ export function DeliveryReceivePage() {
 
     // Validation: Check if receiver name is provided
     if (!receiverName.trim()) {
+      setToastType("error")
+      setShowToast(true)
+      return
+    }
+
+    // Validation: Check if receive date is provided and not in the future
+    if (!receiveDate) {
+      setToastType("error")
+      setShowToast(true)
+      return
+    }
+
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    const selected = new Date(receiveDate)
+    selected.setHours(0, 0, 0, 0)
+
+    if (selected > today) {
+      setReceiveDateError("Receive date cannot be in the future")
       setToastType("error")
       setShowToast(true)
       return
@@ -736,20 +767,54 @@ export function DeliveryReceivePage() {
             </CardTitle>
           </CardHeader>
           <CardContent className="p-4 space-y-4">
-            <div className="space-y-1.5">
-              <Label htmlFor="receiverName" className="text-xs font-medium text-slate-600">Receiver Name <span className="text-red-500">*</span></Label>
-              <Input
-                id="receiverName"
-                value={receiverName}
-                onChange={(e) => setReceiverName(e.target.value)}
-                disabled={delivery.invoiced || submitted || submitting}
-                placeholder="Enter your full name"
-                className="h-10 text-sm border-slate-300 focus:border-[#1d2351] focus:ring-[#1d2351]"
-                required
-              />
-              {!receiverName.trim() && (
-                <p className="text-xs text-red-600 font-medium mt-1">Receiver name is required before applying actions or submitting.</p>
-              )}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="receiverName" className="text-xs font-medium text-slate-600">Receiver Name <span className="text-red-500">*</span></Label>
+                <Input
+                  id="receiverName"
+                  value={receiverName}
+                  onChange={(e) => setReceiverName(e.target.value)}
+                  disabled={delivery.invoiced || submitted || submitting}
+                  placeholder="Enter your full name"
+                  className="h-10 text-sm border-slate-300 focus:border-[#1d2351] focus:ring-[#1d2351]"
+                  required
+                />
+                {!receiverName.trim() && (
+                  <p className="text-xs text-red-600 font-medium mt-1">Receiver name is required before applying actions or submitting.</p>
+                )}
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="receiveDate" className="text-xs font-medium text-slate-600">Receive Date <span className="text-red-500">*</span></Label>
+                <Input
+                  id="receiveDate"
+                  type="date"
+                  value={receiveDate}
+                  onChange={(e) => {
+                    const selectedDate = e.target.value
+                    setReceiveDate(selectedDate)
+                    setReceiveDateError(null)
+
+                    // Validate: prevent future dates
+                    if (selectedDate) {
+                      const today = new Date()
+                      today.setHours(0, 0, 0, 0)
+                      const selected = new Date(selectedDate)
+                      selected.setHours(0, 0, 0, 0)
+
+                      if (selected > today) {
+                        setReceiveDateError("Receive date cannot be in the future")
+                      }
+                    }
+                  }}
+                  disabled={delivery.invoiced || submitted || submitting}
+                  className="h-10 text-sm border-slate-300 focus:border-[#1d2351] focus:ring-[#1d2351]"
+                  required
+                  max={new Date().toISOString().split('T')[0]}
+                />
+                {receiveDateError && (
+                  <p className="text-xs text-red-600 font-medium mt-1">{receiveDateError}</p>
+                )}
+              </div>
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="receiverNotes" className="text-xs font-medium text-slate-600">Additional Notes</Label>
@@ -899,7 +964,7 @@ export function DeliveryReceivePage() {
                             )}
                           </div>
                         </div>
-                        {hasVariance && (
+                        {hasVariance && delivery.received && (
                           <div className="shrink-0 mr-2">
                             <Badge
                               variant="badge"

@@ -258,6 +258,7 @@ Password: Admin@123
 ### Features
 - **Delivery list** with status indicators
 - **Plant-level security filtering** (non-sysadmin users see only assigned plants)
+- **Role-based data filtering:** Warehouse role users see "Confidential" for customer information
 - **Compliance type filtering:** All, BC, Non-BC
 - **Pipeline status filtering:** Active, Canceled, All
 - **Discrepancy filter:** Show only problematic deliveries
@@ -291,10 +292,18 @@ Pending Delivery → Fully Received → Invoiced
 ### Features
 - Detailed delivery information view
 - Ship to address display
+- Customer information (conditional - hidden for warehouse role)
+- **Buyer PO Number** display (conditional - shown only for non-warehouse roles)
+- **Order Number** display (conditional - shown only for non-warehouse roles)
+- **Receive Date** display (shown when delivery is confirmed)
 - Line items breakdown with batch number and variance percentage
 - Photo gallery
 - GPS location data
 - Proof of delivery documents
+
+### Role-Based Visibility
+- **Warehouse role:** Customer code/name, Buyer PO Number, and Order Number are hidden (shows "Confidential")
+- **Other roles:** All delivery details including customer information and order numbers are displayed
 
 ### Variance Display
 - Shows variance percentage for each line item

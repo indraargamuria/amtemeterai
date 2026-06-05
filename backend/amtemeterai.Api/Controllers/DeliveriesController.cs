@@ -472,7 +472,7 @@ public class DeliveriesController : ControllerBase
         data.ReceiverName = dto.ReceiverName;
         data.ReceiverNotes = dto.ReceiverNotes;
         data.Received = true;
-        data.ReceiveDate = DateTime.UtcNow; 
+        data.ReceiveDate = dto.ReceiveDate ?? DateTime.UtcNow; 
 
         if (dto.Latitude.HasValue && dto.Longitude.HasValue)
         {

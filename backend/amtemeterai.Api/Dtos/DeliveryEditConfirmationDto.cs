@@ -4,6 +4,7 @@ public class DeliveryEditConfirmationDto
 {
     public string ReceiverName { get; set; } = string.Empty;
     public string? ReceiverNotes { get; set; }
+    public DateTime? ReceiveDate { get; set; }
     public double? Latitude { get; set; }
     public double? Longitude { get; set; }
 
