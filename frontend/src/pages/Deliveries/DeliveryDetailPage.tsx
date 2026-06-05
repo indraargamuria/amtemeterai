@@ -548,29 +548,32 @@ export function DeliveryDetailPage() {
           <Table>
             <TableHeader className="bg-brand-blue/[0.02]">
               <TableRow>
-                <TableHead className="text-xs font-semibold uppercase tracking-wider text-brand-blue/60 w-[15%]">
+                <TableHead className="text-xs font-semibold uppercase tracking-wider text-brand-blue/60 w-[14%]">
                   Item / SKU
                 </TableHead>
-                <TableHead className="text-xs font-semibold uppercase tracking-wider text-brand-blue/60 w-[12%]">
+                <TableHead className="text-xs font-semibold uppercase tracking-wider text-brand-blue/60 w-[11%]">
                   Batch
                 </TableHead>
-                <TableHead className="text-xs font-semibold uppercase tracking-wider text-brand-blue/60 w-[28%]">
+                <TableHead className="text-xs font-semibold uppercase tracking-wider text-brand-blue/60 w-[26%]">
                   Description
                 </TableHead>
-                <TableHead className="text-xs font-semibold uppercase tracking-wider text-brand-blue/60 text-right w-[11%]">
+                <TableHead className="text-xs font-semibold uppercase tracking-wider text-brand-blue/60 text-right w-[10%]">
                   Dispatched
                 </TableHead>
-                <TableHead className="text-xs font-semibold uppercase tracking-wider text-brand-blue/60 text-right w-[11%]">
+                <TableHead className="text-xs font-semibold uppercase tracking-wider text-brand-blue/60 text-right w-[10%]">
                   Received
                 </TableHead>
-                <TableHead className="text-xs font-semibold uppercase tracking-wider text-brand-blue/60 text-right w-[11%]">
+                <TableHead className="text-xs font-semibold uppercase tracking-wider text-brand-blue/60 text-right w-[10%]">
                   Rejected
                 </TableHead>
-                <TableHead className="text-xs font-semibold uppercase tracking-wider text-brand-blue/60 text-right w-[11%]">
+                <TableHead className="text-xs font-semibold uppercase tracking-wider text-brand-blue/60 text-right w-[10%]">
                   Returned
                 </TableHead>
-                <TableHead className="text-xs font-semibold uppercase tracking-wider text-brand-blue/60 w-[11%]">
-                  Remarks / Variance
+                <TableHead className="text-xs font-semibold uppercase tracking-wider text-brand-blue/60 text-right w-[9%]">
+                  Variance
+                </TableHead>
+                <TableHead className="text-xs font-semibold uppercase tracking-wider text-brand-blue/60 w-[10%]">
+                  Remarks
                 </TableHead>
               </TableRow>
             </TableHeader>
@@ -578,66 +581,92 @@ export function DeliveryDetailPage() {
               {totalLines === 0 ? (
                 <TableRow>
                   <TableCell
-                    colSpan={8}
+                    colSpan={9}
                     className="text-center py-12 text-sm text-brand-blue/40 italic"
                   >
                     No dynamic dispatch line items attached to this delivery record.
                   </TableCell>
                 </TableRow>
               ) : (
-                paginatedLines.map((line) => (
-                  <TableRow
-                    key={line.deliveryLineNumber}
-                    className="hover:bg-brand-blue/[0.01] transition-colors"
-                  >
-                    <TableCell className="py-3.5 font-semibold text-sm text-brand-blue">
-                      {line.deliveryItemCode}
-                    </TableCell>
-                    <TableCell className="py-3.5 text-sm text-brand-blue/70">
-                      {line.batchNumber || <span className="text-brand-blue/30 italic">-</span>}
-                    </TableCell>
-                    <TableCell className="py-3.5 text-sm text-brand-blue/80">
-                      {line.deliveryItemDescription || (
-                        <span className="text-brand-blue/30 italic">No description</span>
-                      )}
-                    </TableCell>
-                    <TableCell className="py-3.5 text-sm text-right font-medium text-brand-blue/70">
-                      {line.packQuantity} {line.packUOM}
-                    </TableCell>
-                    <TableCell className="py-3.5 text-sm text-right font-semibold text-emerald-600">
-                      {delivery.status === 3 ? `0 ${line.packUOM}` : `${line.packQuantityDelivered} ${line.packUOM}`}
-                    </TableCell>
-                    <TableCell className="py-3.5 text-sm text-right font-semibold">
-                      <span
-                        className={
-                          line.packQuantityRejected > 0 && delivery.status !== 3
-                            ? "text-amber-600 font-bold bg-amber-50 px-2 py-0.5 rounded"
-                            : "text-brand-blue/30"
-                        }
-                      >
-                        {delivery.status === 3 ? 0 : line.packQuantityRejected} {line.packUOM}
-                      </span>
-                    </TableCell>
-                    <TableCell className="py-3.5 text-sm text-right font-semibold">
-                      <span
-                        className={
-                          line.packQuantityReturned > 0 && delivery.status !== 3
-                            ? "text-amber-600 font-bold bg-amber-50 px-2 py-0.5 rounded"
-                            : "text-brand-blue/30"
-                        }
-                      >
-                        {delivery.status === 3 ? 0 : line.packQuantityReturned} {line.packUOM}
-                      </span>
-                    </TableCell>
-                    <TableCell className="py-3.5 text-xs text-brand-blue/60 font-medium">
-                      {delivery.status === 3 ? (
-                        <span className="text-rose-500/80 font-medium">Link Revoked</span>
-                      ) : (
-                        line.lineComment || <span className="text-brand-blue/20">-</span>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                ))
+                paginatedLines.map((line) => {
+                  const totalReceived = line.packQuantityDelivered + line.packQuantityReturned + line.packQuantityRejected
+                  const rawVariance = totalReceived - line.packQuantity
+                  const variancePercent = line.packQuantity > 0 ? ((rawVariance / line.packQuantity) * 100).toFixed(2) : "0.00"
+                  const isOver = parseFloat(variancePercent) > 0
+                  const isShort = parseFloat(variancePercent) < 0
+                  const displayVariance = isOver ? `+${variancePercent}%` : `${variancePercent}%`
+
+                  return (
+                    <TableRow
+                      key={line.deliveryLineNumber}
+                      className="hover:bg-brand-blue/[0.01] transition-colors"
+                    >
+                      <TableCell className="py-3.5 font-semibold text-sm text-brand-blue">
+                        {line.deliveryItemCode}
+                      </TableCell>
+                      <TableCell className="py-3.5 text-sm text-brand-blue/70">
+                        {line.batchNumber || <span className="text-brand-blue/30 italic">-</span>}
+                      </TableCell>
+                      <TableCell className="py-3.5 text-sm text-brand-blue/80">
+                        {line.deliveryItemDescription || (
+                          <span className="text-brand-blue/30 italic">No description</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="py-3.5 text-sm text-right font-medium text-brand-blue/70">
+                        {line.packQuantity} {line.packUOM}
+                      </TableCell>
+                      <TableCell className="py-3.5 text-sm text-right font-semibold text-emerald-600">
+                        {delivery.status === 3 ? `0 ${line.packUOM}` : `${line.packQuantityDelivered} ${line.packUOM}`}
+                      </TableCell>
+                      <TableCell className="py-3.5 text-sm text-right font-semibold">
+                        <span
+                          className={
+                            line.packQuantityRejected > 0 && delivery.status !== 3
+                              ? "text-amber-600 font-bold bg-amber-50 px-2 py-0.5 rounded"
+                              : "text-brand-blue/30"
+                          }
+                        >
+                          {delivery.status === 3 ? 0 : line.packQuantityRejected} {line.packUOM}
+                        </span>
+                      </TableCell>
+                      <TableCell className="py-3.5 text-sm text-right font-semibold">
+                        <span
+                          className={
+                            line.packQuantityReturned > 0 && delivery.status !== 3
+                              ? "text-amber-600 font-bold bg-amber-50 px-2 py-0.5 rounded"
+                              : "text-brand-blue/30"
+                          }
+                        >
+                          {delivery.status === 3 ? 0 : line.packQuantityReturned} {line.packUOM}
+                        </span>
+                      </TableCell>
+                      <TableCell className="py-3.5 text-sm text-right font-semibold">
+                        {delivery.status === 3 ? (
+                          <span className="text-rose-500/80 font-medium">—</span>
+                        ) : (
+                          <span
+                            className={
+                              isShort
+                                ? "text-rose-600 font-bold bg-rose-50 px-2 py-0.5 rounded"
+                                : isOver
+                                ? "text-emerald-600 font-bold bg-emerald-50 px-2 py-0.5 rounded"
+                                : "text-brand-blue/40"
+                            }
+                          >
+                            {displayVariance}
+                          </span>
+                        )}
+                      </TableCell>
+                      <TableCell className="py-3.5 text-xs text-brand-blue/60 font-medium">
+                        {delivery.status === 3 ? (
+                          <span className="text-rose-500/80 font-medium">Link Revoked</span>
+                        ) : (
+                          line.lineComment || <span className="text-brand-blue/20">-</span>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  )
+                })
               )}
             </TableBody>
           </Table>

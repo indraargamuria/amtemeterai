@@ -291,10 +291,17 @@ Pending Delivery → Fully Received → Invoiced
 ### Features
 - Detailed delivery information view
 - Ship to address display
-- Line items breakdown with batch number
+- Line items breakdown with batch number and variance percentage
 - Photo gallery
 - GPS location data
 - Proof of delivery documents
+
+### Variance Display
+- Shows variance percentage for each line item
+- Green background (+): Over-received (excess quantity)
+- Red background (-): Shortage/discrepancy
+- Neutral (0%): Perfect match
+- Formula: `((delivered + returned + rejected - packQuantity) / packQuantity) * 100`
 
 ## Invoices (`/invoices`)
 
@@ -367,10 +374,17 @@ Pending Delivery → Fully Received → Invoiced
 - **PIN verification** for access
 - **Delivery confirmation** workflow
 - **Ship to address display**
-- **Line items with batch number**
+- **Line items with batch number and variance percentage badge**
 - **Photo upload** capability
 - **GPS location** capture
 - **Variance percent calculation** for quantity discrepancies
+
+### Variance Percent Display
+- Shown as badge on each line item in the collapsed view
+- Green badge: Over-received (excess quantity)
+- Red badge: Shortage/discrepancy
+- Hidden when variance is 0% (perfect match)
+- Formula: `((delivered + returned + rejected - packQuantity) / packQuantity) * 100`
 
 ### Variance Percent Calculation
 The variance percent is calculated on each line item:

@@ -854,6 +854,14 @@ export function DeliveryReceivePage() {
                     ? parseFloat(lineState.delivered) + parseFloat(lineState.returned) + parseFloat(lineState.rejected)
                     : line.packQuantity
 
+                  // Calculate variance percentage
+                  const rawVariance = actualTotal - line.packQuantity
+                  const variancePercent = line.packQuantity > 0 ? ((rawVariance / line.packQuantity) * 100).toFixed(2) : "0.00"
+                  const isOver = parseFloat(variancePercent) > 0
+                  const isShort = parseFloat(variancePercent) < 0
+                  const displayVariance = isOver ? `+${variancePercent}%` : `${variancePercent}%`
+                  const hasVariance = Math.abs(parseFloat(variancePercent)) > 0.01
+
                   return (
                     <div key={line.deliveryLineNumber} className={isModified ? "bg-red-50/30" : ""}>
                       <button
@@ -891,6 +899,22 @@ export function DeliveryReceivePage() {
                             )}
                           </div>
                         </div>
+                        {hasVariance && (
+                          <div className="shrink-0 mr-2">
+                            <Badge
+                              variant="badge"
+                              className={
+                                isShort
+                                  ? "bg-rose-100 text-rose-700 border-rose-200 text-xs font-semibold px-2 py-1"
+                                  : isOver
+                                  ? "bg-emerald-100 text-emerald-700 border-emerald-200 text-xs font-semibold px-2 py-1"
+                                  : "bg-slate-100 text-slate-500 border-slate-200 text-xs px-2 py-1"
+                              }
+                            >
+                              {displayVariance}
+                            </Badge>
+                          </div>
+                        )}
                         <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center shrink-0">
                           {isExpanded ? <ChevronUp className="w-4 h-4 text-slate-600" /> : <ChevronDown className="w-4 h-4 text-slate-600" />}
                         </div>
