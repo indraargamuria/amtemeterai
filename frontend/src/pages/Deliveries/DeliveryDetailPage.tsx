@@ -46,10 +46,13 @@ interface DeliveryDetail {
   shipToAddress?: string | null
   customerCode: string
   customerName: string
+  orderNumber?: string | null
+  buyerPONumber?: string | null
   receiverToken: string
   receiverName: string | null
   receiverNotes: string | null
   received: boolean
+  receiveDate?: string | null
   invoiced: boolean
   publicUrl: string
   plant?: string | null
@@ -275,13 +278,49 @@ export function DeliveryDetailPage() {
                 <p className="text-xs font-medium text-brand-blue/50 uppercase tracking-wider">
                   Customer
                 </p>
-                <div className="flex items-center gap-2">
-                  <Badge variant="badge" className="text-brand-blue/70 font-normal text-xs">
-                    {delivery.customerCode}
-                  </Badge>
-                  <span className="text-sm text-brand-blue/80">{delivery.customerName}</span>
-                </div>
+                {delivery.customerCode && delivery.customerName ? (
+                  <div className="flex items-center gap-2">
+                    <Badge variant="badge" className="text-brand-blue/70 font-normal text-xs">
+                      {delivery.customerCode}
+                    </Badge>
+                    <span className="text-sm text-brand-blue/80">{delivery.customerName}</span>
+                  </div>
+                ) : (
+                  <span className="text-sm text-brand-blue/40 italic">-</span>
+                )}
               </div>
+
+              {/* Buyer PO Number - Only shown if user has access (non-warehouse) */}
+              {delivery.buyerPONumber && (
+                <div className="space-y-1">
+                  <p className="text-xs font-medium text-brand-blue/50 uppercase tracking-wider">
+                    Buyer PO Number
+                  </p>
+                  <p className="text-sm text-brand-blue/80">{delivery.buyerPONumber}</p>
+                </div>
+              )}
+
+              {/* Order Number - Only shown if user has access (non-warehouse) */}
+              {delivery.orderNumber && (
+                <div className="space-y-1">
+                  <p className="text-xs font-medium text-brand-blue/50 uppercase tracking-wider">
+                    Order Number
+                  </p>
+                  <p className="text-sm text-brand-blue/80">{delivery.orderNumber}</p>
+                </div>
+              )}
+
+              {/* Receive Date - Only shown when delivery is received */}
+              {delivery.received && delivery.receiveDate && (
+                <div className="space-y-1">
+                  <p className="text-xs font-medium text-brand-blue/50 uppercase tracking-wider">
+                    Receive Date
+                  </p>
+                  <p className="text-sm text-brand-blue/80">
+                    {formatDate(delivery.receiveDate)}
+                  </p>
+                </div>
+              )}
 
               <div className="space-y-1">
                 <p className="text-xs font-medium text-brand-blue/50 uppercase tracking-wider">

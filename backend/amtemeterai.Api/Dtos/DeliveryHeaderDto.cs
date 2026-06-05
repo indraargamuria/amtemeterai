@@ -9,6 +9,7 @@ namespace amtemeterai.Api.Dtos
         public string CustomerCode { get; set; } = string.Empty;
         public string CustomerName { get; set; } = string.Empty;
         public bool Received { get; set; }
+        public DateTime? ReceiveDate { get; set; }
         public bool Invoiced { get; set; }
         public string? Plant { get; set; }
         public int? Type { get; set; }          // 🔴 Double check this isn't returning null

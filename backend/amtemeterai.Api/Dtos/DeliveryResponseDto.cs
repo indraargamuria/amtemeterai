@@ -20,6 +20,7 @@ public class DeliveryResponseDto
     public string? ReceiverNotes { get; set; }
 
     public bool Received { get; set; }
+    public DateTime? ReceiveDate { get; set; }
     public bool Invoiced { get; set; }
 
     public string PublicUrl { get; set; } = null!;

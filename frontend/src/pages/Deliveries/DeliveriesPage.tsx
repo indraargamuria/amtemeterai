@@ -528,14 +528,18 @@ export function DeliveriesPage() {
 
                   {/* Combined Customer Column */}
                   <TableCell className="py-4">
-                    <div className="flex items-center gap-2">
-                      <Badge variant="badge" className={`font-normal ${delivery.isCanceled ? "text-slate-400 bg-slate-100" : "text-brand-blue/70"}`}>
-                        {delivery.customerCode}
-                      </Badge>
-                      <span className={`text-sm ${delivery.isCanceled ? "text-slate-500" : "text-brand-blue/80"}`}>
-                        {delivery.customerName}
-                      </span>
-                    </div>
+                    {delivery.customerCode && delivery.customerName ? (
+                      <div className="flex items-center gap-2">
+                        <Badge variant="badge" className={`font-normal ${delivery.isCanceled ? "text-slate-400 bg-slate-100" : "text-brand-blue/70"}`}>
+                          {delivery.customerCode}
+                        </Badge>
+                        <span className={`text-sm ${delivery.isCanceled ? "text-slate-500" : "text-brand-blue/80"}`}>
+                          {delivery.customerName}
+                        </span>
+                      </div>
+                    ) : (
+                      <span className="text-sm text-brand-blue/40 italic">Confidential</span>
+                    )}
                   </TableCell>
 
                   {/* Compliance Type Column */}

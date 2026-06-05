@@ -95,7 +95,10 @@ public class DeliveriesController : ControllerBase
             // Filter data PostgreSQL secara dinamis: Hanya ambil delivery yang kodenya ada di dalam klaim tokenquery = query.Where(d => allowedPlants.Contains(d.Plant ?? ""));
         }
 
-        // 3. Eksekusi penarikan data yang sudah ter-filter aman
+        // 3. CEK ROLE UNTUK DATA VISIBILITY
+        var isWarehouseRole = User.IsInRole("warehouse");
+
+        // 4. Eksekusi penarikan data yang sudah ter-filter aman
         var deliveries = await query
             .Include(d => d.Customer)
             .Select(d => new
@@ -105,10 +108,12 @@ public class DeliveriesController : ControllerBase
                 DeliveryDate = d.DeliveryDate,
                 DeliveryRemarks = d.DeliveryRemarks,
 
-                CustomerCode = d.Customer != null ? d.Customer.CustomerCode : "UNKNOWN",
-                CustomerName = d.Customer != null ? d.Customer.CustomerName : "UNKNOWN",
+                // Conditional: Hide customer info for warehouse role
+                CustomerCode = isWarehouseRole ? (string)null : (d.Customer != null ? d.Customer.CustomerCode : "UNKNOWN"),
+                CustomerName = isWarehouseRole ? (string)null : (d.Customer != null ? d.Customer.CustomerName : "UNKNOWN"),
 
                 Received = d.Received,
+                ReceiveDate = d.ReceiveDate,
                 Invoiced = d.Invoiced,
                 ReceiverToken = d.ReceiverToken,
 
@@ -120,12 +125,12 @@ public class DeliveriesController : ControllerBase
                 CityRegency = d.CityRegency,
                 District = d.District,
                 Province = d.Province,
-                
+
                 CancelReason = d.CancelReason,
                 IsCanceled = d.Status == DeliveryHeader.ReceiverStatus.Canceled,
-                
-                PhotosCount = _db.Documents.Count(p => 
-                    p.DeliveryID == d.DeliveryID && 
+
+                PhotosCount = _db.Documents.Count(p =>
+                    p.DeliveryID == d.DeliveryID &&
                     p.Type == DocumentType.DeliveryPhoto)
             })
             .OrderByDescending(d => d.DeliveryDate)
@@ -137,9 +142,10 @@ public class DeliveriesController : ControllerBase
             DeliveryNumber = d.DeliveryNumber,
             DeliveryDate = d.DeliveryDate,
             DeliveryRemarks = d.DeliveryRemarks,
-            CustomerCode = d.CustomerCode,
-            CustomerName = d.CustomerName,
+            CustomerCode = d.CustomerCode ?? string.Empty,
+            CustomerName = d.CustomerName ?? string.Empty,
             Received = d.Received,
+            ReceiveDate = d.ReceiveDate,
             Invoiced = d.Invoiced,
             PublicUrl = $"{baseUrl}/receive/{d.ReceiverToken}",
 
@@ -164,7 +170,11 @@ public class DeliveriesController : ControllerBase
     [HttpGet("{deliveryId:int}")]
     public async Task<ActionResult<DeliveryResponseDto>> GetDeliveryById(int deliveryId)
     {
-        // 🚀 1. TARIK DATA UNTUK DICHECK TERLEBIH DAHULU
+        // 🚀 1. CEK ROLE UNTUK DATA VISIBILITY
+        var isSysAdmin = User.IsInRole("sysadmin");
+        var isWarehouseRole = User.IsInRole("warehouse");
+
+        // 🚀 2. TARIK DATA UNTUK DICHECK TERLEBIH DAHULU
         var delivery = await _db.DeliveryHeaders
             .Include(d => d.Lines)
             .Include(d => d.Customer)
@@ -173,21 +183,20 @@ public class DeliveriesController : ControllerBase
         if (delivery == null)
             return NotFound();
 
-        // 🚀 2. SECURITY GUARD CLAIMS VALIDATION FOR DIRECT URL INJECTION (ID GUESSING)
-        var isSysAdmin = User.IsInRole("sysadmin");
+        // 🚀 3. SECURITY GUARD CLAIMS VALIDATION FOR DIRECT URL INJECTION (ID GUESSING)
         if (!isSysAdmin)
         {
             var allowedPlants = User.FindAll("plant").Select(c => c.Value).ToList();
-            
+
             // Jika user mencoba menebak ID delivery milik plant lain, paksa return 403 Forbidden!
             if (!allowedPlants.Contains(delivery.Plant ?? ""))
             {
-                return Forbid(); 
+                return Forbid();
             }
         }
 
         var baseApiUrl = _configuration["App:ApiBaseUrl"] ?? "http://localhost:8080";
-        
+
         var photos = await _db.Documents
             .Where(doc => doc.DeliveryID == deliveryId && doc.Type == DocumentType.DeliveryPhoto)
             .Select(doc => new DeliveryPhotoResponseDto
@@ -206,14 +215,17 @@ public class DeliveriesController : ControllerBase
             DeliveryDate = delivery.DeliveryDate,
             DeliveryRemarks = delivery.DeliveryRemarks,
             ShipToAddress = delivery.ShipToAddress,
-            OrderNumber = delivery.OrderNumber,
-            BuyerPONumber = delivery.BuyerPONumber,
-            CustomerCode = delivery.Customer?.CustomerCode ?? "UNKNOWN",
-            CustomerName = delivery.Customer?.CustomerName ?? "UNKNOWN",
+            // Conditional: Hide OrderNumber and BuyerPONumber for warehouse role
+            OrderNumber = isWarehouseRole ? null : delivery.OrderNumber,
+            BuyerPONumber = isWarehouseRole ? null : delivery.BuyerPONumber,
+            // Conditional: Hide CustomerCode and CustomerName for warehouse role
+            CustomerCode = isWarehouseRole ? string.Empty : (delivery.Customer?.CustomerCode ?? "UNKNOWN"),
+            CustomerName = isWarehouseRole ? string.Empty : (delivery.Customer?.CustomerName ?? "UNKNOWN"),
             ReceiverToken = delivery.ReceiverToken,
             ReceiverName = delivery.ReceiverName,
             ReceiverNotes = delivery.ReceiverNotes,
             Received = delivery.Received,
+            ReceiveDate = delivery.ReceiveDate,
             Invoiced = delivery.Invoiced,
             PublicUrl = GetPublicUrl(delivery.ReceiverToken, _configuration["App:PublicBaseUrl"]),
 
@@ -285,6 +297,7 @@ public class DeliveriesController : ControllerBase
             ReceiverName = data.ReceiverName,
             ReceiverNotes = data.ReceiverNotes,
             Received = data.Received,
+            ReceiveDate = data.ReceiveDate,
             Invoiced = data.Invoiced,
             PublicUrl = GetPublicUrl(data.ReceiverToken, _configuration["App:PublicBaseUrl"]),
             Lines = (data.Lines ?? new List<DeliveryLine>()).Select(l => new DeliveryLineResponseDto
@@ -458,7 +471,8 @@ public class DeliveriesController : ControllerBase
 
         data.ReceiverName = dto.ReceiverName;
         data.ReceiverNotes = dto.ReceiverNotes;
-        data.Received = true; 
+        data.Received = true;
+        data.ReceiveDate = DateTime.UtcNow; 
 
         if (dto.Latitude.HasValue && dto.Longitude.HasValue)
         {
