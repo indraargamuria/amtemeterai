@@ -36,7 +36,13 @@ public class Invoice
 
     // E-Meterai Tracking Fields
     public string? SerialNumber { get; set; }
-    
+
+    /// <summary>
+    /// Base64 encoded e-Meterai stamp image data
+    /// Cached from Peruri API to avoid redundant quota consumption
+    /// </summary>
+    public string? QrCodeBase64 { get; set; }
+
     // 2. The property now references the renamed enum type perfectly
     public InvoiceStampingStatus StampingStatus { get; set; } = InvoiceStampingStatus.NotStamped;
 

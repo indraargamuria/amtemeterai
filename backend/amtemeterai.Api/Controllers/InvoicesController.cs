@@ -201,6 +201,7 @@ public class InvoicesController : ControllerBase
 
                 var stampRequest = new IPeruriOnPremiseStampService.PeruriStampRequest
                 {
+                    InvoiceId = invoice.InvoiceID,
                     InvoiceNumber = invoiceNumber,
                     PdfContent = pdfBytes,
                     CustomerName = invoice.DeliveryHeader?.Customer?.CustomerName ?? "Unknown",
@@ -226,6 +227,8 @@ public class InvoicesController : ControllerBase
 
                 stampedPdf = stampResult.StampedPdf ?? pdfBytes;
                 serialNumber = stampResult.SerialNumber ?? string.Empty;
+
+                _logger.LogInformation("Stamping completed. UsedCache: {UsedCache}", stampResult.UsedCache);
             }
             else
             {
