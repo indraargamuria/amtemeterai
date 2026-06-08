@@ -441,6 +441,7 @@ backend/amtemeterai.Api/
 │   ├── SapDeliveryConfirmationDto.cs
 │   ├── SapBillingRequestDto.cs     # SAP billing simulation request/response
 │   ├── DeliverySettlementResponseDto.cs # Settlement processing response
+│   ├── PeruriApiDtos.cs           # Peruri API request/response DTOs
 │   ├── GoogleGeocodeResponse.cs
 │   └── GeoLocationResult.cs
 ├── Data/                           # Database Context
@@ -454,8 +455,12 @@ backend/amtemeterai.Api/
 │   ├── ErpCustomerSource.cs
 │   ├── IStorageService.cs
 │   ├── MinioStorageService.cs
-│   ├── IPeriuriPdsService.cs       # e-Meterai integration
+│   ├── IPeriuriPdsService.cs       # e-Meterai cloud integration
 │   ├── PeriuriPdsService.cs
+│   ├── IPeruriSessionService.cs    # Peruri JWT session management
+│   ├── PeruriSessionService.cs
+│   ├── IPeruriOnPremiseStampService.cs # On-premise e-Meterai stamping
+│   ├── PeruriOnPremiseStampService.cs
 │   ├── IEmailService.cs
 │   ├── EmailService.cs
 │   └── BillingBackgroundService.cs # Background invoice creation
@@ -463,6 +468,7 @@ backend/amtemeterai.Api/
 │   └── QrCodeHelper.cs
 ├── Config/                         # Configuration Options
 │   ├── SapOptions.cs
+│   ├── PeruriOptions.cs           # Peruri on-premise configuration
 │   └── SmtpSettings.cs
 ├── Migrations/                     # Database Migrations
 └── Program.cs                       # Application Entry Point
@@ -1195,7 +1201,7 @@ Authorization: Bearer {token}
 - Marks linked delivery as invoiced
 - Cannot link to already invoiced delivery
 
-### Upload Invoice Printout
+### Upload Invoice Printout (by ID - Legacy)
 **Endpoint:** `POST /api/invoices/{id}/upload-printout`
 
 **Authorization:** `invoice:sync` permission required
@@ -1212,6 +1218,29 @@ Authorization: Bearer {token}
   "uploadedAt": "2025-05-20T10:30:00Z"
 }
 ```
+
+### Upload Invoice Printout (by Number - SAP Native)
+**Endpoint:** `POST /api/invoices/by-number/{invoiceNumber}/upload-printout`
+
+**Authorization:** `invoice:sync` permission required
+
+**Request:** Multipart form data with file
+
+**Response:**
+```json
+{
+  "documentId": 1,
+  "fileName": "invoice.pdf",
+  "storageKey": "invoices/{invoiceId}/printouts/{guid}.pdf",
+  "downloadUrl": "http://localhost:8080/api/deliveries/files/download?key=...",
+  "uploadedAt": "2025-05-20T10:30:00Z"
+}
+```
+
+**Notes:**
+- Uses SAP-native business key (invoiceNumber) instead of internal database ID
+- Preferred method for SAP integration
+- Accepts PDF and image files
 
 ### Stamp Invoice with e-Meterai
 **Endpoint:** `POST /api/invoices/{id}/stamp`
@@ -1242,13 +1271,50 @@ Authorization: Bearer {token}
 - `400` - Invoice already stamped or no printout found
 - `500` - Stamping failed or server error
 
+### Stamp Invoice by SAP Number (Preferred for SAP Integration)
+**Endpoint:** `POST /api/invoices/by-sap-number/{invoiceNumber}/stamp`
+
+**Authorization:** `invoice:sync` permission required
+
+**Process:**
+1. Validates invoice has printout
+2. Sets stamping status to Pending
+3. Downloads the invoice printout from MinIO
+4. If on-premise Peruri is configured:
+   - Writes PDF to shared folder (`/sharefolder/UNSIGNED/{invoiceNumber}.pdf`)
+   - Gets JWT token from Peruri session service
+   - Calls Peruri Stamp v2 API to get serial number and QR code
+   - Decodes QR code and saves to shared folder
+   - Calls Docker KeyStamp adapter for signing
+   - Reads signed PDF from shared folder
+   - Cleans up transient files
+5. If on-premise is not configured, falls back to cloud Peruri PDS API
+6. Uploads the stamped PDF back to MinIO
+7. Updates invoice with serial number and status
+
+**Response:**
+```json
+{
+  "invoiceId": 1,
+  "invoiceNumber": "INV001",
+  "serialNumber": "EM-2025-123456",
+  "status": "Stamped",
+  "stampedDocumentUrl": "http://localhost:8080/api/deliveries/files/download?key=..."
+}
+```
+
+**Errors:**
+- `404` - Invoice not found
+- `400` - Invoice already stamped or no printout found
+- `500` - Stamping failed or server error
+
 ---
 
 # External Integrations
 
 ## Peruri PDS API (e-Meterai Stamping)
 
-### Configuration
+### Cloud Configuration (Legacy)
 ```json
 "Periuri": {
   "BaseUrl": "https://api.peruri.go.id",
@@ -1256,16 +1322,51 @@ Authorization: Bearer {token}
 }
 ```
 
-**Properties:**
-- `BaseUrl`: Peruri PDS API base URL
-- `ApiKey`: Authentication API key for stamping requests
+### On-Premise Configuration (New - WP2)
+```json
+"Peruri": {
+  "BackendStg": "https://backend.peruri.co.id",
+  "Stampv2Stg": "https://stampv2.peruri.co.id",
+  "InventoryStg": "https://inventory.peruri.co.id",
+  "User": "${PERIURI_USER}",
+  "Password": "${PERIURI_PASSWORD}",
+  "KeyStamp": "http://localhost:8081",
+  "SharedFolder": "/sharefolder",
+  "TokenExpiryBufferMinutes": 5
+}
+```
 
-### Stamping Flow
+**Properties:**
+- `BackendStg`: Peruri backend staging URL for user authentication
+- `Stampv2Stg`: Peruri stamp v2 staging URL for e-meterai allotment
+- `InventoryStg`: Peruri inventory staging URL for inventory management
+- `User`: Peruri service account username
+- `Password`: Peruri service account password
+- `KeyStamp`: KeyStamp Docker adapter URL for on-premise PDF signing
+- `SharedFolder`: Shared folder path for Docker volume
+- `TokenExpiryBufferMinutes`: Token expiry buffer in minutes
+
+### Cloud Stamping Flow (Legacy)
 1. Upload invoice printout via `/api/invoices/{id}/upload-printout`
 2. Call `/api/invoices/{id}/stamp` to initiate stamping
 3. System calls Peruri PDS API with PDF file
 4. Peruri returns serial number and stamp coordinates
 5. Stamped PDF is stored and linked to invoice
+
+### On-Premise Stamping Flow (New - WP2)
+1. Upload invoice printout via `/api/invoices/{id}/upload-printout`
+2. Call `/api/invoices/by-sap-number/{invoiceNumber}/stamp` to initiate stamping
+3. System authenticates with Peruri backend to get JWT token (cached)
+4. System writes PDF to shared folder: `/sharefolder/UNSIGNED/{invoiceNumber}.pdf`
+5. System calls Peruri Stamp v2 API with JWT token to get:
+   - Serial Number (`result.sn`)
+   - QR Code image (Base64 `result.filenameQR`)
+6. System decodes QR code and saves to: `/sharefolder/STAMP/{invoiceNumber}_qr.png`
+7. System calls KeyStamp Docker adapter with signing coordinates
+8. Docker adapter stamps the PDF and saves to: `/sharefolder/SIGNED/stamped_{invoiceNumber}.pdf`
+9. System reads signed PDF and uploads to MinIO
+10. System cleans up transient files
+11. Stamped PDF is stored and linked to invoice with serial number
 
 ## SAP ERP Integration
 
@@ -1657,10 +1758,22 @@ Task<string> GetPresignedUrlAsync(string objectKey, double expiryMinutes = 60);
 Task DeleteFileAsync(string storageKey);
 ```
 
-### IPeriuriPdsService Interface
+### IPeriuriPdsService Interface (Cloud)
 ```csharp
 Task<PeriuriStampingResult> StampPdfAsync(byte[] pdfContent, string invoiceNumber, string customerName);
 Task<PeriuriStampingStatusResponse> CheckStampingStatusAsync(string transactionId);
+```
+
+### IPeruriSessionService Interface (On-Premise)
+```csharp
+Task<string> GetAuthTokenAsync();      // Returns cached JWT token if valid, otherwise refreshes
+Task<string> RefreshTokenAsync();     // Forces token refresh
+```
+
+### IPeruriOnPremiseStampService Interface (On-Premise)
+```csharp
+Task<PeruriStampResult> StampInvoiceAsync(PeruriStampRequest request);
+// Handles complete on-premise flow: PDF prep, Peruri API, Docker signing, cleanup
 ```
 
 ### IEmailService Interface

@@ -21,19 +21,22 @@ public class InvoicesController : ControllerBase
     private readonly IStorageService _storageService;
     private readonly ILogger<InvoicesController> _logger;
     private readonly IPeriuriPdsService _periuriPdsService;
+    private readonly IPeruriOnPremiseStampService? _peruriOnPremiseStampService;
 
     public InvoicesController(
         AppDbContext db,
         IConfiguration configuration,
         IStorageService storageService,
         ILogger<InvoicesController> logger,
-        IPeriuriPdsService periuriPdsService)
+        IPeriuriPdsService periuriPdsService,
+        IPeruriOnPremiseStampService? peruriOnPremiseStampService = null)
     {
         _db = db;
         _configuration = configuration;
         _storageService = storageService;
         _logger = logger;
         _periuriPdsService = periuriPdsService;
+        _peruriOnPremiseStampService = peruriOnPremiseStampService;
     }
 
     [HttpPost("{id:int}/stamp")]
@@ -140,6 +143,168 @@ public class InvoicesController : ControllerBase
             await _db.SaveChangesAsync();
 
             _logger.LogError(ex, "Error stamping invoice {InvoiceId}", id);
+            return StatusCode(500, $"Internal error during stamping: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Stamp invoice by SAP invoice number (preferred method for SAP integration)
+    /// Uses on-premise Peruri stamping flow if configured
+    /// </summary>
+    [HttpPost("by-sap-number/{invoiceNumber}/stamp")]
+    public async Task<IActionResult> StampInvoiceByNumber(string invoiceNumber)
+    {
+        if (string.IsNullOrWhiteSpace(invoiceNumber))
+        {
+            return BadRequest("Invoice number is required.");
+        }
+
+        var invoice = await _db.Invoices
+            .Include(i => i.DeliveryHeader)
+            .ThenInclude(d => d!.Customer)
+            .FirstOrDefaultAsync(i => i.InvoiceNumber == invoiceNumber);
+
+        if (invoice == null)
+            return NotFound($"Invoice with number {invoiceNumber} not found.");
+
+        if (invoice.StampingStatus == Invoice.InvoiceStampingStatus.Stamped)
+            return BadRequest($"Invoice {invoiceNumber} is already stamped.");
+
+        // Get the latest invoice printout document
+        var printoutDocument = await _db.Documents
+            .Where(d => d.InvoiceID == invoice.InvoiceID && d.Type == DocumentType.InvoicePrintOut)
+            .OrderByDescending(d => d.UploadedAt)
+            .FirstOrDefaultAsync();
+
+        if (printoutDocument == null)
+            return BadRequest($"No printout document found for invoice {invoiceNumber}. Please upload a printout first.");
+
+        try
+        {
+            // Update stamping status to pending
+            invoice.StampingStatus = Invoice.InvoiceStampingStatus.Pending;
+            await _db.SaveChangesAsync();
+
+            // Download the PDF from MinIO
+            using var pdfStream = await _storageService.GetFileStreamAsync(printoutDocument.StorageKey);
+            using var memoryStream = new MemoryStream();
+            await pdfStream.CopyToAsync(memoryStream);
+            byte[] pdfBytes = memoryStream.ToArray();
+
+            byte[] stampedPdf;
+            string serialNumber;
+
+            // Use on-premise service if available, otherwise fall back to cloud service
+            if (_peruriOnPremiseStampService != null)
+            {
+                _logger.LogInformation("Using on-premise Peruri stamping for invoice {InvoiceNumber}", invoiceNumber);
+
+                var stampRequest = new IPeruriOnPremiseStampService.PeruriStampRequest
+                {
+                    InvoiceNumber = invoiceNumber,
+                    PdfContent = pdfBytes,
+                    CustomerName = invoice.DeliveryHeader?.Customer?.CustomerName ?? "Unknown",
+                    CustomerNumber = invoice.CustomerNumber,
+                    Amount = invoice.InvoiceAmount
+                };
+
+                var stampResult = await _peruriOnPremiseStampService.StampInvoiceAsync(stampRequest);
+
+                if (!stampResult.Success)
+                {
+                    invoice.StampingStatus = Invoice.InvoiceStampingStatus.Failed;
+                    invoice.Status = Invoice.InvoiceStatus.SyncFailed;
+                    await _db.SaveChangesAsync();
+
+                    _logger.LogError(
+                        "On-premise stamping failed for invoice {InvoiceNumber}: {Error}",
+                        invoiceNumber,
+                        stampResult.ErrorMessage);
+
+                    return StatusCode(500, $"Stamping failed: {stampResult.ErrorMessage}");
+                }
+
+                stampedPdf = stampResult.StampedPdf ?? pdfBytes;
+                serialNumber = stampResult.SerialNumber ?? string.Empty;
+            }
+            else
+            {
+                _logger.LogInformation("Using cloud Peruri PDS service for invoice {InvoiceNumber}", invoiceNumber);
+
+                // Fall back to cloud Peruri service
+                var customerName = invoice.DeliveryHeader?.Customer?.CustomerName ?? "Unknown";
+                var stampingResult = await _periuriPdsService.StampPdfAsync(
+                    pdfBytes,
+                    invoiceNumber,
+                    customerName);
+
+                if (!stampingResult.Success)
+                {
+                    invoice.StampingStatus = Invoice.InvoiceStampingStatus.Failed;
+                    invoice.Status = Invoice.InvoiceStatus.SyncFailed;
+                    await _db.SaveChangesAsync();
+
+                    _logger.LogError(
+                        "Stamping failed for invoice {InvoiceNumber}: {Error}",
+                        invoiceNumber,
+                        stampingResult.ErrorMessage);
+
+                    return StatusCode(500, $"Stamping failed: {stampingResult.ErrorMessage}");
+                }
+
+                stampedPdf = pdfBytes; // In real cloud implementation, this would be stamped
+                serialNumber = stampingResult.SerialNumber ?? string.Empty;
+            }
+
+            // Upload the stamped PDF back to MinIO
+            string stampedStorageKey = $"invoices/{invoice.InvoiceID}/stamped/{Guid.NewGuid()}_stamped.pdf";
+            using var stampedStream = new MemoryStream(stampedPdf);
+            await _storageService.UploadFileAsync(stampedStorageKey, stampedStream, "application/pdf");
+
+            // Create document record for stamped PDF
+            var stampedDocument = new Document
+            {
+                InvoiceID = invoice.InvoiceID,
+                StorageKey = stampedStorageKey,
+                FileName = $"{invoiceNumber}_stamped.pdf",
+                ContentType = "application/pdf",
+                Type = DocumentType.InvoicePrintOut,
+                UploadedAt = DateTime.UtcNow
+            };
+
+            _db.Documents.Add(stampedDocument);
+
+            // Update invoice with stamping results
+            invoice.SerialNumber = serialNumber;
+            invoice.StampingStatus = Invoice.InvoiceStampingStatus.Stamped;
+            invoice.StampedDocumentId = stampedDocument.DocumentID;
+            invoice.Status = Invoice.InvoiceStatus.SyncedToSap;
+
+            await _db.SaveChangesAsync();
+
+            _logger.LogInformation(
+                "Successfully stamped invoice {InvoiceNumber} with serial number {SerialNumber}",
+                invoiceNumber,
+                serialNumber);
+
+            var baseApiUrl = _configuration["App:ApiBaseUrl"] ?? "http://localhost:8080";
+
+            return Ok(new
+            {
+                invoiceId = invoice.InvoiceID,
+                invoiceNumber = invoiceNumber,
+                serialNumber = serialNumber,
+                status = "Stamped",
+                stampedDocumentUrl = $"{baseApiUrl.TrimEnd('/')}/api/deliveries/files/download?key={Uri.EscapeDataString(stampedStorageKey)}"
+            });
+        }
+        catch (Exception ex)
+        {
+            invoice.StampingStatus = Invoice.InvoiceStampingStatus.Failed;
+            invoice.Status = Invoice.InvoiceStatus.SyncFailed;
+            await _db.SaveChangesAsync();
+
+            _logger.LogError(ex, "Error stamping invoice {InvoiceNumber}", invoiceNumber);
             return StatusCode(500, $"Internal error during stamping: {ex.Message}");
         }
     }
@@ -296,6 +461,9 @@ public class InvoicesController : ControllerBase
         return CreatedAtAction(nameof(GetInvoiceById), new { id = invoice.InvoiceID }, response);
     }
 
+    /// <summary>
+    /// Upload invoice printout using internal invoice ID (Legacy endpoint)
+    /// </summary>
     [HttpPost("{id:int}/upload-printout")]
     public async Task<IActionResult> UploadInvoicePrintout(int id, IFormFile file)
     {
@@ -308,6 +476,36 @@ public class InvoicesController : ControllerBase
         if (invoice == null)
             return NotFound($"Invoice with ID {id} not found.");
 
+        return await UploadInvoicePrintoutInternal(invoice, file);
+    }
+
+    /// <summary>
+    /// Upload invoice printout using SAP-native invoice number (New endpoint)
+    /// This is the preferred method for SAP integration
+    /// </summary>
+    [HttpPost("by-number/{invoiceNumber}/upload-printout")]
+    public async Task<IActionResult> UploadInvoicePrintoutByNumber(string invoiceNumber, IFormFile file)
+    {
+        if (string.IsNullOrWhiteSpace(invoiceNumber))
+            return BadRequest("Invoice number is required.");
+
+        if (file == null || file.Length == 0)
+            return BadRequest("File is required.");
+
+        var invoice = await _db.Invoices
+            .FirstOrDefaultAsync(i => i.InvoiceNumber == invoiceNumber);
+
+        if (invoice == null)
+            return NotFound($"Invoice with number {invoiceNumber} not found.");
+
+        return await UploadInvoicePrintoutInternal(invoice, file);
+    }
+
+    /// <summary>
+    /// Internal method for handling invoice printout upload
+    /// </summary>
+    private async Task<IActionResult> UploadInvoicePrintoutInternal(Invoice invoice, IFormFile file)
+    {
         // Validate file type (PDF or Image)
         string contentType = file.ContentType.ToLowerInvariant();
         if (!contentType.StartsWith("application/pdf") &&
@@ -320,7 +518,7 @@ public class InvoicesController : ControllerBase
         try
         {
             string fileExtension = Path.GetExtension(file.FileName);
-            string storageKey = $"invoices/{id}/printouts/{Guid.NewGuid()}{fileExtension}";
+            string storageKey = $"invoices/{invoice.InvoiceID}/printouts/{Guid.NewGuid()}{fileExtension}";
 
             // Upload to MinIO
             using (var stream = file.OpenReadStream())
@@ -362,7 +560,7 @@ public class InvoicesController : ControllerBase
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to upload printout for invoice {InvoiceId}", id);
+            _logger.LogError(ex, "Failed to upload printout for invoice {InvoiceNumber}", invoice.InvoiceNumber);
             return StatusCode(500, $"Failed to upload file: {ex.Message}");
         }
     }

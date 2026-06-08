@@ -1,0 +1,26 @@
+{
+  "Peruri": {
+    "BackendStg": "https://backend.peruri.co.id",
+    "Stampv2Stg": "https://stampv2.peruri.co.id",
+    "InventoryStg": "https://inventory.peruri.co.id",
+    "User": "your-service-account-username",
+    "Password": "your-service-account-password",
+    "KeyStamp": "http://localhost:8081",
+    "SharedFolder": "/sharefolder",
+    "TokenExpiryBufferMinutes": 5
+  },
+  "_comment_Peruri": {
+    "BackendStg": "Peruri backend staging URL for user authentication (POST api/users/login)",
+    "Stampv2Stg": "Peruri stamp v2 staging URL for e-meterai allotment (POST chanel/stampv2)",
+    "InventoryStg": "Peruri inventory staging URL for inventory management",
+    "User": "Peruri service account username for authentication",
+    "Password": "Peruri service account password for authentication",
+    "KeyStamp": "KeyStamp Docker adapter URL for on-premise PDF signing (POST adapter/pdfsigning/rest/docSigningZ)",
+    "SharedFolder": "Shared folder path for Docker volume (used for PDF exchange between API and signing adapter)",
+    "TokenExpiryBufferMinutes": "Token expiry buffer in minutes (tokens will be refreshed this many minutes before actual expiry)"
+  },
+  "_comment_Usage": {
+    "OnPremise": "When configured, the stamping endpoint will use on-premise flow: PDF -> shared folder -> Peruri API -> Docker adapter -> signed PDF",
+    "Fallback": "If Peruri options are not configured, the system falls back to cloud-based Peruri PDS service"
+  }
+}

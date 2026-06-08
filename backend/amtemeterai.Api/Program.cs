@@ -21,6 +21,9 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 // 2026-05-20 - Configure SAP Options
 builder.Services.Configure<SapOptions>(builder.Configuration.GetSection(SapOptions.Position));
 
+// 2026-06-09 - Configure Peruri Options for e-Meterai on-premise stamping
+builder.Services.Configure<PeruriOptions>(builder.Configuration.GetSection(PeruriOptions.SectionName));
+
 // 2026-04-30 - Add Controllers
 builder.Services.AddControllers();
 
@@ -67,6 +70,10 @@ builder.Services.AddTransient<IEmailService, EmailService>();
 // Register Periuri PDS Service for e-Meterai stamping
 builder.Services.AddHttpClient();
 builder.Services.AddScoped<IPeriuriPdsService, PeriuriPdsService>();
+
+// 2026-06-09 - Register Peruri On-Premise Stamping Services
+builder.Services.AddScoped<IPeruriSessionService, PeruriSessionService>();
+builder.Services.AddScoped<IPeruriOnPremiseStampService, PeruriOnPremiseStampService>();
 
 // Register the named HttpClient that your DeliveriesController uses to talk to SAP
 builder.Services.AddHttpClient("SapClient", (serviceProvider, client) =>
