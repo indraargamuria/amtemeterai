@@ -9,6 +9,7 @@ using amtemeterai.Api.Services;
 using amtemeterai.Api.Config;
 using System; 
 using System.Text.Json; 
+using Microsoft.AspNetCore.Http.Features;
 
 namespace amtemeterai.Api.Controllers;
 
@@ -109,8 +110,8 @@ public class DeliveriesController : ControllerBase
                 DeliveryRemarks = d.DeliveryRemarks,
 
                 // Conditional: Hide customer info for warehouse role
-                CustomerCode = isWarehouseRole ? (string)null : (d.Customer != null ? d.Customer.CustomerCode : "UNKNOWN"),
-                CustomerName = isWarehouseRole ? (string)null : (d.Customer != null ? d.Customer.CustomerName : "UNKNOWN"),
+                CustomerCode = isWarehouseRole ? (string?)null : (d.Customer != null ? d.Customer.CustomerCode : "UNKNOWN"),
+                CustomerName = isWarehouseRole ? (string?)null : (d.Customer != null ? d.Customer.CustomerName : "UNKNOWN"),
 
                 Received = d.Received,
                 ReceiveDate = d.ReceiveDate,

@@ -8,6 +8,7 @@ using amtemeterai.Api.Models;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using amtemeterai.Api.Config;
+using Microsoft.AspNetCore.Http.Features;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -82,6 +83,22 @@ builder.Services.AddHttpClient("SapClient", (serviceProvider, client) =>
     client.DefaultRequestHeaders.Accept.Add(new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue("application/json"));
 });
 
+// Locate your existing AddControllers call and update it like this:
+// Update your existing AddControllers declaration inside Program.cs
+// builder.Services.AddControllers(options =>
+// {
+//     // Expands the maximum collection binding entries allowed from the default (1024) to 8192
+//     options.MaxModelBindingCollectionSize = 8192;
+// });
+
+builder.Services.Configure<FormOptions>(o =>
+{
+    o.ValueCountLimit = int.MaxValue;
+});
+builder.Services.AddControllers(options =>
+{
+    options.MaxModelBindingCollectionSize = 10000;
+});
 // 2026-05-06 - Add ASP.NET Core Identity
 builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
 {
