@@ -91,14 +91,14 @@ public class PeruriSessionService : IPeruriSessionService
                 password = _options.Password
             };
 
-            _logger.LogDebug("Sending Peruri login request to {LoginUrl}", loginUrl);
+            _logger.LogDebug("Sending Peruri login request to {LoginUrl} for user {User}", loginUrl, _options.User);
 
             var response = await client.PostAsJsonAsync(loginUrl, loginRequest);
 
             if (!response.IsSuccessStatusCode)
             {
                 var errorContent = await response.Content.ReadAsStringAsync();
-                _logger.LogError("Peruri login failed with status {StatusCode}: {ErrorContent}",
+                _logger.LogError("Peruri login failed with HTTP status {StatusCode}: {ErrorContent}",
                     response.StatusCode, errorContent);
 
                 throw new InvalidOperationException(
@@ -107,21 +107,47 @@ public class PeruriSessionService : IPeruriSessionService
 
             var loginResponse = await response.Content.ReadFromJsonAsync<PeruriLoginResponseDto>();
 
-            if (loginResponse == null || !loginResponse.status || string.IsNullOrEmpty(loginResponse.data?.token))
+            // Validate response structure
+            if (loginResponse == null)
             {
-                _logger.LogError("Peruri login response invalid or missing token");
-                throw new InvalidOperationException("Peruri authentication response is invalid or missing token.");
+                _logger.LogError("Peruri login response is null");
+                throw new InvalidOperationException("Peruri authentication response is null.");
             }
 
-            var token = loginResponse.data.token;
+            // Check statusCode - "00" indicates success
+            if (loginResponse.statusCode != "00")
+            {
+                _logger.LogError("Peruri login returned unsuccessful status code: {StatusCode}, Message: {Message}",
+                    loginResponse.statusCode, loginResponse.message);
+                throw new InvalidOperationException(
+                    $"Peruri authentication failed with status code: {loginResponse.statusCode}. Message: {loginResponse.message}");
+            }
 
-            // Parse expiry if available, otherwise use default (1 hour)
+            // Extract token - prioritize root-level token, fall back to nested token
+            string token = string.Empty;
+
+            // Try root-level token first
+            if (!string.IsNullOrEmpty(loginResponse.token))
+            {
+                token = loginResponse.token;
+                _logger.LogDebug("Using token from root-level response property");
+            }
+            // Fall back to nested token path: result.data.login.token
+            else if (!string.IsNullOrEmpty(loginResponse.result?.data?.login?.token))
+            {
+                token = loginResponse.result.data.login.token;
+                _logger.LogDebug("Using token from nested path: result.data.login.token");
+            }
+
+            if (string.IsNullOrEmpty(token))
+            {
+                _logger.LogError("Peruri login response missing token at both root and nested paths");
+                throw new InvalidOperationException("Peruri authentication response is missing token.");
+            }
+
+            // Default token expiry to 1 hour if not provided
+            // Note: The current Peruri API response doesn't include expiry time
             DateTime expiresAt = DateTime.UtcNow.AddHours(1);
-            if (!string.IsNullOrEmpty(loginResponse.data.expireIn) &&
-                int.TryParse(loginResponse.data.expireIn, out var expireSeconds))
-            {
-                expiresAt = DateTime.UtcNow.AddSeconds(expireSeconds);
-            }
 
             // Cache the token
             var newCachedToken = new CachedToken
@@ -133,8 +159,8 @@ public class PeruriSessionService : IPeruriSessionService
 
             _tokenCache.AddOrUpdate(cacheKey, newCachedToken, (key, old) => newCachedToken);
 
-            _logger.LogInformation("Peruri token refreshed successfully. Expires at {ExpiresAt} (in {Minutes} minutes)",
-                expiresAt, (expiresAt - DateTime.UtcNow).TotalMinutes);
+            _logger.LogInformation("Peruri token refreshed successfully. Expires at {ExpiresAt} (in {Minutes} minutes). User: {User}",
+                expiresAt, (expiresAt - DateTime.UtcNow).TotalMinutes, loginResponse.result?.data?.login?.user?.email ?? "unknown");
 
             return token;
         }

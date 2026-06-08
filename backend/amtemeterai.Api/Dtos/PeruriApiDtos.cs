@@ -11,18 +11,73 @@ public class PeruriLoginRequestDto
 
 /// <summary>
 /// Response DTO for Peruri User Login API
+/// Matches the actual API response structure from:
+/// https://backendservicestg.e-meterai.co.id/api/users/login
 /// </summary>
 public class PeruriLoginResponseDto
 {
-    public bool status { get; set; }
+    /// <summary>
+    /// Status code from Peruri API
+    /// "00" indicates success
+    /// </summary>
+    public string statusCode { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Message from the API
+    /// </summary>
     public string message { get; set; } = string.Empty;
-    public PeruriLoginDataDto? data { get; set; }
+
+    /// <summary>
+    /// Direct access to the JWT token at root level
+    /// This is the primary token to use
+    /// </summary>
+    public string token { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Nested result structure containing additional data
+    /// </summary>
+    public PeruriLoginResultDto? result { get; set; }
 }
 
-public class PeruriLoginDataDto
+/// <summary>
+/// Result wrapper for Peruri login response
+/// </summary>
+public class PeruriLoginResultDto
 {
+    public PeruriLoginNestedDataDto? data { get; set; }
+}
+
+/// <summary>
+/// Nested data structure in Peruri login response
+/// </summary>
+public class PeruriLoginNestedDataDto
+{
+    public PeruriLoginDetailsDto? login { get; set; }
+}
+
+/// <summary>
+/// Login details containing the token and user information
+/// </summary>
+public class PeruriLoginDetailsDto
+{
+    /// <summary>
+    /// JWT token (also available at root level)
+    /// </summary>
     public string token { get; set; } = string.Empty;
-    public string expireIn { get; set; } = string.Empty;
+
+    /// <summary>
+    /// User information
+    /// </summary>
+    public PeruriLoginUserDto? user { get; set; }
+}
+
+/// <summary>
+/// User information returned in login response
+/// </summary>
+public class PeruriLoginUserDto
+{
+    public string id { get; set; } = string.Empty;
+    public string email { get; set; } = string.Empty;
 }
 
 /// <summary>
