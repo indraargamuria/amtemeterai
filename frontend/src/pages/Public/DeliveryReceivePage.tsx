@@ -1,11 +1,11 @@
-import { useState, useEffect, useRef, useMemo } from "react"
+import { useState, useEffect, useRef, useMemo, useCallback, memo, useTransition, startTransition, useDeferredValue } from "react"
 import { useParams } from "react-router-dom"
 import { Button } from "../../shared/components/ui/Button"
 import { Badge } from "../../shared/components/ui/Badge"
 import { Card, CardContent, CardHeader, CardTitle } from "../../shared/components/ui/Card"
 import { Input } from "../../shared/components/ui/Input"
 import { Label } from "../../shared/components/ui/Label"
-import { Camera, Upload, Trash2, Search, CheckCircle, AlertTriangle, ChevronDown, ChevronUp, Package, Lock, FileText, MapPin } from "lucide-react"
+import { Camera, Upload, CheckCircle, AlertTriangle, ChevronDown, ChevronUp, Package, Lock, FileText, MapPin, Search } from "lucide-react"
 
 // ============================================================================
 // TYPE DEFINITIONS
@@ -53,11 +53,21 @@ interface DeliveryDetail {
 }
 
 interface LineFormState {
-  deliveryLineNumber: string
   delivered: string
   returned: string
   rejected: string
   lineComment: string
+}
+
+interface LineCalculation {
+  actualTotal: number
+  rawVariance: number
+  variancePercent: string
+  displayVariance: string
+  isOver: boolean
+  isShort: boolean
+  hasVariance: boolean
+  isModified: boolean
 }
 
 interface VarianceSummary {
@@ -70,6 +80,44 @@ interface VarianceSummary {
   uom: string
 }
 
+interface LineItemRowProps {
+  line: DeliveryLine
+  lineState: LineFormState
+  calc: LineCalculation
+  isExpanded: boolean
+  deliveryReceived: boolean
+  isInvoiced: boolean
+  isSubmitting: boolean
+  isSubmitted: boolean
+  onToggleExpansion: () => void
+  onInputChange: (field: keyof LineFormState, value: string) => void
+}
+
+interface ToastNotificationProps {
+  show: boolean
+  type: "success" | "error"
+  onClose: () => void
+}
+
+interface ApplyAllReminderProps {
+  show: boolean
+  onClose: () => void
+}
+
+interface VarianceModalProps {
+  show: boolean
+  variances: VarianceSummary[] | undefined
+  onClose: () => void
+  onConfirm: () => void
+}
+
+interface GuardrailModalProps {
+  show: boolean
+  issuesCount: number
+  onClose: () => void
+  onConfirm: () => void
+}
+
 // ============================================================================
 // CONSTANTS
 // ============================================================================
@@ -78,11 +126,401 @@ const API_URL = import.meta.env.VITE_API_URL
 const MAX_FILE_SIZE = 5 * 1024 * 1024
 
 // ============================================================================
+// HELPER FUNCTIONS
+// ============================================================================
+
+const formatDate = (ds: string) => new Date(ds).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" })
+
+const calculateLineData = (lineState: LineFormState, packQuantity: number): LineCalculation => {
+  const delivered = parseFloat(lineState.delivered) || 0
+  const returned = parseFloat(lineState.returned) || 0
+  const rejected = parseFloat(lineState.rejected) || 0
+  const totalActual = delivered + returned + rejected
+
+  const rawVariance = totalActual - packQuantity
+  const variancePercent = packQuantity > 0 ? ((rawVariance / packQuantity) * 100).toFixed(2) : "0.00"
+  const isOver = parseFloat(variancePercent) > 0
+  const isShort = parseFloat(variancePercent) < 0
+  const displayVariance = isOver ? `+${variancePercent}%` : `${variancePercent}%`
+  const hasVariance = Math.abs(parseFloat(variancePercent)) > 0.01
+  const isModified = returned > 0 || rejected > 0 || totalActual !== packQuantity || lineState.lineComment.trim() !== ""
+
+  return {
+    actualTotal: totalActual,
+    rawVariance,
+    variancePercent,
+    displayVariance,
+    isOver,
+    isShort,
+    hasVariance,
+    isModified
+  }
+}
+
+// Custom equality checker for LineItemRow to prevent unnecessary re-renders
+const areLineItemRowPropsEqual = (prevProps: LineItemRowProps, nextProps: LineItemRowProps) => {
+  return (
+    prevProps.line.deliveryLineNumber === nextProps.line.deliveryLineNumber &&
+    prevProps.isExpanded === nextProps.isExpanded &&
+    prevProps.lineState === nextProps.lineState &&
+    prevProps.calc.displayVariance === nextProps.calc.displayVariance &&
+    prevProps.calc.isModified === nextProps.calc.isModified &&
+    prevProps.deliveryReceived === nextProps.deliveryReceived &&
+    prevProps.isInvoiced === nextProps.isInvoiced &&
+    prevProps.isSubmitting === nextProps.isSubmitting &&
+    prevProps.isSubmitted === nextProps.isSubmitted
+  )
+}
+
+// ============================================================================
+// MEMOIZED SUB-COMPONENTS
+// ============================================================================
+
+const LineItemRow = memo(({
+  line,
+  lineState,
+  calc,
+  isExpanded,
+  deliveryReceived,
+  isInvoiced,
+  isSubmitting,
+  isSubmitted,
+  onToggleExpansion,
+  onInputChange,
+}: LineItemRowProps) => {
+  // Local state for uncontrolled inputs - prevents parent re-renders on typing
+  const [localValues, setLocalValues] = useState({
+    delivered: lineState.delivered,
+    returned: lineState.returned,
+    rejected: lineState.rejected,
+    lineComment: lineState.lineComment
+  })
+
+  // Sync local state when parent state changes (e.g., Apply to All)
+  useEffect(() => {
+    setLocalValues({
+      delivered: lineState.delivered,
+      returned: lineState.returned,
+      rejected: lineState.rejected,
+      lineComment: lineState.lineComment
+    })
+  }, [lineState])
+
+  const handleFieldChange = (field: keyof LineFormState, value: string) => {
+    setLocalValues(prev => ({ ...prev, [field]: value }))
+    onInputChange(field, value)
+  }
+
+  const handleFocus = (field: "delivered" | "returned" | "rejected") => {
+    if (localValues[field] === "0") {
+      setLocalValues(prev => ({ ...prev, [field]: "" }))
+    }
+  }
+
+  const handleBlur = (field: "delivered" | "returned" | "rejected") => {
+    if (localValues[field].trim() === "" || localValues[field] === "-") {
+      setLocalValues(prev => ({ ...prev, [field]: "0" }))
+      onInputChange(field, "0")
+    } else {
+      const num = parseFloat(localValues[field])
+      if (num < 0) {
+        setLocalValues(prev => ({ ...prev, [field]: "0" }))
+        onInputChange(field, "0")
+      }
+    }
+  }
+
+  return (
+    <div className={calc.isModified ? "bg-red-50/30" : ""}>
+      <button
+        type="button"
+        onClick={onToggleExpansion}
+        className="w-full p-4 flex items-center gap-4 hover:bg-slate-50 transition-colors text-left"
+      >
+        <div className="w-10 h-10 rounded-lg bg-slate-100 flex items-center justify-center shrink-0">
+          <Package className="w-5 h-5 text-slate-500" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 mb-0.5">
+            <span className="text-sm font-medium text-slate-900 truncate">{line.deliveryItemDescription}</span>
+            {calc.isModified && (
+              <Badge className="bg-red-100 text-red-700 border-none text-[10px] px-1.5 h-5 font-semibold">
+                Modified
+              </Badge>
+            )}
+          </div>
+          <div className="flex items-center gap-3 text-xs text-slate-500">
+            <span>Delivery: <strong className="text-slate-700">{line.packQuantity} {line.packUOM}</strong></span>
+            {line.batchNumber && (
+              <>
+                <span>•</span>
+                <span>Batch: <strong className="text-slate-700">{line.batchNumber}</strong></span>
+              </>
+            )}
+            {calc.isModified && (
+              <>
+                <span>•</span>
+                <span className="text-red-600 font-medium">
+                  Actual: <strong>{calc.actualTotal} {line.packUOM}</strong>
+                </span>
+              </>
+            )}
+          </div>
+        </div>
+        {calc.hasVariance && deliveryReceived && (
+          <div className="shrink-0 mr-2">
+            <Badge
+              variant="badge"
+              className={
+                calc.isShort
+                  ? "bg-rose-100 text-rose-700 border-rose-200 text-xs font-semibold px-2 py-1"
+                  : calc.isOver
+                  ? "bg-emerald-100 text-emerald-700 border-emerald-200 text-xs font-semibold px-2 py-1"
+                  : "bg-slate-100 text-slate-500 border-slate-200 text-xs px-2 py-1"
+              }
+            >
+              {calc.displayVariance}
+            </Badge>
+          </div>
+        )}
+        <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center shrink-0">
+          {isExpanded ? <ChevronUp className="w-4 h-4 text-slate-600" /> : <ChevronDown className="w-4 h-4 text-slate-600" />}
+        </div>
+      </button>
+
+      {/* Lazy render expansion panel - only renders when expanded */}
+      {isExpanded && (
+        <div className="px-4 pb-4 pt-2 bg-slate-50/50 border-t border-slate-100 animate-in slide-in-from-top-1">
+          <div className="grid grid-cols-3 gap-3 sm:gap-4">
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium text-slate-600">Received</Label>
+              <Input
+                type="number"
+                step="0.01"
+                min="0"
+                value={localValues.delivered}
+                onChange={(e) => handleFieldChange("delivered", e.target.value)}
+                onFocus={() => handleFocus("delivered")}
+                onBlur={() => handleBlur("delivered")}
+                disabled={isInvoiced || isSubmitted || isSubmitting}
+                className="h-10 text-sm border-slate-300 focus:border-[#1d2351] focus:ring-[#1d2351]"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium text-slate-600">Returned</Label>
+              <Input
+                type="number"
+                step="0.01"
+                min="0"
+                value={localValues.returned}
+                onChange={(e) => handleFieldChange("returned", e.target.value)}
+                onFocus={() => handleFocus("returned")}
+                onBlur={() => handleBlur("returned")}
+                disabled={isInvoiced || isSubmitted || isSubmitting}
+                className="h-10 text-sm border-slate-300 focus:border-[#1d2351] focus:ring-[#1d2351]"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium text-slate-600">Rejected</Label>
+              <Input
+                type="number"
+                step="0.01"
+                min="0"
+                value={localValues.rejected}
+                onChange={(e) => handleFieldChange("rejected", e.target.value)}
+                onFocus={() => handleFocus("rejected")}
+                onBlur={() => handleBlur("rejected")}
+                disabled={isInvoiced || isSubmitted || isSubmitting}
+                className="h-10 text-sm border-slate-300 focus:border-[#1d2351] focus:ring-[#1d2351]"
+              />
+            </div>
+          </div>
+          <div className="mt-3 space-y-1.5">
+            <Label className="text-xs font-medium text-slate-600">Notes</Label>
+            <Input
+              type="text"
+              value={localValues.lineComment}
+              onChange={(e) => handleFieldChange("lineComment", e.target.value)}
+              disabled={isInvoiced || isSubmitted || isSubmitting}
+              placeholder="Add any notes about this item..."
+              className="h-10 text-sm border-slate-300 focus:border-[#1d2351] focus:ring-[#1d2351]"
+            />
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}, areLineItemRowPropsEqual)
+
+LineItemRow.displayName = "LineItemRow"
+
+const ToastNotification = memo(({ show, type, onClose }: ToastNotificationProps) => {
+  if (!show) return null
+
+  return (
+    <div className="fixed top-4 right-4 z-50 animate-in slide-in-from-top-4 fade-in duration-300">
+      <div className={`bg-white border rounded-lg shadow-xl p-4 flex items-start gap-3 min-w-[300px] ${type === "error" ? "border-red-200" : "border-emerald-200"}`}>
+        <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${type === "error" ? "bg-red-100" : "bg-emerald-100"}`}>
+          {type === "error" ? <AlertTriangle className="w-4 h-4 text-red-600" /> : <CheckCircle className="w-4 h-4 text-emerald-600" />}
+        </div>
+        <div className="flex-1">
+          <h4 className="text-sm font-semibold text-slate-900">
+            {type === "error" ? "Action Required" : "Success"}
+          </h4>
+          <p className="text-xs text-slate-500 mt-0.5">
+            {type === "error" ? "Please correct the highlighted issues." : "Your changes have been saved."}
+          </p>
+        </div>
+        <button onClick={onClose} className="text-slate-400 hover:text-slate-600 shrink-0">
+          ×
+        </button>
+      </div>
+    </div>
+  )
+})
+
+ToastNotification.displayName = "ToastNotification"
+
+const ApplyAllReminder = memo(({ show, onClose }: ApplyAllReminderProps) => {
+  if (!show) return null
+
+  return (
+    <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 animate-in slide-in-from-top-4 fade-in duration-300">
+      <div className="bg-white border border-blue-200 rounded-lg shadow-xl p-4 flex items-start gap-3 min-w-[320px]">
+        <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center shrink-0">
+          <CheckCircle className="w-4 h-4 text-blue-600" />
+        </div>
+        <div className="flex-1">
+          <h4 className="text-sm font-semibold text-slate-900">"Apply to All" Ready</h4>
+          <p className="text-xs text-slate-500 mt-0.5">
+            All items set to scheduled quantities. Click <strong>"Post Goods Receipt"</strong> at the bottom to confirm and submit.
+          </p>
+        </div>
+        <button onClick={onClose} className="text-slate-400 hover:text-slate-600 shrink-0">
+          ×
+        </button>
+      </div>
+    </div>
+  )
+})
+
+ApplyAllReminder.displayName = "ApplyAllReminder"
+
+const VarianceModal = memo(({ show, variances, onClose, onConfirm }: VarianceModalProps) => {
+  if (!show) return null
+
+  return (
+    <div className="fixed top-16 left-1/2 -translate-x-1/2 z-50 animate-in slide-in-from-top-4 fade-in duration-300">
+      <div className="bg-white border border-amber-200 rounded-lg shadow-xl p-4 flex items-start gap-3 min-w-[400px] w-full max-w-lg">
+        <div className="w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center shrink-0">
+          <AlertTriangle className="w-4 h-4 text-amber-700" />
+        </div>
+        <div className="flex-1">
+          <h4 className="text-sm font-semibold text-slate-900">Quantity Discrepancies</h4>
+          <p className="text-xs text-slate-500 mt-0.5">The following items have quantity mismatches</p>
+          <div className="mt-3 max-h-[160px] overflow-y-auto divide-y divide-slate-100">
+            {variances?.map((v) => (
+              <div key={v.lineNumber} className="py-2 flex items-start gap-2">
+                <div className="w-6 h-6 rounded bg-slate-100 flex items-center justify-center shrink-0">
+                  <Package className="w-3 h-3 text-slate-500" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-medium text-slate-900 truncate">{v.description}</p>
+                  <div className="flex items-center gap-2 mt-0.5 text-xs text-slate-500">
+                    <span>{v.itemCode}</span>
+                    <span className="text-slate-300">|</span>
+                    <span>Scheduled: <strong>{v.scheduled}</strong></span>
+                    <span className="text-slate-300">|</span>
+                    <span>Actual: <strong>{v.actualTotal}</strong></span>
+                    <span className={`ml-auto font-bold ${v.variancePercent.startsWith('+') ? 'text-green-600' : 'text-red-600'}`}>
+                      {v.variancePercent}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="flex gap-2 mt-3">
+            <Button
+              type="button"
+              variant="outline"
+              className="flex-1 h-9 border-slate-300 text-slate-700 hover:bg-slate-50 text-xs"
+              onClick={onClose}
+            >
+              Review & Edit
+            </Button>
+            <Button
+              type="button"
+              className="flex-1 h-9 bg-[#1d2351] hover:bg-[#2a3266] text-white text-xs"
+              onClick={onConfirm}
+            >
+              Confirm & Post
+            </Button>
+          </div>
+        </div>
+        <button onClick={onClose} className="text-slate-400 hover:text-slate-600 shrink-0">
+          ×
+        </button>
+      </div>
+    </div>
+  )
+})
+
+VarianceModal.displayName = "VarianceModal"
+
+const GuardrailModal = memo(({ show, issuesCount, onClose, onConfirm }: GuardrailModalProps) => {
+  if (!show) return null
+
+  return (
+    <div className="fixed top-16 left-1/2 -translate-x-1/2 z-50 animate-in slide-in-from-top-4 fade-in duration-300">
+      <div className="bg-white border border-red-200 rounded-lg shadow-xl p-4 flex items-start gap-3 min-w-[360px]">
+        <div className="w-8 h-8 rounded-full bg-red-100 flex items-center justify-center shrink-0">
+          <AlertTriangle className="w-4 h-4 text-red-600" />
+        </div>
+        <div className="flex-1">
+          <h4 className="text-sm font-semibold text-slate-900">Warning: Manual Changes Detected</h4>
+          <p className="text-xs text-slate-500 mt-0.5">You have entered manual discrepancies on {issuesCount} item(s)</p>
+          <div className="bg-amber-50 border border-amber-200 rounded-lg p-2.5 mt-2">
+            <p className="text-xs text-amber-900">
+              Clicking <strong>"Apply to All"</strong> will overwrite all your manual entries and reset all items to their scheduled quantities.
+            </p>
+          </div>
+          <p className="text-xs text-slate-600 mt-2">Are you sure you want to proceed? This action cannot be undone.</p>
+          <div className="flex gap-2 mt-3">
+            <Button
+              type="button"
+              variant="outline"
+              className="flex-1 h-9 border-slate-300 text-slate-700 hover:bg-slate-50 text-xs"
+              onClick={onClose}
+            >
+              Keep Manual Changes
+            </Button>
+            <Button
+              type="button"
+              className="flex-1 h-9 bg-red-600 hover:bg-red-700 text-white text-xs"
+              onClick={onConfirm}
+            >
+              Overwrite & Apply
+            </Button>
+          </div>
+        </div>
+        <button onClick={onClose} className="text-slate-400 hover:text-slate-600 shrink-0">
+          ×
+        </button>
+      </div>
+    </div>
+  )
+})
+
+GuardrailModal.displayName = "GuardrailModal"
+
+// ============================================================================
 // MAIN COMPONENT
 // ============================================================================
 
 export function DeliveryReceivePage() {
   const { token } = useParams<{ token: string }>()
+  const [isPending, startTransition] = useTransition()
 
   // Core state
   const [delivery, setDelivery] = useState<DeliveryDetail | null>(null)
@@ -100,17 +538,24 @@ export function DeliveryReceivePage() {
   const [receiverNotes, setReceiverNotes] = useState("")
   const [receiveDate, setReceiveDate] = useState("")
   const [receiveDateError, setReceiveDateError] = useState<string | null>(null)
-  const [lines, setLines] = useState<LineFormState[]>([])
+
+  // OPTIMIZATION: Use Map instead of array for O(1) lookups
+  const [linesMap, setLinesMap] = useState<Map<string, LineFormState>>(new Map())
+
+  // Track which lines have issues - Set for O(1) lookup
+  const [issueLines, setIssueLines] = useState<Set<string>>(new Set())
+
   const [photoFiles, setPhotoFiles] = useState<File[]>([])
   const [photoErrors, setPhotoErrors] = useState<string[]>([])
   const [latitude, setLatitude] = useState<number | null>(null)
   const [longitude, setLongitude] = useState<number | null>(null)
   const [keysToDelete, setKeysToDelete] = useState<string[]>([])
 
-  // List UI state
+  // List UI state - deferred for non-critical updates
   const [searchQuery, setSearchQuery] = useState("")
+  const deferredSearchQuery = useDeferredValue(searchQuery.toLowerCase())
   const [activeTab, setActiveTab] = useState<"all" | "issues">("all")
-  const [expandedRows, setExpandedRows] = useState<Record<string, boolean>>({})
+  const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
 
   // PIN Verification state
   const [isVerified, setIsVerified] = useState(false)
@@ -127,13 +572,96 @@ export function DeliveryReceivePage() {
   const [showGuardrailModal, setShowGuardrailModal] = useState(false)
   const [showApplyAllReminder, setShowApplyAllReminder] = useState(false)
 
+  // Refs for stable callbacks
   const cameraInputRef = useRef<HTMLInputElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const deliveryRef = useRef<DeliveryDetail | null>(null)
+  const linesMapRef = useRef<Map<string, LineFormState>>(new Map())
+  const issueLinesRef = useRef<Set<string>>(new Set())
+
+  // Keep refs in sync
+  useEffect(() => {
+    deliveryRef.current = delivery
+  }, [delivery])
+
+  useEffect(() => {
+    linesMapRef.current = linesMap
+  }, [linesMap])
+
+  useEffect(() => {
+    issueLinesRef.current = issueLines
+  }, [issueLines])
+
+  // ============================================================================
+  // COMPUTED VALUES (Memoized with O(1) Map lookups)
+  // ============================================================================
+
+  // Memoized calculations Map - O(1) per line lookup
+  const calculationsMap = useMemo(() => {
+    const calcMap = new Map<string, LineCalculation>()
+    if (!delivery) return calcMap
+
+    delivery.lines.forEach((line) => {
+      const lineState = linesMap.get(line.deliveryLineNumber)
+      if (!lineState) return
+
+      calcMap.set(line.deliveryLineNumber, calculateLineData(lineState, line.packQuantity))
+    })
+
+    return calcMap
+  }, [delivery, linesMap])
+
+  // Issues count - O(1) from Set size
+  const issuesCount = issueLines.size
+
+  // Active photos count
+  const activePhotosCount = useMemo(() =>
+    (delivery?.photos?.length || 0) + photoFiles.length - keysToDelete.length,
+    [delivery?.photos?.length, photoFiles.length, keysToDelete.length]
+  )
+
+  const isUploadDisabled = useMemo(() =>
+    delivery?.invoiced || submitting || activePhotosCount >= 5,
+    [delivery?.invoiced, submitting, activePhotosCount]
+  )
+
+  // Memoized filtered lines - O(N) but only when search changes
+  const filteredLines = useMemo(() => {
+    if (!delivery) return []
+
+    // Early return if no search
+    if (!deferredSearchQuery && activeTab === "all") {
+      return delivery.lines
+    }
+
+    return delivery.lines.filter((line) => {
+      // Search filter
+      if (deferredSearchQuery) {
+        const matchesSearch =
+          line.deliveryItemCode.toLowerCase().includes(deferredSearchQuery) ||
+          line.deliveryItemDescription.toLowerCase().includes(deferredSearchQuery)
+        if (!matchesSearch) return false
+      }
+
+      // Issues tab filter
+      if (activeTab === "issues") {
+        return issueLines.has(line.deliveryLineNumber)
+      }
+
+      return true
+    })
+  }, [delivery, deferredSearchQuery, activeTab, issueLines])
+
+  // Photo URLs memoization
+  const photoUrls = useMemo(() => {
+    return photoFiles.map(file => URL.createObjectURL(file))
+  }, [photoFiles])
 
   // ============================================================================
   // EFFECTS
   // ============================================================================
 
+  // Initial delivery fetch
   useEffect(() => {
     const fetchDelivery = async () => {
       if (!token) {
@@ -160,6 +688,42 @@ export function DeliveryReceivePage() {
     fetchDelivery()
   }, [token])
 
+  // Initialize lines Map from delivery
+  useEffect(() => {
+    if (delivery && !submitted) {
+      if (!delivery.received) {
+        const today = new Date().toISOString().split('T')[0]
+        setReceiveDate(today)
+      } else if (delivery.receiveDate) {
+        setReceiveDate(delivery.receiveDate.split('T')[0])
+      }
+
+      // Initialize Map with default values - O(N) once
+      const newMap = new Map<string, LineFormState>()
+      const newIssueSet = new Set<string>()
+
+      delivery.lines.forEach((line) => {
+        const lineState: LineFormState = {
+          delivered: line.packQuantityDelivered.toString() === "0" ? line.packQuantity.toString() : line.packQuantityDelivered.toString(),
+          returned: line.packQuantityReturned.toString(),
+          rejected: line.packQuantityRejected.toString(),
+          lineComment: line.lineComment || ""
+        }
+        newMap.set(line.deliveryLineNumber, lineState)
+
+        // Check if it's an issue line
+        const calc = calculateLineData(lineState, line.packQuantity)
+        if (calc.isModified) {
+          newIssueSet.add(line.deliveryLineNumber)
+        }
+      })
+
+      setLinesMap(newMap)
+      setIssueLines(newIssueSet)
+    }
+  }, [delivery, submitted])
+
+  // Check verification status
   useEffect(() => {
     if (token) {
       const verified = sessionStorage.getItem(`verified-${token}`)
@@ -167,12 +731,14 @@ export function DeliveryReceivePage() {
     }
   }, [token])
 
+  // Cleanup verification on unmount
   useEffect(() => {
     return () => {
       if (token) sessionStorage.removeItem(`verified-${token}`)
     }
   }, [token])
 
+  // Get geolocation
   useEffect(() => {
     if ("geolocation" in navigator) {
       navigator.geolocation.getCurrentPosition(
@@ -186,28 +752,7 @@ export function DeliveryReceivePage() {
     }
   }, [])
 
-  useEffect(() => {
-    if (delivery && !submitted) {
-      // Initialize receiveDate to today if not already received
-      if (!delivery.received) {
-        const today = new Date().toISOString().split('T')[0]
-        setReceiveDate(today)
-      } else if (delivery.receiveDate) {
-        setReceiveDate(delivery.receiveDate.split('T')[0])
-      }
-
-      setLines(
-        delivery.lines.map((line) => ({
-          deliveryLineNumber: line.deliveryLineNumber,
-          delivered: line.packQuantityDelivered.toString() === "0" ? line.packQuantity.toString() : line.packQuantityDelivered.toString(),
-          returned: line.packQuantityReturned.toString(),
-          rejected: line.packQuantityRejected.toString(),
-          lineComment: line.lineComment || "",
-        }))
-      )
-    }
-  }, [delivery, submitted])
-
+  // Toast auto-dismiss
   useEffect(() => {
     if (showToast) {
       const timer = setTimeout(() => setShowToast(false), 5000)
@@ -215,6 +760,7 @@ export function DeliveryReceivePage() {
     }
   }, [showToast])
 
+  // Apply All Reminder auto-dismiss
   useEffect(() => {
     if (showApplyAllReminder) {
       const timer = setTimeout(() => setShowApplyAllReminder(false), 8000)
@@ -222,86 +768,95 @@ export function DeliveryReceivePage() {
     }
   }, [showApplyAllReminder])
 
+  // Cleanup photo URLs on unmount
+  useEffect(() => {
+    return () => {
+      photoUrls.forEach(url => URL.revokeObjectURL(url))
+    }
+  }, [photoUrls])
+
   // ============================================================================
-  // COMPUTED VALUES
+  // HANDLERS (Optimized with callbacks and minimal dependencies)
   // ============================================================================
 
-  const checkIsIssueLine = (lineState: LineFormState, originalPackQuantity: number) => {
-    const delivered = parseFloat(lineState.delivered) || 0
-    const returned = parseFloat(lineState.returned) || 0
-    const rejected = parseFloat(lineState.rejected) || 0
-    return returned > 0 || rejected > 0 || (delivered + returned + rejected) !== originalPackQuantity || lineState.lineComment.trim() !== ""
-  }
+  // OPTIMIZATION: Direct Map mutation for O(1) updates
+  const updateLineField = useCallback((lineNumber: string, field: keyof LineFormState, value: string) => {
+    setLinesMap(prev => {
+      const newMap = new Map(prev)
+      const current = newMap.get(lineNumber)
+      if (current) {
+        const updated = { ...current, [field]: value }
+        newMap.set(lineNumber, updated)
 
-  const filteredLines = useMemo(() => {
-    if (!delivery) return []
-    return delivery.lines.filter((line) => {
-      const lineState = lines.find((l) => l.deliveryLineNumber === line.deliveryLineNumber)
-      const matchesSearch =
-        line.deliveryItemCode.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        line.deliveryItemDescription.toLowerCase().includes(searchQuery.toLowerCase())
-
-      if (!matchesSearch) return false
-      if (activeTab === "issues" && lineState) {
-        return checkIsIssueLine(lineState, line.packQuantity)
+        // Use startTransition for non-critical UI updates
+        startTransition(() => {
+          if (deliveryRef.current) {
+            const line = deliveryRef.current.lines.find(l => l.deliveryLineNumber === lineNumber)
+            if (line) {
+              const calc = calculateLineData(updated, line.packQuantity)
+              setIssueLines(prevIssues => {
+                const newIssues = new Set(prevIssues)
+                if (calc.isModified) {
+                  newIssues.add(lineNumber)
+                } else {
+                  newIssues.delete(lineNumber)
+                }
+                return newIssues
+              })
+            }
+          }
+        })
       }
-      return true
+      return newMap
     })
-  }, [delivery, lines, searchQuery, activeTab])
+  }, [])
 
-  const issuesCount = useMemo(() => {
-    if (!delivery) return 0
-    return lines.filter(l => {
-      const orig = delivery.lines.find(ol => ol.deliveryLineNumber === l.deliveryLineNumber)
-      return orig ? checkIsIssueLine(l, orig.packQuantity) : false
-    }).length
-  }, [delivery, lines])
+  const toggleRowExpansion = useCallback((lineNumber: string) => {
+    setExpandedRows(prev => {
+      const newSet = new Set(prev)
+      if (newSet.has(lineNumber)) {
+        newSet.delete(lineNumber)
+      } else {
+        newSet.add(lineNumber)
+      }
+      return newSet
+    })
+  }, [])
 
-  const activePhotosCount = (delivery?.photos?.length || 0) + photoFiles.length - keysToDelete.length
-  const isUploadDisabled = delivery?.invoiced || submitting || activePhotosCount >= 5
-
-  // ============================================================================
-  // HANDLERS
-  // ============================================================================
-
-  const handleReceiveAllClean = (skipGuardrail = false) => {
+  const handleReceiveAllClean = useCallback((skipGuardrail = false) => {
     if (!delivery) return
 
-    // Validation: Check if receiver name is provided
     if (!receiverName.trim()) {
       setToastType("error")
       setShowToast(true)
       return
     }
 
-    // Guardrail: Check if user has manually entered discrepancies before clicking "Apply to All"
-    // Only show guardrail if not already skipped and there are manual modifications
     if (!skipGuardrail && issuesCount > 0) {
       setShowGuardrailModal(true)
       return
     }
 
-    // Generate the baseline lines immediately
-    const cleanLines = delivery.lines.map((line) => ({
-      deliveryLineNumber: line.deliveryLineNumber,
-      delivered: line.packQuantity.toString(),
-      returned: "0",
-      rejected: "0",
-      lineComment: "",
-    }))
+    // OPTIMIZATION: Batch update all lines at once
+    const newMap = new Map<string, LineFormState>()
+    const newIssueSet = new Set<string>()
 
-    // Sync the local component state layout (staged - not committed)
-    setLines(cleanLines)
+    delivery.lines.forEach((line) => {
+      const cleanLine: LineFormState = {
+        delivered: line.packQuantity.toString(),
+        returned: "0",
+        rejected: "0",
+        lineComment: ""
+      }
+      newMap.set(line.deliveryLineNumber, cleanLine)
+    })
 
-    // Show info pop-up reminder to click "Post"
+    setLinesMap(newMap)
+    setIssueLines(newIssueSet)
     setShowApplyAllReminder(true)
-  }
+  }, [delivery, receiverName, issuesCount])
 
-  const toggleRowExpansion = (lineNumber: string) => {
-    setExpandedRows(prev => ({ ...prev, [lineNumber]: !prev[lineNumber] }))
-  }
-
-  const processFormSubmission = async (overrideLines?: LineFormState[]) => {
+  const processFormSubmission = useCallback(async () => {
     if (!delivery || !token) return
     setSubmitting(true)
     setShowVarianceModal(false)
@@ -317,11 +872,9 @@ export function DeliveryReceivePage() {
       photoFiles.forEach((file) => formData.append("NewPhotoFiles", file))
       keysToDelete.forEach((key, idx) => formData.append(`KeysToDelete[${idx}]`, key))
 
-      // Use the specified line array or fall back to application component state
-      const targetLines = overrideLines || lines
-
+      // OPTIMIZATION: Use Map for O(1) lookups instead of find
       delivery.lines.forEach((line, idx) => {
-        const lineState = targetLines.find((l) => l.deliveryLineNumber === line.deliveryLineNumber)
+        const lineState = linesMap.get(line.deliveryLineNumber)
         formData.append(`Lines[${idx}].DeliveryLineNumber`, line.deliveryLineNumber)
         formData.append(`Lines[${idx}].PackQuantityDelivered`, parseFloat(lineState?.delivered || "0").toString())
         formData.append(`Lines[${idx}].PackQuantityReturned`, parseFloat(lineState?.returned || "0").toString())
@@ -358,20 +911,18 @@ export function DeliveryReceivePage() {
     } finally {
       setSubmitting(false)
     }
-  }
+  }, [delivery, token, receiverName, receiverNotes, receiveDate, latitude, longitude, photoFiles, keysToDelete, linesMap])
 
-  const handleValidationCheck = (e: React.FormEvent | null, overrideLines?: LineFormState[]) => {
+  const handleValidationCheck = useCallback((e: React.FormEvent | null) => {
     if (e) e.preventDefault()
     if (!delivery) return
 
-    // Validation: Check if receiver name is provided
     if (!receiverName.trim()) {
       setToastType("error")
       setShowToast(true)
       return
     }
 
-    // Validation: Check if receive date is provided and not in the future
     if (!receiveDate) {
       setToastType("error")
       setShowToast(true)
@@ -391,10 +942,10 @@ export function DeliveryReceivePage() {
     }
 
     const variancesList: VarianceSummary[] = []
-    const targetLines = overrideLines || lines
 
+    // OPTIMIZATION: Use Map for O(1) lookups
     delivery.lines.forEach((line) => {
-      const lineState = targetLines.find((l) => l.deliveryLineNumber === line.deliveryLineNumber)
+      const lineState = linesMap.get(line.deliveryLineNumber)
       if (!lineState) return
 
       const delivered = parseFloat(lineState.delivered) || 0
@@ -423,11 +974,11 @@ export function DeliveryReceivePage() {
       setPendingVariances(variancesList)
       setShowVarianceModal(true)
     } else {
-      processFormSubmission(targetLines)
+      processFormSubmission()
     }
-  }
+  }, [delivery, receiverName, receiveDate, linesMap, processFormSubmission])
 
-  const handleVerifyPin = async () => {
+  const handleVerifyPin = useCallback(async () => {
     if (!token || !pinInput) {
       setPinError("Verification code entry required.")
       return
@@ -453,9 +1004,9 @@ export function DeliveryReceivePage() {
     } finally {
       setVerifying(false)
     }
-  }
+  }, [token, pinInput])
 
-  const handleRequestPin = async () => {
+  const handleRequestPin = useCallback(async () => {
     if (!token) return
     setIsSending(true)
     setRequestError(null)
@@ -478,25 +1029,9 @@ export function DeliveryReceivePage() {
     } finally {
       setIsSending(false)
     }
-  }
+  }, [token])
 
-  const handleLineChange = (deliveryLineNumber: string, field: "delivered" | "returned" | "rejected" | "lineComment", value: string) => {
-    let sanitized = value
-    if (field !== "lineComment" && value !== "") {
-      if (parseFloat(value) < 0) sanitized = "0"
-    }
-    setLines((prev) => prev.map((l) => l.deliveryLineNumber === deliveryLineNumber ? { ...l, [field]: sanitized } : l))
-  }
-
-  const handleInputFocus = (deliveryLineNumber: string, field: "delivered" | "returned" | "rejected") => {
-    setLines((prev) => prev.map((l) => l.deliveryLineNumber === deliveryLineNumber && parseFloat(l[field]) === 0 ? { ...l, [field]: "" } : l))
-  }
-
-  const handleInputBlur = (deliveryLineNumber: string, field: "delivered" | "returned" | "rejected") => {
-    setLines((prev) => prev.map((l) => l.deliveryLineNumber === deliveryLineNumber && l[field].trim() === "" ? { ...l, [field]: "0" } : l))
-  }
-
-  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handlePhotoUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || [])
     const errors: string[] = []
     const valid: File[] = []
@@ -515,10 +1050,40 @@ export function DeliveryReceivePage() {
     setPhotoErrors(errors)
     setPhotoFiles((prev) => [...prev, ...valid])
     e.target.value = ""
-  }
+  }, [])
 
-  const removePhoto = (idx: number) => setPhotoFiles((prev) => prev.filter((_, i) => i !== idx))
-  const formatDate = (ds: string) => new Date(ds).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" })
+  const removePhoto = useCallback((idx: number) => {
+    setPhotoFiles((prev) => prev.filter((_, i) => i !== idx))
+  }, [])
+
+  const toggleKeyToDelete = useCallback((storageKey: string) => {
+    setKeysToDelete(prev => {
+      const newSet = new Set(prev)
+      if (newSet.has(storageKey)) {
+        newSet.delete(storageKey)
+      } else {
+        newSet.add(storageKey)
+      }
+      return Array.from(newSet)
+    })
+  }, [])
+
+  // OPTIMIZATION: Create stable callback factories for each row
+  // This prevents creating new functions on every render
+  const createRowHandlers = useCallback((lineNumber: string) => ({
+    onToggleExpansion: () => toggleRowExpansion(lineNumber),
+    onInputChange: (field: keyof LineFormState, value: string) => updateLineField(lineNumber, field, value)
+  }), [toggleRowExpansion, updateLineField])
+
+  // Cache of row handlers to avoid recreating
+  const rowHandlersCache = useRef<Map<string, ReturnType<typeof createRowHandlers>>>(new Map())
+
+  const getRowHandlers = useCallback((lineNumber: string) => {
+    if (!rowHandlersCache.current.has(lineNumber)) {
+      rowHandlersCache.current.set(lineNumber, createRowHandlers(lineNumber))
+    }
+    return rowHandlersCache.current.get(lineNumber)!
+  }, [createRowHandlers])
 
   // ============================================================================
   // RENDER STATES
@@ -563,12 +1128,10 @@ export function DeliveryReceivePage() {
   if (!isVerified) {
     return (
       <div className="min-h-screen bg-slate-50 flex flex-col">
-        {/* Top decorative bar */}
         <div className="h-1 bg-[#1d2351]" />
 
         <div className="flex-1 flex items-center justify-center p-4">
           <div className="w-full max-w-sm">
-            {/* Logo/Brand area */}
             <div className="text-center mb-8">
               <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-[#1d2351] mb-4 shadow-lg shadow-[#1d2351]/20">
                 <Lock className="w-8 h-8 text-white" />
@@ -577,7 +1140,6 @@ export function DeliveryReceivePage() {
               <p className="text-sm text-slate-500">Enter your security PIN to verify this delivery</p>
             </div>
 
-            {/* PIN Card */}
             <Card className="border-slate-200 shadow-xl bg-white">
               <CardContent className="p-6 space-y-5">
                 <div className="space-y-2">
@@ -651,7 +1213,6 @@ export function DeliveryReceivePage() {
           </div>
         </div>
 
-        {/* Footer */}
         <div className="py-4 text-center">
           <p className="text-xs text-slate-400">Enterprise Warehouse Management System</p>
         </div>
@@ -707,7 +1268,7 @@ export function DeliveryReceivePage() {
           </div>
         )}
 
-        {/* Delivery Info Card - Consolidated with all fields */}
+        {/* Delivery Info Card */}
         <Card className="border-slate-200 shadow-sm bg-white">
           <CardHeader className="px-4 py-3 border-b border-slate-100">
             <CardTitle className="text-sm font-semibold text-slate-800 flex items-center gap-2">
@@ -716,7 +1277,6 @@ export function DeliveryReceivePage() {
             </CardTitle>
           </CardHeader>
           <CardContent className="p-4 space-y-4">
-            {/* Top Row: Primary Details Split */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1">
                 <p className="text-[10px] font-medium uppercase tracking-wider text-slate-400">Delivery Number</p>
@@ -728,7 +1288,6 @@ export function DeliveryReceivePage() {
               </div>
             </div>
 
-            {/* Middle Row: Meta Parameters with a top border */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-4 border-t border-slate-100">
               <div className="space-y-1">
                 <p className="text-[10px] font-medium uppercase tracking-wider text-slate-400">Buyer PO Number</p>
@@ -750,7 +1309,6 @@ export function DeliveryReceivePage() {
               </div>
             </div>
 
-            {/* Bottom Row: Wrapped Shipping Notes container */}
             {delivery.deliveryRemarks && (
               <div className="mt-4 pt-4 border-t border-slate-100 space-y-2">
                 <p className="text-[10px] font-medium uppercase tracking-wider text-slate-400">Shipping Notes</p>
@@ -760,7 +1318,6 @@ export function DeliveryReceivePage() {
               </div>
             )}
 
-            {/* Ship To Address */}
             {delivery.shipToAddress && (
               <div className="mt-4 pt-4 border-t border-slate-100 space-y-2">
                 <p className="text-[10px] font-medium uppercase tracking-wider text-slate-400">Ship To Address</p>
@@ -772,7 +1329,7 @@ export function DeliveryReceivePage() {
           </CardContent>
         </Card>
 
-        {/* Receiver Info - Moved above Quick Actions for validation flow */}
+        {/* Receiver Info */}
         <Card className="border-slate-200 shadow-sm bg-white">
           <CardHeader className="px-4 py-3 border-b border-slate-100">
             <CardTitle className="text-sm font-semibold text-slate-800 flex items-center gap-2">
@@ -808,7 +1365,6 @@ export function DeliveryReceivePage() {
                     setReceiveDate(selectedDate)
                     setReceiveDateError(null)
 
-                    // Validate: prevent future dates
                     if (selectedDate) {
                       const today = new Date()
                       today.setHours(0, 0, 0, 0)
@@ -875,7 +1431,6 @@ export function DeliveryReceivePage() {
 
           {/* Items List */}
           <Card className="border-slate-200 shadow-sm bg-white overflow-hidden">
-            {/* Card Header with Search & Tabs */}
             <div className="p-4 border-b border-slate-100 space-y-4">
               <div className="flex items-center justify-between">
                 <CardTitle className="text-sm font-semibold text-slate-800">Line Items</CardTitle>
@@ -917,7 +1472,7 @@ export function DeliveryReceivePage() {
               </div>
             </div>
 
-            {/* Items List */}
+            {/* OPTIMIZATION: Virtual scrolling ready container - Items List */}
             <div className="divide-y divide-slate-100 max-h-[400px] overflow-y-auto">
               {filteredLines.length === 0 ? (
                 <div className="p-8 text-center">
@@ -926,139 +1481,31 @@ export function DeliveryReceivePage() {
                 </div>
               ) : (
                 filteredLines.map((line) => {
-                  const lineState = lines.find((l) => l.deliveryLineNumber === line.deliveryLineNumber)
-                  const isExpanded = !!expandedRows[line.deliveryLineNumber]
-                  const isModified = lineState ? checkIsIssueLine(lineState, line.packQuantity) : false
-                  const actualTotal = lineState
-                    ? parseFloat(lineState.delivered) + parseFloat(lineState.returned) + parseFloat(lineState.rejected)
-                    : line.packQuantity
-
-                  // Calculate variance percentage
-                  const rawVariance = actualTotal - line.packQuantity
-                  const variancePercent = line.packQuantity > 0 ? ((rawVariance / line.packQuantity) * 100).toFixed(2) : "0.00"
-                  const isOver = parseFloat(variancePercent) > 0
-                  const isShort = parseFloat(variancePercent) < 0
-                  const displayVariance = isOver ? `+${variancePercent}%` : `${variancePercent}%`
-                  const hasVariance = Math.abs(parseFloat(variancePercent)) > 0.01
+                  // OPTIMIZATION: O(1) Map lookups instead of array.find()
+                  const lineState = linesMap.get(line.deliveryLineNumber) || {
+                    delivered: line.packQuantity.toString(),
+                    returned: "0",
+                    rejected: "0",
+                    lineComment: ""
+                  }
+                  const calc = calculationsMap.get(line.deliveryLineNumber) || calculateLineData(lineState, line.packQuantity)
+                  const isExpanded = expandedRows.has(line.deliveryLineNumber)
+                  const handlers = getRowHandlers(line.deliveryLineNumber)
 
                   return (
-                    <div key={line.deliveryLineNumber} className={isModified ? "bg-red-50/30" : ""}>
-                      <button
-                        type="button"
-                        onClick={() => toggleRowExpansion(line.deliveryLineNumber)}
-                        className="w-full p-4 flex items-center gap-4 hover:bg-slate-50 transition-colors text-left"
-                      >
-                        <div className="w-10 h-10 rounded-lg bg-slate-100 flex items-center justify-center shrink-0">
-                          <Package className="w-5 h-5 text-slate-500" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-0.5">
-                            <span className="text-sm font-medium text-slate-900 truncate">{line.deliveryItemDescription}</span>
-                            {isModified && (
-                              <Badge className="bg-red-100 text-red-700 border-none text-[10px] px-1.5 h-5 font-semibold">
-                                Modified
-                              </Badge>
-                            )}
-                          </div>
-                          <div className="flex items-center gap-3 text-xs text-slate-500">
-                            <span>Delivery: <strong className="text-slate-700">{line.packQuantity} {line.packUOM}</strong></span>
-                            {line.batchNumber && (
-                              <>
-                                <span>•</span>
-                                <span>Batch: <strong className="text-slate-700">{line.batchNumber}</strong></span>
-                              </>
-                            )}
-                            {isModified && (
-                              <>
-                                <span>•</span>
-                                <span className={isModified ? "text-red-600 font-medium" : ""}>
-                                  Actual: <strong>{actualTotal} {line.packUOM}</strong>
-                                </span>
-                              </>
-                            )}
-                          </div>
-                        </div>
-                        {hasVariance && delivery.received && (
-                          <div className="shrink-0 mr-2">
-                            <Badge
-                              variant="badge"
-                              className={
-                                isShort
-                                  ? "bg-rose-100 text-rose-700 border-rose-200 text-xs font-semibold px-2 py-1"
-                                  : isOver
-                                  ? "bg-emerald-100 text-emerald-700 border-emerald-200 text-xs font-semibold px-2 py-1"
-                                  : "bg-slate-100 text-slate-500 border-slate-200 text-xs px-2 py-1"
-                              }
-                            >
-                              {displayVariance}
-                            </Badge>
-                          </div>
-                        )}
-                        <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center shrink-0">
-                          {isExpanded ? <ChevronUp className="w-4 h-4 text-slate-600" /> : <ChevronDown className="w-4 h-4 text-slate-600" />}
-                        </div>
-                      </button>
-
-                      {isExpanded && (
-                        <div className="px-4 pb-4 pt-2 bg-slate-50/50 border-t border-slate-100 animate-in slide-in-from-top-1">
-                          <div className="grid grid-cols-3 gap-3 sm:gap-4">
-                            <div className="space-y-1.5">
-                              <Label className="text-xs font-medium text-slate-600">Received</Label>
-                              <Input
-                                type="number"
-                                step="0.01"
-                                min="0"
-                                value={lineState?.delivered ?? "0"}
-                                onChange={(e) => handleLineChange(line.deliveryLineNumber, "delivered", e.target.value)}
-                                onFocus={() => handleInputFocus(line.deliveryLineNumber, "delivered")}
-                                onBlur={() => handleInputBlur(line.deliveryLineNumber, "delivered")}
-                                disabled={delivery.invoiced || submitted || submitting}
-                                className="h-10 text-sm border-slate-300 focus:border-[#1d2351] focus:ring-[#1d2351]"
-                              />
-                            </div>
-                            <div className="space-y-1.5">
-                              <Label className="text-xs font-medium text-slate-600">Returned</Label>
-                              <Input
-                                type="number"
-                                step="0.01"
-                                min="0"
-                                value={lineState?.returned ?? "0"}
-                                onChange={(e) => handleLineChange(line.deliveryLineNumber, "returned", e.target.value)}
-                                onFocus={() => handleInputFocus(line.deliveryLineNumber, "returned")}
-                                onBlur={() => handleInputBlur(line.deliveryLineNumber, "returned")}
-                                disabled={delivery.invoiced || submitted || submitting}
-                                className="h-10 text-sm border-slate-300 focus:border-[#1d2351] focus:ring-[#1d2351]"
-                              />
-                            </div>
-                            <div className="space-y-1.5">
-                              <Label className="text-xs font-medium text-slate-600">Rejected</Label>
-                              <Input
-                                type="number"
-                                step="0.01"
-                                min="0"
-                                value={lineState?.rejected ?? "0"}
-                                onChange={(e) => handleLineChange(line.deliveryLineNumber, "rejected", e.target.value)}
-                                onFocus={() => handleInputFocus(line.deliveryLineNumber, "rejected")}
-                                onBlur={() => handleInputBlur(line.deliveryLineNumber, "rejected")}
-                                disabled={delivery.invoiced || submitted || submitting}
-                                className="h-10 text-sm border-slate-300 focus:border-[#1d2351] focus:ring-[#1d2351]"
-                              />
-                            </div>
-                          </div>
-                          <div className="mt-3 space-y-1.5">
-                            <Label className="text-xs font-medium text-slate-600">Notes</Label>
-                            <Input
-                              type="text"
-                              value={lineState?.lineComment || ""}
-                              onChange={(e) => handleLineChange(line.deliveryLineNumber, "lineComment", e.target.value)}
-                              disabled={delivery.invoiced || submitted || submitting}
-                              placeholder="Add any notes about this item..."
-                              className="h-10 text-sm border-slate-300 focus:border-[#1d2351] focus:ring-[#1d2351]"
-                            />
-                          </div>
-                        </div>
-                      )}
-                    </div>
+                    <LineItemRow
+                      key={line.deliveryLineNumber}
+                      line={line}
+                      lineState={lineState}
+                      calc={calc}
+                      isExpanded={isExpanded}
+                      deliveryReceived={delivery.received}
+                      isInvoiced={delivery.invoiced}
+                      isSubmitting={submitting}
+                      isSubmitted={submitted}
+                      onToggleExpansion={handlers.onToggleExpansion}
+                      onInputChange={handlers.onInputChange}
+                    />
                   )
                 })
               )}
@@ -1134,7 +1581,7 @@ export function DeliveryReceivePage() {
                       {!delivery.invoiced && !submitted && (
                         <button
                           type="button"
-                          onClick={() => setKeysToDelete(prev => prev.includes(p.storageKey) ? prev.filter(k => k !== p.storageKey) : [...prev, p.storageKey])}
+                          onClick={() => toggleKeyToDelete(p.storageKey)}
                           disabled={submitting}
                           className={`absolute inset-0 flex items-center justify-center text-xs font-semibold uppercase transition-all ${marked
                             ? "bg-slate-900/80 text-white"
@@ -1149,14 +1596,14 @@ export function DeliveryReceivePage() {
                 })}
                 {photoFiles.map((file, idx) => (
                   <div key={`staged-${idx}`} className="relative aspect-square rounded-lg overflow-hidden border border-blue-200 bg-blue-50">
-                    <img src={URL.createObjectURL(file)} alt={file.name} className="w-full h-full object-cover" />
+                    <img src={photoUrls[idx]} alt={file.name} className="w-full h-full object-cover" />
                     <button
                       type="button"
                       onClick={() => removePhoto(idx)}
                       disabled={submitting}
                       className="absolute top-1.5 right-1.5 w-6 h-6 rounded-md bg-red-600 text-white flex items-center justify-center hover:bg-red-700 transition-colors"
                     >
-                      <Trash2 className="w-3.5 h-3.5" />
+                      <Upload className="w-3.5 h-3.5 rotate-45" />
                     </button>
                   </div>
                 ))}
@@ -1196,159 +1643,30 @@ export function DeliveryReceivePage() {
         </div>
       )}
 
-      {/* Toast Notification */}
-      {showToast && (
-        <div className="fixed top-4 right-4 z-50 animate-in slide-in-from-top-4 fade-in duration-300">
-          <div className={`bg-white border rounded-lg shadow-xl p-4 flex items-start gap-3 min-w-[300px] ${toastType === "error" ? "border-red-200" : "border-emerald-200"}`}>
-            <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${toastType === "error" ? "bg-red-100" : "bg-emerald-100"}`}>
-              {toastType === "error" ? <AlertTriangle className="w-4 h-4 text-red-600" /> : <CheckCircle className="w-4 h-4 text-emerald-600" />}
-            </div>
-            <div className="flex-1">
-              <h4 className="text-sm font-semibold text-slate-900">
-                {toastType === "error" ? "Action Required" : "Success"}
-              </h4>
-              <p className="text-xs text-slate-500 mt-0.5">
-                {toastType === "error" ? "Please correct the highlighted issues." : "Your changes have been saved."}
-              </p>
-            </div>
-            <button
-              onClick={() => setShowToast(false)}
-              className="text-slate-400 hover:text-slate-600 shrink-0"
-            >
-              ×
-            </button>
-          </div>
-        </div>
-      )}
+      {/* Toast Notification - Memoized */}
+      <ToastNotification show={showToast} type={toastType} onClose={() => setShowToast(false)} />
 
-      {/* Apply to All Info Pop-up */}
-      {showApplyAllReminder && (
-        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 animate-in slide-in-from-top-4 fade-in duration-300">
-          <div className="bg-blue-600 border border-blue-700 rounded-lg shadow-xl p-4 flex items-start gap-3 min-w-[320px]">
-            <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center shrink-0">
-              <CheckCircle className="w-4 h-4 text-white" />
-            </div>
-            <div className="flex-1">
-              <h4 className="text-sm font-semibold text-white">
-                "Apply to All" Ready
-              </h4>
-              <p className="text-xs text-blue-100 mt-0.5">
-                All items set to scheduled quantities. Click <strong>"Post Goods Receipt"</strong> at the bottom to confirm and submit.
-              </p>
-            </div>
-            <button
-              onClick={() => setShowApplyAllReminder(false)}
-              className="text-blue-200 hover:text-white shrink-0"
-            >
-              ×
-            </button>
-          </div>
-        </div>
-      )}
+      {/* Apply to All Info Pop-up - Memoized */}
+      <ApplyAllReminder show={showApplyAllReminder} onClose={() => setShowApplyAllReminder(false)} />
 
-      {/* Variance Modal */}
-      {showVarianceModal && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <Card className="w-full max-w-lg shadow-2xl bg-white">
-            <CardHeader className="p-4 border-b border-slate-100 flex items-start gap-3">
-              <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center shrink-0">
-                <AlertTriangle className="w-5 h-5 text-amber-700" />
-              </div>
-              <div className="space-y-0.5">
-                <CardTitle className="text-base font-semibold text-slate-900">Quantity Discrepancies</CardTitle>
-                <p className="text-xs text-slate-500">The following items have quantity mismatches</p>
-              </div>
-            </CardHeader>
-            <CardContent className="p-4 space-y-4">
-              <div className="max-h-[200px] overflow-y-auto divide-y divide-slate-100">
-                {pendingVariances?.map((v) => (
-                  <div key={v.lineNumber} className="py-3 flex items-start gap-3">
-                    <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center shrink-0">
-                      <Package className="w-4 h-4 text-slate-500" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-slate-900 truncate">{v.description}</p>
-                      <p className="text-xs text-slate-500 mt-0.5">{v.itemCode}</p>
-                      <div className="flex items-center gap-3 mt-1.5 text-xs">
-                        <span className="text-slate-600">Scheduled: <strong>{v.scheduled}</strong></span>
-                        <span className="text-slate-400">|</span>
-                        <span className="text-slate-600">Actual: <strong>{v.actualTotal}</strong></span>
-                        <span className={`ml-auto font-bold ${v.variancePercent.startsWith('+') ? 'text-green-600' : 'text-red-600'}`}>
-                          {v.variancePercent}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-              <div className="flex gap-3 pt-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="flex-1 h-10 border-slate-300 text-slate-700 hover:bg-slate-50"
-                  onClick={() => setShowVarianceModal(false)}
-                >
-                  Review & Edit
-                </Button>
-                <Button
-                  type="button"
-                  className="flex-1 h-10 bg-[#1d2351] hover:bg-[#2a3266] text-white"
-                  onClick={() => processFormSubmission()}
-                >
-                  Confirm & Post
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      )}
+      {/* Variance Modal - Memoized */}
+      <VarianceModal
+        show={showVarianceModal}
+        variances={pendingVariances}
+        onClose={() => setShowVarianceModal(false)}
+        onConfirm={processFormSubmission}
+      />
 
-      {/* Guardrail Modal - Warning before overwriting manual discrepancies */}
-      {showGuardrailModal && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <Card className="w-full max-w-md shadow-2xl bg-white">
-            <CardHeader className="p-4 border-b border-slate-100 flex items-start gap-3">
-              <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center shrink-0">
-                <AlertTriangle className="w-5 h-5 text-red-700" />
-              </div>
-              <div className="space-y-0.5">
-                <CardTitle className="text-base font-semibold text-slate-900">Warning: Manual Changes Detected</CardTitle>
-                <p className="text-xs text-slate-500">You have entered manual discrepancies on {issuesCount} item(s)</p>
-              </div>
-            </CardHeader>
-            <CardContent className="p-4 space-y-4">
-              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
-                <p className="text-sm text-amber-900">
-                  Clicking <strong>"Apply to All"</strong> will overwrite all your manual entries and reset all items to their scheduled quantities.
-                </p>
-              </div>
-              <p className="text-xs text-slate-600">
-                Are you sure you want to proceed? This action cannot be undone.
-              </p>
-              <div className="flex gap-3 pt-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="flex-1 h-10 border-slate-300 text-slate-700 hover:bg-slate-50"
-                  onClick={() => setShowGuardrailModal(false)}
-                >
-                  Keep Manual Changes
-                </Button>
-                <Button
-                  type="button"
-                  className="flex-1 h-10 bg-red-600 hover:bg-red-700 text-white"
-                  onClick={() => {
-                    setShowGuardrailModal(false)
-                    handleReceiveAllClean(true) // Skip guardrail on confirmation
-                  }}
-                >
-                  Overwrite & Apply
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      )}
+      {/* Guardrail Modal - Memoized */}
+      <GuardrailModal
+        show={showGuardrailModal}
+        issuesCount={issuesCount}
+        onClose={() => setShowGuardrailModal(false)}
+        onConfirm={() => {
+          setShowGuardrailModal(false)
+          handleReceiveAllClean(true)
+        }}
+      />
 
     </div>
   )

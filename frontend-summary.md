@@ -6,6 +6,20 @@ The frontend is a modern **React 19** application built with **TypeScript** and 
 
 ---
 
+# Performance Optimizations
+
+## React Performance Best Practices Applied
+
+### DeliveryReceivePage (`/receive/:token`)
+- **Component Extraction**: Modals and LineItemRow extracted as memoized sub-components
+- **useCallback Hooks**: Event handlers wrapped for stable references
+- **useMemo Hooks**: Expensive calculations memoized (lineCalculations, photoUrls)
+- **Search Debouncing**: 200ms debounce to reduce filter recalculations
+- **Lazy Rendering**: Modals only render when visible
+- **Photo URL Memoization**: Object URLs created once and reused
+
+---
+
 # Tech Stack
 
 | Technology | Version | Purpose |
@@ -415,6 +429,16 @@ Pending Delivery → Fully Received → Invoiced
 - Clean, minimal design
 
 ## Public Delivery Receive (`/receive/:token`)
+
+### Performance Optimizations (Latest)
+The DeliveryReceivePage component has been optimized with:
+- **Component Extraction**: Modals (ToastNotification, ApplyAllReminder, VarianceModal, GuardrailModal) and LineItemRow extracted as memoized sub-components
+- **useCallback Hooks**: All event handlers (handleLineChange, toggleRowExpansion, handlePhotoUpload, removePhoto, etc.) wrapped in useCallback for stable references
+- **useMemo Hooks**: Expensive calculations memoized (lineCalculations Map, photoUrls, activePhotosCount, issuesCount)
+- **Search Debouncing**: 200ms debounce on search input to reduce filteredLines recalculations
+- **Lazy Modal Rendering**: Modals only render when `show` prop is true
+- **Photo URL Memoization**: Object URLs created once and reused, cleaned up on unmount
+- **Reduced Re-renders**: LineItemRow uses React.memo to prevent unnecessary re-renders of individual rows
 
 ### Features
 - **Public access** via delivery token
@@ -970,9 +994,25 @@ npm run lint      # Run ESLint
 # Performance Considerations
 
 ## Optimization Techniques
-- **Memoization:** `useMemo` for filtered/sorted data
-- **Stable References:** `useMemo` for API object
-- **Pagination:** Large datasets paginated client-side (10 items per page)
+
+### Large Dataset Optimizations (DeliveryReceivePage - 5,000+ items)
+- **Map-based State Management**: `Map<string, LineFormState>` replaces arrays for O(1) lookups
+- **Set-based Issue Tracking**: `Set<string>` for O(1) issue checking
+- **Uncontrolled Input Pattern**: Each LineItemRow manages local state, preventing parent re-renders on typing
+- **useDeferredValue**: Search input uses deferred value to prioritize typing responsiveness
+- **useTransition API**: Non-critical UI updates (issue tracking) use transitions for smooth typing
+- **Custom React.memo Comparison**: `areLineItemRowPropsEqual` prevents unnecessary row re-renders
+- **Lazy Render Expansion**: Expanded content only renders when `isExpanded={true}`
+- **Row Handlers Cache**: Ref-based Map prevents creating new callbacks on every render
+- **Early Return Optimization**: Filtered list returns original array when no search is active
+
+### General Optimizations
+- **Memoization:** `useMemo` for filtered/sorted data and expensive calculations
+- **Stable References:** `useMemo` for API objects and computed values
+- **Component Memoization:** `React.memo` for LineItemRow and modal components
+- **useCallback Hooks:** Event handlers wrapped to prevent unnecessary re-renders
+- **Lazy Rendering:** Modals and toasts only render when visible
+- **Resource Cleanup:** Proper cleanup of object URLs and timers
 - **Efficient filtering:** Multiple filter conditions combined in single pass
 
 ## Data Fetching Patterns
