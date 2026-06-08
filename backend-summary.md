@@ -1322,27 +1322,30 @@ Authorization: Bearer {token}
 }
 ```
 
-### On-Premise Configuration (New - WP2)
+### On-Premise Configuration (New - WP2 - Corrected)
 ```json
 "Peruri": {
-  "BackendStg": "https://backend.peruri.co.id",
-  "Stampv2Stg": "https://stampv2.peruri.co.id",
+  "BackendStg": "https://backendservicestg.e-meterai.co.id",
+  "Stampv2Stg": "https://stampv2stg.e-meterai.co.id",
   "InventoryStg": "https://inventory.peruri.co.id",
   "User": "${PERIURI_USER}",
   "Password": "${PERIURI_PASSWORD}",
-  "KeyStamp": "http://localhost:8081",
+  "KeyStamp": "http://localhost:9999",
   "SharedFolder": "/sharefolder",
   "TokenExpiryBufferMinutes": 5
 }
 ```
 
-**Properties:**
+**Properties (Corrected - WP2):**
 - `BackendStg`: Peruri backend staging URL for user authentication
+  - Full endpoint: `POST https://backendservicestg.e-meterai.co.id/api/users/login`
 - `Stampv2Stg`: Peruri stamp v2 staging URL for e-meterai allotment
+  - Full endpoint: `POST https://stampv2stg.e-meterai.co.id/chanel/stampv2`
 - `InventoryStg`: Peruri inventory staging URL for inventory management
 - `User`: Peruri service account username
 - `Password`: Peruri service account password
 - `KeyStamp`: KeyStamp Docker adapter URL for on-premise PDF signing
+  - Full endpoint: `POST http://localhost:9999/adapter/pdfsigning/rest/docSigningZ`
 - `SharedFolder`: Shared folder path for Docker volume
 - `TokenExpiryBufferMinutes`: Token expiry buffer in minutes
 
@@ -1353,16 +1356,19 @@ Authorization: Bearer {token}
 4. Peruri returns serial number and stamp coordinates
 5. Stamped PDF is stored and linked to invoice
 
-### On-Premise Stamping Flow (New - WP2)
+### On-Premise Stamping Flow (New - WP2 - Corrected)
 1. Upload invoice printout via `/api/invoices/{id}/upload-printout`
 2. Call `/api/invoices/by-sap-number/{invoiceNumber}/stamp` to initiate stamping
 3. System authenticates with Peruri backend to get JWT token (cached)
+   - Endpoint: `POST https://backendservicestg.e-meterai.co.id/api/users/login`
 4. System writes PDF to shared folder: `/sharefolder/UNSIGNED/{invoiceNumber}.pdf`
 5. System calls Peruri Stamp v2 API with JWT token to get:
    - Serial Number (`result.sn`)
    - QR Code image (Base64 `result.filenameQR`)
+   - Endpoint: `POST https://stampv2stg.e-meterai.co.id/chanel/stampv2`
 6. System decodes QR code and saves to: `/sharefolder/STAMP/{invoiceNumber}_qr.png`
 7. System calls KeyStamp Docker adapter with signing coordinates
+   - Endpoint: `POST http://localhost:9999/adapter/pdfsigning/rest/docSigningZ`
 8. Docker adapter stamps the PDF and saves to: `/sharefolder/SIGNED/stamped_{invoiceNumber}.pdf`
 9. System reads signed PDF and uploads to MinIO
 10. System cleans up transient files
