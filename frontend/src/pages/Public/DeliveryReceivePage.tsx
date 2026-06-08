@@ -95,8 +95,10 @@ interface LineItemRowProps {
 
 interface ToastNotificationProps {
   show: boolean
-  type: "success" | "error"
+  type: "success" | "error" | "info"
   onClose: () => void
+  title?: string
+  message?: string
 }
 
 interface ApplyAllReminderProps {
@@ -131,7 +133,7 @@ const MAX_FILE_SIZE = 5 * 1024 * 1024
 
 const formatDate = (ds: string) => new Date(ds).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" })
 
-const calculateLineData = (lineState: LineFormState, packQuantity: number): LineCalculation => {
+const calculateLineData = (lineState: LineFormState, packQuantity: number, deliveryReceived: boolean): LineCalculation => {
   const delivered = parseFloat(lineState.delivered) || 0
   const returned = parseFloat(lineState.returned) || 0
   const rejected = parseFloat(lineState.rejected) || 0
@@ -143,7 +145,11 @@ const calculateLineData = (lineState: LineFormState, packQuantity: number): Line
   const isShort = parseFloat(variancePercent) < 0
   const displayVariance = isOver ? `+${variancePercent}%` : `${variancePercent}%`
   const hasVariance = Math.abs(parseFloat(variancePercent)) > 0.01
-  const isModified = returned > 0 || rejected > 0 || totalActual !== packQuantity || lineState.lineComment.trim() !== ""
+  // A line is only considered "modified" if user changed values away from initial baseline
+  // Initial baseline: when not received, all values start at 0 (pristine state)
+  const isModified = deliveryReceived
+    ? (returned > 0 || rejected > 0 || totalActual !== packQuantity || lineState.lineComment.trim() !== "")
+    : (delivered > 0 || returned > 0 || rejected > 0 || lineState.lineComment.trim() !== "")
 
   return {
     actualTotal: totalActual,
@@ -354,24 +360,65 @@ const LineItemRow = memo(({
 
 LineItemRow.displayName = "LineItemRow"
 
-const ToastNotification = memo(({ show, type, onClose }: ToastNotificationProps) => {
+const ToastNotification = memo(({ show, type, onClose, title, message }: ToastNotificationProps) => {
   if (!show) return null
+
+  const defaultTitles = {
+    success: "Success",
+    error: "Action Required",
+    info: "Information"
+  }
+
+  const defaultMessages = {
+    success: "Your changes have been saved.",
+    error: "Please correct the highlighted issues.",
+    info: ""
+  }
+
+  const displayTitle = title ?? defaultTitles[type]
+  const displayMessage = message ?? defaultMessages[type]
+
+  const typeStyles = {
+    success: {
+      border: "border-emerald-200",
+      bg: "bg-emerald-100",
+      iconColor: "text-emerald-600"
+    },
+    error: {
+      border: "border-red-200",
+      bg: "bg-red-100",
+      iconColor: "text-red-600"
+    },
+    info: {
+      border: "border-blue-200",
+      bg: "bg-blue-100",
+      iconColor: "text-blue-600"
+    }
+  }
+
+  const styles = typeStyles[type]
 
   return (
     <div className="fixed top-4 right-4 z-50 animate-in slide-in-from-top-4 fade-in duration-300">
-      <div className={`bg-white border rounded-lg shadow-xl p-4 flex items-start gap-3 min-w-[300px] ${type === "error" ? "border-red-200" : "border-emerald-200"}`}>
-        <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${type === "error" ? "bg-red-100" : "bg-emerald-100"}`}>
-          {type === "error" ? <AlertTriangle className="w-4 h-4 text-red-600" /> : <CheckCircle className="w-4 h-4 text-emerald-600" />}
+      <div className={`bg-white border rounded-lg shadow-xl p-4 flex items-start gap-3 min-w-[300px] ${styles.border}`}>
+        <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${styles.bg}`}>
+          {type === "error" ? (
+            <AlertTriangle className={`w-4 h-4 ${styles.iconColor}`} />
+          ) : (
+            <CheckCircle className={`w-4 h-4 ${styles.iconColor}`} />
+          )}
         </div>
         <div className="flex-1">
           <h4 className="text-sm font-semibold text-slate-900">
-            {type === "error" ? "Action Required" : "Success"}
+            {displayTitle}
           </h4>
-          <p className="text-xs text-slate-500 mt-0.5">
-            {type === "error" ? "Please correct the highlighted issues." : "Your changes have been saved."}
-          </p>
+          {displayMessage && (
+            <p className="text-xs text-slate-500 mt-0.5">
+              {displayMessage}
+            </p>
+          )}
         </div>
-        <button onClick={onClose} className="text-slate-400 hover:text-slate-600 shrink-0">
+        <button onClick={onClose} className="text-slate-400 hover:text-slate-600 shrink-0 text-lg leading-none">
           ×
         </button>
       </div>
@@ -385,7 +432,7 @@ const ApplyAllReminder = memo(({ show, onClose }: ApplyAllReminderProps) => {
   if (!show) return null
 
   return (
-    <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 animate-in slide-in-from-top-4 fade-in duration-300">
+    <div className="fixed top-4 right-4 z-40 animate-in slide-in-from-top-4 fade-in duration-300">
       <div className="bg-white border border-blue-200 rounded-lg shadow-xl p-4 flex items-start gap-3 min-w-[320px]">
         <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center shrink-0">
           <CheckCircle className="w-4 h-4 text-blue-600" />
@@ -396,7 +443,7 @@ const ApplyAllReminder = memo(({ show, onClose }: ApplyAllReminderProps) => {
             All items set to scheduled quantities. Click <strong>"Post Goods Receipt"</strong> at the bottom to confirm and submit.
           </p>
         </div>
-        <button onClick={onClose} className="text-slate-400 hover:text-slate-600 shrink-0">
+        <button onClick={onClose} className="text-slate-400 hover:text-slate-600 shrink-0 text-lg leading-none">
           ×
         </button>
       </div>
@@ -531,7 +578,9 @@ export function DeliveryReceivePage() {
 
   // UI state
   const [showToast, setShowToast] = useState(false)
-  const [toastType, setToastType] = useState<"success" | "error">("success")
+  const [toastType, setToastType] = useState<"success" | "error" | "info">("success")
+  const [toastTitle, setToastTitle] = useState<string | undefined>(undefined)
+  const [toastMessage, setToastMessage] = useState<string | undefined>(undefined)
 
   // Form state
   const [receiverName, setReceiverName] = useState("")
@@ -605,7 +654,7 @@ export function DeliveryReceivePage() {
       const lineState = linesMap.get(line.deliveryLineNumber)
       if (!lineState) return
 
-      calcMap.set(line.deliveryLineNumber, calculateLineData(lineState, line.packQuantity))
+      calcMap.set(line.deliveryLineNumber, calculateLineData(lineState, line.packQuantity, delivery.received))
     })
 
     return calcMap
@@ -704,7 +753,7 @@ export function DeliveryReceivePage() {
 
       delivery.lines.forEach((line) => {
         const lineState: LineFormState = {
-          delivered: line.packQuantityDelivered.toString() === "0" ? line.packQuantity.toString() : line.packQuantityDelivered.toString(),
+          delivered: !delivery.received ? "0" : (line.packQuantityDelivered.toString() === "0" ? line.packQuantity.toString() : line.packQuantityDelivered.toString()),
           returned: line.packQuantityReturned.toString(),
           rejected: line.packQuantityRejected.toString(),
           lineComment: line.lineComment || ""
@@ -712,7 +761,7 @@ export function DeliveryReceivePage() {
         newMap.set(line.deliveryLineNumber, lineState)
 
         // Check if it's an issue line
-        const calc = calculateLineData(lineState, line.packQuantity)
+        const calc = calculateLineData(lineState, line.packQuantity, delivery.received)
         if (calc.isModified) {
           newIssueSet.add(line.deliveryLineNumber)
         }
@@ -793,7 +842,7 @@ export function DeliveryReceivePage() {
           if (deliveryRef.current) {
             const line = deliveryRef.current.lines.find(l => l.deliveryLineNumber === lineNumber)
             if (line) {
-              const calc = calculateLineData(updated, line.packQuantity)
+              const calc = calculateLineData(updated, line.packQuantity, deliveryRef.current?.received || false)
               setIssueLines(prevIssues => {
                 const newIssues = new Set(prevIssues)
                 if (calc.isModified) {
@@ -903,6 +952,8 @@ export function DeliveryReceivePage() {
 
       setSubmitted(true)
       setToastType("success")
+      setToastTitle("Receipt Posted Successfully")
+      setToastMessage("Warehouse inventory registers have been updated.")
       setShowToast(true)
       setKeysToDelete([])
       setPhotoFiles([])
@@ -1255,19 +1306,6 @@ export function DeliveryReceivePage() {
           </div>
         )}
 
-        {/* Success alert */}
-        {submitted && (
-          <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4 flex items-start gap-3">
-            <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center shrink-0">
-              <CheckCircle className="w-4 h-4 text-emerald-700" />
-            </div>
-            <div>
-              <h3 className="text-sm font-semibold text-emerald-900">Receipt Posted Successfully</h3>
-              <p className="text-xs text-emerald-700 mt-0.5">Warehouse inventory registers have been updated.</p>
-            </div>
-          </div>
-        )}
-
         {/* Delivery Info Card */}
         <Card className="border-slate-200 shadow-sm bg-white">
           <CardHeader className="px-4 py-3 border-b border-slate-100">
@@ -1488,7 +1526,7 @@ export function DeliveryReceivePage() {
                     rejected: "0",
                     lineComment: ""
                   }
-                  const calc = calculationsMap.get(line.deliveryLineNumber) || calculateLineData(lineState, line.packQuantity)
+                  const calc = calculationsMap.get(line.deliveryLineNumber) || calculateLineData(lineState, line.packQuantity, delivery.received)
                   const isExpanded = expandedRows.has(line.deliveryLineNumber)
                   const handlers = getRowHandlers(line.deliveryLineNumber)
 
@@ -1644,7 +1682,17 @@ export function DeliveryReceivePage() {
       )}
 
       {/* Toast Notification - Memoized */}
-      <ToastNotification show={showToast} type={toastType} onClose={() => setShowToast(false)} />
+      <ToastNotification
+        show={showToast}
+        type={toastType}
+        title={toastTitle}
+        message={toastMessage}
+        onClose={() => {
+          setShowToast(false)
+          setToastTitle(undefined)
+          setToastMessage(undefined)
+        }}
+      />
 
       {/* Apply to All Info Pop-up - Memoized */}
       <ApplyAllReminder show={showApplyAllReminder} onClose={() => setShowApplyAllReminder(false)} />
