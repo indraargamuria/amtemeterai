@@ -9,8 +9,8 @@ using System.Text.Json;
 namespace amtemeterai.Api.Services;
 
 /// <summary>
-/// Service for on-premise Peruri e-Meterai stamping operations with database caching
-/// Handles the complete flow: PDF preparation, cached stamp resolution, Peruri API calls, Docker adapter signing, and cleanup
+/// Service for on-premise Peruri e-Meterai stamping operations with MinIO storage and zero-footprint workspace
+/// Handles the complete flow: PDF preparation, cached stamp resolution from MinIO, Peruri API calls, Docker adapter signing, and cleanup
 /// </summary>
 public interface IPeruriOnPremiseStampService
 {
@@ -31,6 +31,9 @@ public interface IPeruriOnPremiseStampService
         public byte[]? StampedPdf { get; set; }
         public string? InvoiceNumber { get; set; }
         public bool UsedCache { get; set; }  // Indicates if cached stamp data was used
+        public string? QrImageStorageKey { get; set; }  // MinIO storage key for QR code
+        public int? QrImageDocumentId { get; set; }  // Document ID for QR code image
+        public string? StampedStorageKey { get; set; }  // MinIO storage key for signed PDF
     }
 
     /// <summary>
@@ -44,11 +47,13 @@ public interface IPeruriOnPremiseStampService
         public string CustomerName { get; set; } = string.Empty;
         public string CustomerNumber { get; set; } = string.Empty;
         public decimal Amount { get; set; }
+        // Invoice printout storage key for streaming
+        public string? PrintoutStorageKey { get; set; }
     }
 }
 
 /// <summary>
-/// On-premise implementation of Peruri stamping service with database caching
+/// On-premise implementation of Peruri stamping service with MinIO storage and zero-footprint workspace
 /// </summary>
 public class PeruriOnPremiseStampService : IPeruriOnPremiseStampService
 {
@@ -57,19 +62,22 @@ public class PeruriOnPremiseStampService : IPeruriOnPremiseStampService
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly ILogger<PeruriOnPremiseStampService> _logger;
     private readonly AppDbContext _dbContext;
+    private readonly IStorageService _storageService;
 
     public PeruriOnPremiseStampService(
         IOptions<PeruriOptions> options,
         IPeruriSessionService sessionService,
         IHttpClientFactory httpClientFactory,
         ILogger<PeruriOnPremiseStampService> logger,
-        AppDbContext dbContext)
+        AppDbContext dbContext,
+        IStorageService storageService)
     {
         _options = options.Value;
         _sessionService = sessionService;
         _httpClientFactory = httpClientFactory;
         _logger = logger;
         _dbContext = dbContext;
+        _storageService = storageService;
     }
 
     public async Task<IPeruriOnPremiseStampService.PeruriStampResult> StampInvoiceAsync(
@@ -92,7 +100,7 @@ public class PeruriOnPremiseStampService : IPeruriOnPremiseStampService
         string stampDir = Path.Combine(baseShareFolder, "STAMP");
         string signedDir = Path.Combine(baseShareFolder, "SIGNED");
 
-        // Guarantee directory tree initialization exists
+        // Guarantee directory tree initialization exists for Docker portability
         Directory.CreateDirectory(unsignedDir);
         Directory.CreateDirectory(stampDir);
         Directory.CreateDirectory(signedDir);
@@ -101,6 +109,9 @@ public class PeruriOnPremiseStampService : IPeruriOnPremiseStampService
         string localQrPath = Path.Combine(stampDir, $"{invoiceNumber}_qr.png");
         string localSignedPath = Path.Combine(signedDir, $"stamped_{invoiceNumber}.pdf");
 
+        // Local files for cleanup tracking
+        List<string> transientFiles = new List<string>();
+
         try
         {
             // =================================================================
@@ -108,6 +119,7 @@ public class PeruriOnPremiseStampService : IPeruriOnPremiseStampService
             // =================================================================
             _logger.LogInformation("PHASE 1: Writing unsigned PDF to {LocalPdfPath}", localPdfPath);
             await File.WriteAllBytesAsync(localPdfPath, request.PdfContent);
+            transientFiles.Add(localPdfPath);
 
             // =================================================================
             // PHASE 3: DATABASE CACHE RESOLUTION (QUOTA SAVER)
@@ -121,23 +133,38 @@ public class PeruriOnPremiseStampService : IPeruriOnPremiseStampService
             }
 
             string sn = invoice.SerialNumber ?? string.Empty;
-            string qrBase64 = invoice.QrCodeBase64 ?? string.Empty;
-            bool hasCachedStampData = !string.IsNullOrEmpty(sn) && !string.IsNullOrEmpty(qrBase64);
+            string? qrImageStorageKey = invoice.QrImageStorageKey;
+            bool hasCachedStampData = !string.IsNullOrEmpty(sn) && !string.IsNullOrEmpty(qrImageStorageKey);
 
             // Fetch session credentials upfront
             string jwtToken = await _sessionService.GetAuthTokenAsync();
 
             if (hasCachedStampData)
             {
-                _logger.LogInformation("OPTIMIZATION: Found existing cached stamp data for Invoice {InvoiceNumber}. Skipping Peruri API call.", invoiceNumber);
+                _logger.LogInformation("OPTIMIZATION: Found existing cached stamp data for Invoice {InvoiceNumber}. SN: {SerialNumber}. Skipping Peruri API call.", invoiceNumber, sn);
                 result.UsedCache = true;
+                result.SerialNumber = sn;
+                result.QrImageStorageKey = qrImageStorageKey;
 
-                // If database contains cached metadata but local folder image got cleared out, recreate it instantly
+                // If database contains cached metadata but local folder image got cleared out, pull from MinIO
                 if (!File.Exists(localQrPath))
                 {
-                    _logger.LogInformation("Restoring missing physical QR PNG file from database Base64 cache string.");
-                    byte[] qrBytes = Convert.FromBase64String(qrBase64);
-                    await File.WriteAllBytesAsync(localQrPath, qrBytes);
+                    _logger.LogInformation("Restoring missing physical QR PNG file from MinIO storage.");
+                    try
+                    {
+                        using var qrStream = await _storageService.GetFileStreamAsync(qrImageStorageKey);
+                        using var fileStream = File.Create(localQrPath);
+                        await qrStream.CopyToAsync(fileStream);
+                        transientFiles.Add(localQrPath);
+                        _logger.LogInformation("QR code restored from MinIO to local workspace.");
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "Failed to restore QR code from MinIO: {Message}", ex.Message);
+                        result.Success = false;
+                        result.ErrorMessage = $"Failed to restore QR code from MinIO: {ex.Message}";
+                        return result;
+                    }
                 }
             }
             else
@@ -150,33 +177,20 @@ public class PeruriOnPremiseStampService : IPeruriOnPremiseStampService
                 var stampClient = _httpClientFactory.CreateClient();
                 var stampUrl = $"{_options.Stampv2Stg.TrimEnd('/')}/chanel/stampv2";
 
+                // Map business fields to Peruri API contract structure
                 var stampRequest = new PeruriStampRequestDto
                 {
                     isUpload = false,
-                    namadoc = "4b", // Hardcoded standard value
-                    namafile = "INVA.pdf",
-                    nilaidoc = "10000",
-                    namejidentitas = "KTP",
-                    noidentitas = "1251038765430004",
-                    namedipungut = "Santosa",
+                    namadoc = "4b",  // Document type code for Invoice/Faktur
+                    namafile = "Invoice.pdf",
+                    nilaidoc = "10000",  // e-Meterai nominal price tier
+                    namejidentitas = "KTP",  // ID type
+                    noidentitas = "3201131104980002",  // Fallback placeholder for staging
+                    namedipungut = "IndraArgaMuria",
                     snOnly = false,
-                    nodoc = "1",
-                    tgldoc = DateTime.Today.ToString("yyyy-MM-dd") // Format: YYYY-MM-DD
+                    nodoc = "5",
+                    tgldoc = DateTime.Today.ToString("yyyy-MM-dd")  // Format: YYYY-MM-DD
                 };
-                // Map business fields to Peruri API contract structure
-                // var stampRequest = new PeruriStampRequestDto
-                // {
-                //     isUpload = false,
-                //     namadoc = "4b",  // Document type code for Invoice/Faktur
-                //     namafile = $"{invoiceNumber}.pdf",
-                //     nilaidoc = "10000",  // e-Meterai nominal price tier
-                //     namejidentitas = "KTP",  // ID type
-                //     noidentitas = !string.IsNullOrEmpty(request.CustomerNumber) ? request.CustomerNumber : "1251038765430004",  // Fallback placeholder for staging
-                //     namedipungut = !string.IsNullOrEmpty(request.CustomerName) ? request.CustomerName : "Customer Name",
-                //     snOnly = false,
-                //     nodoc = "invoiceNumber",
-                //     tgldoc = DateTime.Today.ToString("yyyy-MM-dd")  // Format: YYYY-MM-DD
-                // };
 
                 _logger.LogDebug("Peruri Stamp Request: isUpload={IsUpload}, nodoc={NoDoc}, tgldoc={TglDoc}, noidentitas={NoIdentitas}, namedipungut={NameDipungut}",
                     stampRequest.isUpload, stampRequest.nodoc, stampRequest.tgldoc, stampRequest.noidentitas, stampRequest.namedipungut);
@@ -213,7 +227,7 @@ public class PeruriOnPremiseStampService : IPeruriOnPremiseStampService
 
                 if (statusCode != "00")
                 {
-                    string message = root.TryGetProperty("message", out var msgProp) ? msgProp.GetString() : "Unknown error";
+                    string message = root.TryGetProperty("message", out var msgProp) ? (msgProp.GetString() ?? "Unknown error") : "Unknown error";
                     _logger.LogError("Peruri Stamping Error Status ({StatusCode}): {Message}", statusCode, message);
                     result.Success = false;
                     result.ErrorMessage = $"Peruri Stamping Error Status ({statusCode}): {message}";
@@ -223,7 +237,7 @@ public class PeruriOnPremiseStampService : IPeruriOnPremiseStampService
                 // Parse out returned data parameters
                 var resultData = root.GetProperty("result");
                 sn = resultData.GetProperty("sn").GetString() ?? string.Empty;
-                qrBase64 = resultData.GetProperty("image").GetString() ?? string.Empty;
+                var qrBase64 = resultData.GetProperty("image").GetString() ?? string.Empty;
 
                 if (string.IsNullOrEmpty(sn) || string.IsNullOrEmpty(qrBase64))
                 {
@@ -233,22 +247,61 @@ public class PeruriOnPremiseStampService : IPeruriOnPremiseStampService
                     return result;
                 }
 
-                // 1. Write the decoded byte file down to the local project sharefolder specimen structure
-                byte[] qrBytes = Convert.FromBase64String(qrBase64);
-                await File.WriteAllBytesAsync(localQrPath, qrBytes);
-                _logger.LogInformation("PHASE 2 Complete: Physical QR code stamp saved locally into sharefolder structure.");
+                _logger.LogInformation("PHASE 2 Complete: Received SN {SerialNumber} from Peruri API", sn);
 
-                // 2. Persist directly inside the database columns to prevent duplicate calls
-                invoice.SerialNumber = sn;
-                invoice.QrCodeBase64 = qrBase64;
-                await _dbContext.SaveChangesAsync();
-                _logger.LogInformation("PHASE 2 Complete: Serial Number and Base64 QR code saved safely to Invoice entity record.");
+                // =================================================================
+                // PHASE 5: UPLOAD QR CODE TO MINIO (Eliminate Database Bloat)
+                // =================================================================
+                _logger.LogInformation("PHASE 3: Uploading e-Meterai QR code to MinIO storage");
+
+                try
+                {
+                    // Decode Base64 to bytes
+                    byte[] qrBytes = Convert.FromBase64String(qrBase64);
+
+                    // Remove data URL prefix if present
+                    if (qrBase64.Contains(","))
+                    {
+                        qrBase64 = qrBase64.Split(',')[1];
+                        qrBytes = Convert.FromBase64String(qrBase64);
+                    }
+
+                    // Create storage key: invoices/{invoiceId}/qr/{serialNumber}.png
+                    string qrStorageKey = $"invoices/{invoiceId}/qr/{sn}.png";
+
+                    // Upload to MinIO
+                    using (var qrStream = new MemoryStream(qrBytes))
+                    {
+                        await _storageService.UploadFileAsync(qrStorageKey, qrStream, "image/png");
+                    }
+
+                    _logger.LogInformation("PHASE 3 Complete: QR code uploaded to MinIO at {StorageKey}", qrStorageKey);
+
+                    // Save storage reference to database (not the actual Base64)
+                    invoice.SerialNumber = sn;
+                    invoice.QrImageStorageKey = qrStorageKey;
+                    await _dbContext.SaveChangesAsync();
+                    _logger.LogInformation("PHASE 3 Complete: SerialNumber and QR storage key saved to database (no Base64 bloat)");
+
+                    result.QrImageStorageKey = qrStorageKey;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Failed to upload QR code to MinIO: {Message}", ex.Message);
+                    result.Success = false;
+                    result.ErrorMessage = $"Failed to upload QR code to MinIO: {ex.Message}";
+                    return result;
+                }
+
+                // Write QR locally for KeyStamp (will be cleaned up in finally block)
+                await File.WriteAllBytesAsync(localQrPath, Convert.FromBase64String(qrBase64));
+                transientFiles.Add(localQrPath);
             }
 
             // =================================================================
-            // PHASE 5: EXECUTE LOCAL KEYSTAMP CONTAINER SIGNING
+            // PHASE 6: EXECUTE LOCAL KEYSTAMP CONTAINER SIGNING
             // =================================================================
-            _logger.LogInformation("PHASE 3: Invoking KeyStamp Docker adapter at port 9999");
+            _logger.LogInformation("PHASE 4: Invoking KeyStamp Docker adapter at port 9999");
 
             var signingClient = _httpClientFactory.CreateClient();
             var signingUrl = $"{_options.KeyStamp.TrimEnd('/')}/adapter/pdfsigning/rest/docSigningZ";
@@ -256,7 +309,8 @@ public class PeruriOnPremiseStampService : IPeruriOnPremiseStampService
             var signingRequest = new KeyStampSigningRequestDto
             {
                 certificatelevel = "NOT_CERTIFIED",
-            // REMOVE '/app' from the beginning of these three lines:
+
+                // Use relative paths for Docker volume mapping
                 src = $"/sharefolder/UNSIGNED/{invoiceNumber}.pdf",
                 dest = $"/sharefolder/SIGNED/stamped_{invoiceNumber}.pdf",
                 spesimenPath = $"/sharefolder/STAMP/{invoiceNumber}_qr.png",
@@ -264,10 +318,11 @@ public class PeruriOnPremiseStampService : IPeruriOnPremiseStampService
                 refToken = sn,
                 jwToken = jwtToken,
                 visSignaturePage = 1,
-                visLLX = 237,
-                visLLY = 559,
-                visURX = 337,
-                visURY = 459,
+                // POSITIONING: Bottom-Right Corner with a 36pt Margin
+                visLLX = 459,   // Lower-Left X: 595 (total width) - 100 (specimen width) - 36 (margin)
+                visLLY = 36,    // Lower-Left Y: 36 (margin from the bottom edge)
+                visURX = 559,   // Upper-Right X: 459 (LLX) + 100 (specimen width)
+                visURY = 136,   // Upper-Right Y: 36 (LLY) + 100 (specimen height)
                 profileName = "default",
                 docpass = "",
                 location = "Jakarta",
@@ -289,12 +344,13 @@ public class PeruriOnPremiseStampService : IPeruriOnPremiseStampService
                 return result;
             }
 
-            _logger.LogInformation("PHASE 3 Complete: KeyStamp signing completed successfully");
+            _logger.LogInformation("PHASE 4 Complete: KeyStamp signing completed successfully");
 
             // =================================================================
-            // PHASE 6: READ BACK SIGNED PDF
+            // PHASE 7: READ BACK SIGNED PDF
             // =================================================================
-            _logger.LogInformation("PHASE 4: Reading signed PDF from {LocalSignedPath}", localSignedPath);
+            _logger.LogInformation("PHASE 5: Reading signed PDF from {LocalSignedPath}", localSignedPath);
+            transientFiles.Add(localSignedPath);
 
             // Wait a moment for file write to complete
             await Task.Delay(500);
@@ -308,7 +364,7 @@ public class PeruriOnPremiseStampService : IPeruriOnPremiseStampService
                 try
                 {
                     signedPdf = await File.ReadAllBytesAsync(localSignedPath);
-                    _logger.LogInformation("PHASE 4 Complete: Signed PDF read ({Size} bytes)", signedPdf.Length);
+                    _logger.LogInformation("PHASE 5 Complete: Signed PDF read ({Size} bytes)", signedPdf.Length);
                 }
                 catch (FileNotFoundException)
                 {
@@ -333,25 +389,30 @@ public class PeruriOnPremiseStampService : IPeruriOnPremiseStampService
             }
 
             // =================================================================
-            // PHASE 7: CLEANUP TRANSIENT FILES
+            // PHASE 8: UPLOAD SIGNED PDF TO MINIO
             // =================================================================
-            _logger.LogInformation("PHASE 5: Cleaning up transient files");
+            _logger.LogInformation("PHASE 6: Uploading signed PDF to MinIO storage");
 
             try
             {
-                if (File.Exists(localPdfPath)) File.Delete(localPdfPath);
-                if (File.Exists(localQrPath)) File.Delete(localQrPath);
-                if (File.Exists(localSignedPath)) File.Delete(localSignedPath);
-                _logger.LogInformation("PHASE 5 Complete: Transient files cleaned up");
+                string stampedStorageKey = $"invoices/{invoiceId}/stamped/{sn}_stamped.pdf";
+
+                using (var stampedStream = new MemoryStream(signedPdf))
+                {
+                    await _storageService.UploadFileAsync(stampedStorageKey, stampedStream, "application/pdf");
+                }
+
+                _logger.LogInformation("PHASE 6 Complete: Signed PDF uploaded to MinIO at {StorageKey}", stampedStorageKey);
+                result.StampedStorageKey = stampedStorageKey;
             }
             catch (Exception ex)
             {
-                _logger.LogWarning(ex, "Some transient files could not be deleted");
+                _logger.LogError(ex, "Failed to upload signed PDF to MinIO: {Message}", ex.Message);
+                // Continue execution even if MinIO upload fails - we have the signed PDF locally
+                _logger.LogWarning("Continuing with local signed PDF despite MinIO upload failure");
             }
 
-            // =================================================================
-            // SUCCESS
-            // =================================================================
+            // Success
             result.Success = true;
             result.SerialNumber = sn;
             result.StampedPdf = signedPdf;
@@ -364,20 +425,70 @@ public class PeruriOnPremiseStampService : IPeruriOnPremiseStampService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Stamping failed for invoice {InvoiceNumber}", invoiceNumber);
+            _logger.LogError(ex, "Stamping process encountered an error for invoice {InvoiceNumber}", invoiceNumber);
             result.Success = false;
             result.ErrorMessage = ex.Message;
+            return result;
+        }
+        finally
+        {
+            // =================================================================
+            // ZERO-FOOTPRINT TRANSIENT WORKSPACE CLEANUP
+            // =================================================================
+            _logger.LogInformation("PHASE 7: Zero-footprint cleanup - Removing all transient workspace files");
 
-            // Cleanup on error
+            foreach (var file in transientFiles)
+            {
+                try
+                {
+                    if (File.Exists(file))
+                    {
+                        File.Delete(file);
+                        _logger.LogDebug("Deleted transient file: {File}", file);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to delete transient file: {Path}", file);
+                }
+            }
+
+            // Also ensure directories are clean (remove any lingering files)
             try
             {
-                if (File.Exists(localPdfPath)) File.Delete(localPdfPath);
-                if (File.Exists(localQrPath)) File.Delete(localQrPath);
-                if (File.Exists(localSignedPath)) File.Delete(localSignedPath);
+                if (Directory.Exists(unsignedDir))
+                {
+                    var files = Directory.GetFiles(unsignedDir);
+                    foreach (var file in files)
+                    {
+                        try { File.Delete(file); }
+                        catch { }
+                    }
+                }
+                if (Directory.Exists(stampDir))
+                {
+                    var files = Directory.GetFiles(stampDir);
+                    foreach (var file in files)
+                    {
+                        try { File.Delete(file); }
+                        catch { }
+                    }
+                }
+                if (Directory.Exists(signedDir))
+                {
+                    var files = Directory.GetFiles(signedDir);
+                    foreach (var file in files)
+                    {
+                        try { File.Delete(file); }
+                        catch { }
+                    }
+                }
+                _logger.LogInformation("PHASE 7 Complete: Transient workspace cleaned (zero-footprint achieved)");
             }
-            catch { }
-
-            return result;
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Some directories could not be cleaned");
+            }
         }
     }
 }

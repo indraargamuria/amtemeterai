@@ -192,6 +192,7 @@ public class InvoicesController : ControllerBase
 
             byte[] stampedPdf;
             string serialNumber;
+            string? stampedStorageKey = null; // Will be set by on-premise service or cloud fallback
 
             // Use on-premise service if available, otherwise fall back to cloud service
             if (_peruriOnPremiseStampService != null)
@@ -226,6 +227,7 @@ public class InvoicesController : ControllerBase
 
                 stampedPdf = stampResult.StampedPdf ?? pdfBytes;
                 serialNumber = stampResult.SerialNumber ?? string.Empty;
+                stampedStorageKey = stampResult.StampedStorageKey; // Use storage key from service
 
                 _logger.LogInformation("Stamping completed. UsedCache: {UsedCache}", stampResult.UsedCache);
             }
@@ -258,10 +260,13 @@ public class InvoicesController : ControllerBase
                 serialNumber = stampingResult.SerialNumber ?? string.Empty;
             }
 
-            // Upload the stamped PDF back to MinIO
-            string stampedStorageKey = $"invoices/{invoice.InvoiceID}/stamped/{Guid.NewGuid()}_stamped.pdf";
-            using var stampedStream = new MemoryStream(stampedPdf);
-            await _storageService.UploadFileAsync(stampedStorageKey, stampedStream, "application/pdf");
+            // Upload the stamped PDF to MinIO only if not already uploaded by on-premise service
+            if (string.IsNullOrEmpty(stampedStorageKey))
+            {
+                stampedStorageKey = $"invoices/{invoice.InvoiceID}/stamped/{Guid.NewGuid()}_stamped.pdf";
+                using var stampedStream = new MemoryStream(stampedPdf);
+                await _storageService.UploadFileAsync(stampedStorageKey, stampedStream, "application/pdf");
+            }
 
             // Create document record for stamped PDF
             var stampedDocument = new Document

@@ -7,7 +7,8 @@ public enum DocumentType
 {
     DeliveryPhoto = 1,
     DeliveryPrintOut = 2,
-    InvoicePrintOut = 3
+    InvoicePrintOut = 3,
+    EmeteraiQrCode = 4  // e-Meterai QR code image for stamping
 }
 
 public class Document

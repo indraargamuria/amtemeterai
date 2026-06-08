@@ -38,10 +38,17 @@ public class Invoice
     public string? SerialNumber { get; set; }
 
     /// <summary>
-    /// Base64 encoded e-Meterai stamp image data
-    /// Cached from Peruri API to avoid redundant quota consumption
+    /// Storage key for the e-Meterai QR code image in MinIO
+    /// Format: invoices/{invoiceId}/qr/{serialNumber}.png
+    /// Replaces QrCodeBase64 to keep database lean
     /// </summary>
-    public string? QrCodeBase64 { get; set; }
+    public string? QrImageStorageKey { get; set; }
+
+    /// <summary>
+    /// Document ID reference to the QR code image stored in Documents table
+    /// Links to Document with DocumentType = Other (for e-Meterai QR code)
+    /// </summary>
+    public int? QrImageDocumentId { get; set; }
 
     // 2. The property now references the renamed enum type perfectly
     public InvoiceStampingStatus StampingStatus { get; set; } = InvoiceStampingStatus.NotStamped;
