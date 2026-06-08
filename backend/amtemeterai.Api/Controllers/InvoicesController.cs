@@ -150,7 +150,6 @@ public class InvoicesController : ControllerBase
     /// <summary>
     /// Stamp invoice by SAP invoice number (preferred method for SAP integration)
     /// Uses on-premise Peruri stamping flow if configured
-    /// </summary>
     [HttpPost("by-sap-number/{invoiceNumber}/stamp")]
     public async Task<IActionResult> StampInvoiceByNumber(string invoiceNumber)
     {
@@ -275,14 +274,17 @@ public class InvoicesController : ControllerBase
                 UploadedAt = DateTime.UtcNow
             };
 
+            // FIX PART 1: Insert Document record first to generate the DocumentID key value
             _db.Documents.Add(stampedDocument);
+            await _db.SaveChangesAsync();
 
-            // Update invoice with stamping results
+            // FIX PART 2: Assign the fully verified DocumentID, then save invoice updates
             invoice.SerialNumber = serialNumber;
             invoice.StampingStatus = Invoice.InvoiceStampingStatus.Stamped;
-            invoice.StampedDocumentId = stampedDocument.DocumentID;
+            invoice.StampedDocumentId = stampedDocument.DocumentID; 
             invoice.Status = Invoice.InvoiceStatus.SyncedToSap;
 
+            _db.Invoices.Update(invoice);
             await _db.SaveChangesAsync();
 
             _logger.LogInformation(

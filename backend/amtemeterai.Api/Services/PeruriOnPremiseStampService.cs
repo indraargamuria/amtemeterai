@@ -256,11 +256,10 @@ public class PeruriOnPremiseStampService : IPeruriOnPremiseStampService
             var signingRequest = new KeyStampSigningRequestDto
             {
                 certificatelevel = "NOT_CERTIFIED",
-
-                // Keep target paths absolute to the container volume layout (/app root bound)
-                src = $"/app/sharefolder/UNSIGNED/{invoiceNumber}.pdf",
-                dest = $"/app/sharefolder/SIGNED/stamped_{invoiceNumber}.pdf",
-                spesimenPath = $"/app/sharefolder/STAMP/{invoiceNumber}_qr.png",
+            // REMOVE '/app' from the beginning of these three lines:
+                src = $"/sharefolder/UNSIGNED/{invoiceNumber}.pdf",
+                dest = $"/sharefolder/SIGNED/stamped_{invoiceNumber}.pdf",
+                spesimenPath = $"/sharefolder/STAMP/{invoiceNumber}_qr.png",
 
                 refToken = sn,
                 jwToken = jwtToken,
