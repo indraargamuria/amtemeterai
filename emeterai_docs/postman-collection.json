@@ -1,0 +1,277 @@
+{
+  "info": {
+    "_postman_id": "ca74b6e2-9b6d-498a-812c-8f092182d092",
+    "name": "[STG Client] PERURI ON PREMISE E-METERAI API",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "On-Premise Mechanism",
+      "item": [
+        {
+          "name": "1. USER LOGIN",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const jsonData = pm.response.json();\r",
+                  "pm.environment.set(\"token\", jsonData.token);\r",
+                  "pm.environment.set(\"userId\", jsonData.result.data.login.user.id);\r",
+                  ""
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n    \"user\": \"opex_emet@yopmail.com\",\r\n    \"password\": \"Emeterai123!\"\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{backend_stg}}api/users/login",
+              "host": ["{{backend_stg}}api"],
+              "path": ["users", "login"]
+            },
+            "description": "User Login API to fetch the JWT Authorization bearer token."
+          },
+          "response": []
+        },
+        {
+          "name": "2. GENERATE SN & QR (SINGLE)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "let jsonData = pm.response.json();\r",
+                  "pm.environment.set(\"serialNumber\", jsonData.result.sn);\r",
+                  "pm.environment.set(\"fileQr\", \"/sharefolder/\" + jsonData.result.filenameQR);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{"key": "token", "value": "{{token}}", "type": "string"}]
+            },
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n    \"isUpload\": false,\r\n    \"namadoc\": \"4b\",\r\n    \"namafile\": \"{{namafile}}\",\r\n    \"nilaidoc\": \"10000\",\r\n    \"namejidentitas\": \"KTP\",\r\n    \"noidentitas\": \"1251038765430004\",\r\n    \"namedipungut\": \"Santosa\",\r\n    \"snOnly\": false,\r\n    \"nodoc\": \"25\",\r\n    \"tgldoc\": \"2022-02-20\"\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{stampv2_stg}}chanel/stampv2",
+              "host": ["{{stampv2_stg}}chanel"],
+              "path": ["stampv2"]
+            },
+            "description": "Requests a single serial number allocation and returns the Base64 QR string."
+          },
+          "response": []
+        },
+        {
+          "name": "3. GENERATE SN BATCH (BULK)",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{"key": "token", "value": "{{token}}", "type": "string"}]
+            },
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n    \"return_url\": \"https://eoptqh8aqvxplt3.m.pipedream.net\",\r\n    \"tipe\":\"10000\",\r\n    \"partial\":true,\r\n    \"document\": [\r\n        {\r\n            \"idfile\": \"doc_01\",\r\n            \"file\": \"document01.pdf\",\r\n            \"namadoc\": \"4b\",\r\n            \"nodoc\": \"1\",\r\n            \"tgldoc\": \"2022-06-04\",\r\n            \"nilaidoc\": \"150000\",\r\n            \"namejidentitas\": \"NPWP\",\r\n            \"noidentitas\": \"1251087201650004\",\r\n            \"namedipungut\": \"Santoso\"\r\n        },\r\n        {\r\n            \"idfile\": \"doc_02\",\r\n            \"file\": \"document02.pdf\",\r\n            \"namadoc\": \"2\",\r\n            \"nodoc\": \"2\",\r\n            \"tgldoc\": \"2022-06-04\",\r\n            \"nilaidoc\": \"120000\",\r\n            \"namejidentitas\": \"KTP\",\r\n            \"noidentitas\": \"1251087201650003\",\r\n            \"namedipungut\": \"Sentosa\"\r\n        }\r\n    ]\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{inventory_stg}}api/v2/serialnumber/batch",
+              "host": ["{{inventory_stg}}api"],
+              "path": ["v2", "serialnumber", "batch"]
+            },
+            "description": "Triggers an asynchronous bulk allocation request that returns output data via webhook."
+          },
+          "response": []
+        },
+        {
+          "name": "4. DOCUMENT STAMPING",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "let jsonData = pm.response.json();\r",
+                  "pm.environment.set(\"srcfileStamp\", jsonData.urlFile );"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{"key": "token", "value": "{{token}}", "type": "string"}]
+            },
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n    \"certificatelevel\": \"NOT_CERTIFIED\",\r\n    \"dest\": \"{{fileStamp}}\",\r\n    \"docpass\": \"\",\r\n    \"jwToken\": \"{{token}}\",\r\n    \"location\": \"JAKARTA\",\r\n    \"profileName\": \"emeteraicertificateSigner\",\r\n    \"reason\": \"Official Deed\",\r\n    \"refToken\": \"{{serialNumber}}\",\r\n    \"spesimenPath\": \"{{fileQr}}\",\r\n    \"src\": \"{{file}}\",\r\n    \"visLLX\": 237,\r\n    \"visLLY\": 559,\r\n    \"visURX\": 337,\r\n    \"visURY\": 459,\r\n    \"visSignaturePage\": 1\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{keystamp}}adapter/pdfsigning/rest/docSigningZ",
+              "host": ["{{keystamp}}adapter"],
+              "path": ["pdfsigning", "rest", "docSigningZ"]
+            },
+            "description": "Sends an execution command to the local Docker Sign Adapter engine to append the stamp layout into the targeted PDF coordinates."
+          },
+          "response": []
+        },
+        {
+          "name": "5. CHECK DOCUMENT TYPE",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{"key": "token", "value": "{{token}}", "type": "string"}]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{stampv2_stg}}jenisdoc",
+              "host": ["{{stampv2_stg}}jenisdoc"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "6. CHECK SERIAL NUMBER STATUS",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{"key": "token", "value": "{{token}}", "type": "string"}]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{backend_stg}}api/chanel/stamp/ext?filter=ZJ3P4LC08I0GDRGE0000B9",
+              "host": ["{{backend_stg}}api"],
+              "path": ["chanel", "stamp", "ext"],
+              "query": [
+                {
+                  "key": "filter",
+                  "value": "ZJ3P4LC08I0GDRGE0000B9"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "7. CHECK PORTAL POS BALANCE",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{"key": "token", "value": "{{token}}", "type": "string"}]
+            },
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{backend_stg}}function/saldopos",
+              "host": ["{{backend_stg}}function"],
+              "path": ["saldopos"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "8. UPDATE STAMPING METADATA",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{"key": "token", "value": "{{token}}", "type": "string"}]
+            },
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n    \"namedipungut\": \"BudiAni\",\r\n    \"namejidentitas\": \"NPWP\",\r\n    \"noidentitas\": \"3372015407840001\",\r\n    \"nilaidoc\": \"200000\",\r\n    \"tgldoc\": \"2020-06-01\",\r\n    \"nodoc\": \"SP-02\",\r\n    \"namadoc\": \"4b\"\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{stampv2_stg}}stamping/update-data/ZJ3P4LC08I0GDRGE0000B9",
+              "host": ["{{stampv2_stg}}stamping"],
+              "path": ["update-data", "ZJ3P4LC08I0GDRGE0000B9"]
+            }
+          },
+          "response": []
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "backend_stg",
+      "value": "https://backendservicestg.e-meterai.co.id/"
+    },
+    {
+      "key": "stampv2_stg",
+      "value": "https://stampv2stg.e-meterai.co.id/"
+    },
+    {
+      "key": "inventory_stg",
+      "value": "https://inventorystg.e-meterai.co.id/"
+    },
+    {
+      "key": "keystamp",
+      "value": "http://192.168.100.102:8888/"
+    },
+    {
+      "key": "token",
+      "value": ""
+    },
+    {
+      "key": "namafile",
+      "value": "invoice.pdf"
+    },
+    {
+      "key": "fileStamp",
+      "value": "/sharefolder/SIGNED/final_invoice.pdf"
+    },
+    {
+      "key": "file",
+      "value": "/sharefolder/UNSIGNED/invoice.pdf"
+    },
+    {
+      "key": "fileQr",
+      "value": "/sharefolder/STAMP/image.png"
+    }
+  ]
+}

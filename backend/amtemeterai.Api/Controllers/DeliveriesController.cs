@@ -1014,6 +1014,9 @@ public class DeliveriesController : ControllerBase
         return Ok(new { success = true, message = $"Delivery {deliveryNumber} has been successfully canceled and reason recorded." });
     }
 
+    /// <summary>
+    /// Upload delivery printout using internal delivery ID (Legacy endpoint)
+    /// </summary>
     [HttpPost("{deliveryId:int}/upload-printout")]
     [Authorize]
     public async Task<IActionResult> UploadDeliveryPrintout(int deliveryId, IFormFile file)
@@ -1027,6 +1030,37 @@ public class DeliveriesController : ControllerBase
         if (delivery == null)
             return NotFound($"Delivery with ID {deliveryId} not found.");
 
+        return await UploadDeliveryPrintoutInternal(delivery, file);
+    }
+
+    /// <summary>
+    /// Upload delivery printout using SAP-native delivery number (New endpoint)
+    /// This is the preferred method for integration with SAP systems
+    /// </summary>
+    [HttpPost("by-number/{deliveryNumber}/upload-printout")]
+    [Authorize]
+    public async Task<IActionResult> UploadDeliveryPrintoutByNumber(string deliveryNumber, IFormFile file)
+    {
+        if (string.IsNullOrWhiteSpace(deliveryNumber))
+            return BadRequest("Delivery number is required.");
+
+        if (file == null || file.Length == 0)
+            return BadRequest("File is required.");
+
+        var delivery = await _db.DeliveryHeaders
+            .FirstOrDefaultAsync(d => d.DeliveryNumber == deliveryNumber);
+
+        if (delivery == null)
+            return NotFound($"Delivery with number {deliveryNumber} not found.");
+
+        return await UploadDeliveryPrintoutInternal(delivery, file);
+    }
+
+    /// <summary>
+    /// Internal method for handling delivery printout upload
+    /// </summary>
+    private async Task<IActionResult> UploadDeliveryPrintoutInternal(DeliveryHeader delivery, IFormFile file)
+    {
         string contentType = file.ContentType.ToLowerInvariant();
         if (!contentType.StartsWith("application/pdf") &&
             !contentType.StartsWith("image/") &&
@@ -1038,7 +1072,7 @@ public class DeliveriesController : ControllerBase
         try
         {
             string fileExtension = Path.GetExtension(file.FileName);
-            string storageKey = $"deliveries/{deliveryId}/printouts/{Guid.NewGuid()}{fileExtension}";
+            string storageKey = $"deliveries/{delivery.DeliveryID}/printouts/{Guid.NewGuid()}{fileExtension}";
 
             using (var stream = file.OpenReadStream())
             {

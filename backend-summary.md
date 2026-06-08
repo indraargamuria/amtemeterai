@@ -406,6 +406,8 @@ backend/amtemeterai.Api/
 │   ├── CustomersController.cs      # Customer management
 │   ├── DeliveriesController.cs     # Delivery management
 │   ├── InvoicesController.cs        # Invoice management & e-Meterai stamping
+│   ├── SapSimulationController.cs  # Simulated SAP billing endpoint
+│   ├── TestController.cs           # Test endpoints for settlement processing
 │   └── UserManagementController.cs # RBAC & User Administration
 ├── Models/                          # Domain Models
 │   ├── ApplicationUser.cs          # Identity User extension
@@ -437,6 +439,8 @@ backend/amtemeterai.Api/
 │   ├── RequestPinDto.cs
 │   ├── CancelDeliveryDto.cs
 │   ├── SapDeliveryConfirmationDto.cs
+│   ├── SapBillingRequestDto.cs     # SAP billing simulation request/response
+│   ├── DeliverySettlementResponseDto.cs # Settlement processing response
 │   ├── GoogleGeocodeResponse.cs
 │   └── GeoLocationResult.cs
 ├── Data/                           # Database Context
@@ -976,7 +980,7 @@ Authorization: Bearer {token}
 - Clears receiver token
 - Records cancellation reason
 
-### Upload Delivery Printout
+### Upload Delivery Printout (by ID - Legacy)
 **Endpoint:** `POST /api/deliveries/{deliveryId}/upload-printout`
 
 **Authorization:** Required
@@ -993,6 +997,29 @@ Authorization: Bearer {token}
   "uploadedAt": "2025-05-20T10:30:00Z"
 }
 ```
+
+### Upload Delivery Printout (by Number - SAP Native)
+**Endpoint:** `POST /api/deliveries/by-number/{deliveryNumber}/upload-printout`
+
+**Authorization:** Required
+
+**Request:** Multipart form data with file
+
+**Response:**
+```json
+{
+  "documentId": 1,
+  "fileName": "delivery.pdf",
+  "storageKey": "deliveries/{deliveryId}/printouts/{guid}.pdf",
+  "downloadUrl": "http://localhost:8080/api/deliveries/files/download?key=...",
+  "uploadedAt": "2025-05-20T10:30:00Z"
+}
+```
+
+**Notes:**
+- Uses SAP-native business key (deliveryNumber) instead of internal database ID
+- Preferred method for SAP integration
+- Accepts PDF and image files
 
 ### Download File
 **Endpoint:** `GET /api/deliveries/files/download?key={storageKey}`
@@ -1014,6 +1041,100 @@ Authorization: Bearer {token}
   "message": "Successfully seeded 20 deliveries with 85 total lines"
 }
 ```
+
+---
+
+## SAP Simulation API
+
+### Generate Simulated Billing
+**Endpoint:** `POST /api/sap-sim/billing`
+
+**Authorization:** Required
+
+**Request Body:**
+```json
+{
+  "deliveryNumber": "DLV1001"
+}
+```
+
+**Response Body:**
+```json
+{
+  "sapInvoiceNumber": "SAP-INV-20250520123456",
+  "billingDate": "2025-05-20T10:30:00Z",
+  "amount": 1500000,
+  "currency": "IDR",
+  "customerNumber": "CUST001",
+  "customerName": "PT Maju Jaya Logistics",
+  "poNumber": "PO67890",
+  "deliveryNumber": "DLV1001"
+}
+```
+
+**Notes:**
+- Simulates the future SAP billing endpoint contract
+- Calculates invoice amount from delivery lines
+- Generates unique SAP invoice number
+- Used for development and testing until SAP endpoint is ready
+
+---
+
+## Test API (sysadmin only)
+
+### Process Delivery Settlement
+**Endpoint:** `POST /api/test/deliveries/{deliveryNumber}/process-settlement`
+
+**Authorization:** `sysadmin` role required
+
+**Process Flow:**
+1. **Step A**: Calls SAP simulation endpoint to generate invoice details
+2. **Step B**: Uploads dummy PDF as delivery printout
+3. **Step C**: Creates invoice record and marks delivery as invoiced
+
+**Response Body:**
+```json
+{
+  "success": true,
+  "message": "Settlement completed successfully. Invoice SAP-INV-20250520123456 created.",
+  "invoiceNumber": "SAP-INV-20250520123456",
+  "invoiceAmount": 1500000,
+  "billingDate": "2025-05-20T10:30:00Z",
+  "documentId": 123,
+  "storageKey": "deliveries/1/printouts/{guid}.pdf",
+  "downloadUrl": "http://localhost:8080/api/deliveries/files/download?key=...",
+  "deliveryNumber": "DLV1001"
+}
+```
+
+**Business Rules:**
+- Can only process deliveries that are not yet invoiced
+- All database operations are wrapped in a transaction
+- Creates activity logs for success/failure
+
+### Get Available Deliveries for Settlement
+**Endpoint:** `GET /api/test/deliveries/available-for-settlement`
+
+**Authorization:** `sysadmin` role required
+
+**Response Body:**
+```json
+[
+  {
+    "deliveryID": 1,
+    "deliveryNumber": "DLV1001",
+    "deliveryDate": "2025-05-20T10:00:00Z",
+    "customerCode": "CUST001",
+    "customerName": "PT Maju Jaya Logistics",
+    "plant": "B1G2",
+    "lineCount": 5
+  }
+]
+```
+
+**Notes:**
+- Returns only deliveries that are fully received and not yet invoiced
+- Useful for finding candidates for settlement processing
 
 ---
 
@@ -1573,6 +1694,8 @@ The AmtemeterAI backend is a modern, enterprise-grade ASP.NET Core application w
 - **Plant-level data security** for operational users
 - **JWT authentication** with session monitoring
 - **Real-time ERP integration** with SAP
+- **SAP billing simulation** for development/testing
+- **Delivery settlement processing** with automated invoice generation
 - **e-Meterai stamping** via Peruri PDS
 - **Document storage** via MinIO
 - **GPS tracking** with reverse geocoding

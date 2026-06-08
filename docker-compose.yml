@@ -84,6 +84,18 @@ services:
       /usr/bin/mc policy set download myminio/amtemeterai-documents;
       exit 0;
       "
+  signadapter:
+    image: registry.perurica.co.id/e-meterai/signadapter:2.0
+    container_name: signadapter
+    restart: always
+    ports:
+      - "9999:7777"
+    environment:
+      ENV: STAGING
+      TZ: Asia/Jakarta
+    volumes:
+      - ./logs:/app/logs
+      - ./sharefolder:/app/sharefolder
 volumes:
   postgres_data:
   minio_data:

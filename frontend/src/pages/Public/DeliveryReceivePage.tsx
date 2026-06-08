@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo, useCallback, memo, useTransition, startTransition, useDeferredValue } from "react"
+import { useState, useEffect, useRef, useMemo, useCallback, memo, startTransition, useDeferredValue } from "react"
 import { useParams } from "react-router-dom"
 import { Button } from "../../shared/components/ui/Button"
 import { Badge } from "../../shared/components/ui/Badge"
@@ -567,7 +567,7 @@ GuardrailModal.displayName = "GuardrailModal"
 
 export function DeliveryReceivePage() {
   const { token } = useParams<{ token: string }>()
-  const [isPending, startTransition] = useTransition()
+  // const [isPending, startTransition] = useTransition()
 
   // Core state
   const [delivery, setDelivery] = useState<DeliveryDetail | null>(null)
