@@ -177,21 +177,72 @@ public class PeruriOnPremiseStampService : IPeruriOnPremiseStampService
                 var stampClient = _httpClientFactory.CreateClient();
                 var stampUrl = $"{_options.Stampv2Stg.TrimEnd('/')}/chanel/stampv2";
 
+                // =================================================================
+                // BUSINESS RULE MAPPING: Dynamic values with safe fallbacks
+                // =================================================================
+                // nodoc: Use internal database Primary Key (InvoiceID) with fallback
+                string nodoc = invoice.InvoiceID > 0 ? invoice.InvoiceID.ToString() : "0";
+
+                // namedipungut: Use customer name as-is (current working behavior)
+                // Future enhancement: Could apply Title Case + space removal when validated
+                string namedipungut = !string.IsNullOrEmpty(request.CustomerName)
+                    ? request.CustomerName
+                    : "Customer";
+
+                // namejidentitas: NPWP for business invoices (current working value)
+                string namejidentitas = "NPWP";
+
+                // noidentitas: Use CustomerNumber with safe fallback
+                string noidentitas = !string.IsNullOrEmpty(request.CustomerNumber)
+                    ? request.CustomerNumber
+                    : "-"; // Fallback placeholder for staging
+
+                // namafile: Sanitize invoice number with fallback
+                string namafile = !string.IsNullOrEmpty(invoiceNumber)
+                    ? SanitizeFileName(invoiceNumber)
+                    : "Invoice.pdf"; // Fallback to working default
+
+                // nilaidoc: Use amount with safe fallback
+                string nilaidoc = request.Amount > 0
+                    ? request.Amount.ToString("F0")
+                    : "0"; // Fallback to working default
+
+                // tgldoc: Use invoice date or today
+                string tgldoc = invoice.InvoicedDate > DateTime.MinValue
+                    ? invoice.InvoicedDate.ToString("yyyy-MM-dd")
+                    : DateTime.Today.ToString("yyyy-MM-dd");
+
+                // // Map business fields to Peruri API contract structure
+                // var stampRequest = new PeruriStampRequestDto
+                // {
+                //     isUpload = false,
+                //     namadoc = "4b",  // Document type code for Invoice/Faktur
+                //     namafile = namafile,
+                //     nilaidoc = nilaidoc,  // e-Meterai nominal price tier from amount
+                //     namejidentitas = namejidentitas,  // NPWP for business invoices
+                //     noidentitas = noidentitas,  // Customer's tax identification number
+                //     namedipungut = namedipungut,  // Taxpayer name
+                //     snOnly = false,
+                //     nodoc = nodoc,  // Internal database ID as document bridge
+                //     tgldoc = tgldoc  // Invoice date in YYYY-MM-DD format
+                // };
+
                 // Map business fields to Peruri API contract structure
                 var stampRequest = new PeruriStampRequestDto
                 {
                     isUpload = false,
                     namadoc = "4b",  // Document type code for Invoice/Faktur
                     namafile = "Invoice.pdf",
-                    nilaidoc = "10000",  // e-Meterai nominal price tier
-                    namejidentitas = "KTP",  // ID type
-                    noidentitas = "3201131104980002",  // Fallback placeholder for staging
-                    namedipungut = "IndraArgaMuria",
+                    nilaidoc = "0",  // e-Meterai nominal price tier
+                    namejidentitas = "NPWP",  // ID type
+                    noidentitas = "3372015407840001",  // Fallback placeholder for staging
+                    namedipungut = "William",
                     snOnly = false,
-                    nodoc = "5",
+                    nodoc = "0",
                     tgldoc = DateTime.Today.ToString("yyyy-MM-dd")  // Format: YYYY-MM-DD
                 };
-
+                var debugJson = JsonSerializer.Serialize(stampRequest, new JsonSerializerOptions { WriteIndented = true });
+                _logger.LogInformation("Peruri Payload Data:\n{Json}", debugJson);
                 _logger.LogDebug("Peruri Stamp Request: isUpload={IsUpload}, nodoc={NoDoc}, tgldoc={TglDoc}, noidentitas={NoIdentitas}, namedipungut={NameDipungut}",
                     stampRequest.isUpload, stampRequest.nodoc, stampRequest.tgldoc, stampRequest.noidentitas, stampRequest.namedipungut);
 
@@ -221,6 +272,10 @@ public class PeruriOnPremiseStampService : IPeruriOnPremiseStampService
                     result.ErrorMessage = $"Critical parsing fault on stamp payload schema. Content: {responseString}";
                     return result;
                 }
+
+                // Debug: Show parsed JSON payload formatted cleanly in the terminal
+                var parsedJsonString = JsonSerializer.Serialize(jsonDoc.RootElement, new JsonSerializerOptions { WriteIndented = true });
+                _logger.LogInformation("=== RECEIVED PERURI API RESPONSE PAYLOAD ===\n{Json}\n============================================", parsedJsonString);
 
                 var root = jsonDoc.RootElement;
                 string statusCode = root.GetProperty("statusCode").GetString();
@@ -489,6 +544,35 @@ public class PeruriOnPremiseStampService : IPeruriOnPremiseStampService
             {
                 _logger.LogWarning(ex, "Some directories could not be cleaned");
             }
+        }
+    }
+
+    /// <summary>
+    /// Sanitizes invoice number for filename use with safe fallback
+    /// Removes whitespace, slashes, and special symbols, then appends .pdf
+    /// Example: "INV/2026-009" -> "INV2026009.pdf"
+    /// Falls back to "Invoice.pdf" if input is empty or invalid
+    /// </summary>
+    private static string SanitizeFileName(string invoiceNumber)
+    {
+        if (string.IsNullOrWhiteSpace(invoiceNumber))
+            return "Invoice.pdf"; // Safe fallback to working default
+
+        try
+        {
+            // Remove all special characters, keeping only alphanumeric
+            var sanitized = System.Text.RegularExpressions.Regex.Replace(invoiceNumber, @"[^a-zA-Z0-9]", "");
+
+            // Ensure we have something left after sanitization
+            if (string.IsNullOrWhiteSpace(sanitized))
+                return "Invoice.pdf";
+
+            // Append .pdf extension
+            return $"{sanitized}.pdf";
+        }
+        catch
+        {
+            return "Invoice.pdf"; // Safe fallback on any error
         }
     }
 }

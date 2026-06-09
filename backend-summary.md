@@ -1374,6 +1374,31 @@ Authorization: Bearer {token}
 10. System cleans up transient files
 11. Stamped PDF is stored and linked to invoice with serial number
 
+### Peruri API Request Business Rules (WP2 - Dynamic Mappings with Safe Fallbacks)
+
+The Peruri Stamp v2 request payload uses dynamic business mappings derived from invoice records with safe fallbacks to ensure process reliability:
+
+| Field | Source | Mapping Rule | Fallback |
+|-------|--------|--------------|----------|
+| `nodoc` | `invoice.InvoiceID` | Internal database Primary Key (string) | `"0"` |
+| `namedipungut` | `request.CustomerName` | Customer name (as-is for compatibility) | `"Customer"` |
+| `namejidentitas` | - | Hardcoded to `"NPWP"` for business invoices | `"NPWP"` |
+| `noidentitas` | `request.CustomerNumber` | Customer's Tax ID / NPWP number | `"-"` |
+| `namafile` | `invoiceNumber` | Sanitize: Remove special chars + `.pdf` | `"Invoice.pdf"` |
+| `nilaidoc` | `request.Amount` | Invoice amount (no decimals) | `"0"` |
+| `tgldoc` | `invoice.InvoicedDate` | Format: `yyyy-MM-dd` | Today's date |
+| `namadoc` | - | Hardcoded to `"4b"` (Invoice/Faktur code) | `"4b"` |
+| `isUpload` | - | Hardcoded to `false` | `false` |
+| `snOnly` | - | Hardcoded to `false` (returns SN + image) | `false` |
+
+**Implementation Notes:**
+- All dynamic mappings include safe fallbacks to prevent API failures when source data is missing
+- `namedipungut` currently uses raw customer name for compatibility (can be enhanced with Title Case + space removal in future)
+- The response parsing and QR upload code is commented out to conserve Peruri quota during development
+
+**Helper Methods:**
+- `SanitizeFileName(string invoiceNumber)`: Removes all non-alphanumeric characters using regex with `"Invoice.pdf"` fallback on error
+
 ## SAP ERP Integration
 
 ### Configuration
@@ -1780,6 +1805,20 @@ Task<string> RefreshTokenAsync();     // Forces token refresh
 ```csharp
 Task<PeruriStampResult> StampInvoiceAsync(PeruriStampRequest request);
 // Handles complete on-premise flow: PDF prep, Peruri API, Docker signing, cleanup
+
+// Business Rule Helper Method:
+string SanitizeFileName(string invoiceNumber);
+// Removes special characters with safe fallback: "INV/2026-009" → "INV2026009.pdf"
+// Falls back to "Invoice.pdf" on empty input or error
+
+// Dynamic Mappings (Peruri Stamp v2 Request) with Safe Fallbacks:
+// - nodoc → invoice.InvoiceID > 0 ? invoice.InvoiceID.ToString() : "0"
+// - namedipungut → CustomerName ?? "Customer"
+// - namejidentitas → "NPWP" (hardcoded)
+// - noidentitas → CustomerNumber ?? "-"
+// - namafile → SanitizedFileName(invoiceNumber)
+// - nilaidoc → Amount > 0 ? Amount.ToString("F0") : "0"
+// - tgldoc → InvoicedDate.ToString("yyyy-MM-dd") ?? DateTime.Today.ToString("yyyy-MM-dd")
 ```
 
 ### IEmailService Interface
