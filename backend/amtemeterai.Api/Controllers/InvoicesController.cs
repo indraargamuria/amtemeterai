@@ -52,6 +52,15 @@ public class InvoicesController : ControllerBase
         if (invoice.StampingStatus == Invoice.InvoiceStampingStatus.Stamped)
             return BadRequest($"Invoice {invoice.InvoiceNumber} is already stamped.");
 
+        // Strict workflow lifecycle validation: Delivery must be fully received before stamping
+        if (invoice.DeliveryHeader == null || !invoice.DeliveryHeader.Received)
+        {
+            _logger.LogWarning(
+                "Stamping rejected for invoice {InvoiceNumber}: Linked delivery is not fully received.",
+                invoice.InvoiceNumber);
+            return BadRequest("Invoice processing and e-Meterai stamping are unavailable until the linked Delivery Order is fully received.");
+        }
+
         // Get the latest invoice printout document
         var printoutDocument = await _db.Documents
             .Where(d => d.InvoiceID == invoice.InvoiceID && d.Type == DocumentType.InvoicePrintOut)
@@ -95,7 +104,9 @@ public class InvoicesController : ControllerBase
             }
 
             // Upload the stamped PDF back to MinIO
-            string stampedStorageKey = $"invoices/{invoice.InvoiceID}/stamped/{Guid.NewGuid()}_stamped.pdf";
+            // Standardized naming: invoices/{invoiceId}/InvoiceNumber_stamped.pdf
+            string sanitizedInvoiceNumber = SanitizeFileName(invoice.InvoiceNumber);
+            string stampedStorageKey = $"invoices/{invoice.InvoiceID}/{sanitizedInvoiceNumber}_stamped.pdf";
             using var stampedStream = new MemoryStream(pdfBytes); // In real implementation, this would be the stamped PDF from Peruri
             await _storageService.UploadFileAsync(stampedStorageKey, stampedStream, "application/pdf");
 
@@ -168,6 +179,15 @@ public class InvoicesController : ControllerBase
 
         if (invoice.StampingStatus == Invoice.InvoiceStampingStatus.Stamped)
             return BadRequest($"Invoice {invoiceNumber} is already stamped.");
+
+        // Strict workflow lifecycle validation: Delivery must be fully received before stamping
+        if (invoice.DeliveryHeader == null || !invoice.DeliveryHeader.Received)
+        {
+            _logger.LogWarning(
+                "Stamping rejected for invoice {InvoiceNumber}: Linked delivery is not fully received.",
+                invoiceNumber);
+            return BadRequest("Invoice processing and e-Meterai stamping are unavailable until the linked Delivery Order is fully received.");
+        }
 
         // Get the latest invoice printout document
         var printoutDocument = await _db.Documents
@@ -263,7 +283,9 @@ public class InvoicesController : ControllerBase
             // Upload the stamped PDF to MinIO only if not already uploaded by on-premise service
             if (string.IsNullOrEmpty(stampedStorageKey))
             {
-                stampedStorageKey = $"invoices/{invoice.InvoiceID}/stamped/{Guid.NewGuid()}_stamped.pdf";
+                // Standardized naming: invoices/{invoiceId}/InvoiceNumber_stamped.pdf
+                string sanitizedInvoiceNumber = SanitizeFileName(invoiceNumber);
+                stampedStorageKey = $"invoices/{invoice.InvoiceID}/{sanitizedInvoiceNumber}_stamped.pdf";
                 using var stampedStream = new MemoryStream(stampedPdf);
                 await _storageService.UploadFileAsync(stampedStorageKey, stampedStream, "application/pdf");
             }
@@ -414,6 +436,15 @@ public class InvoicesController : ControllerBase
 
             if (delivery.Invoiced)
                 return BadRequest($"Delivery {delivery.DeliveryNumber} is already invoiced.");
+
+            // Strict workflow lifecycle validation: Delivery must be fully received before invoice creation
+            if (!delivery.Received)
+            {
+                _logger.LogWarning(
+                    "Invoice creation rejected for delivery {DeliveryNumber}: Delivery is not fully received.",
+                    delivery.DeliveryNumber);
+                return BadRequest("Invoice processing and e-Meterai stamping are unavailable until the linked Delivery Order is fully received.");
+            }
         }
 
         var invoice = new Invoice
@@ -527,8 +558,9 @@ public class InvoicesController : ControllerBase
 
         try
         {
-            string fileExtension = Path.GetExtension(file.FileName);
-            string storageKey = $"invoices/{invoice.InvoiceID}/printouts/{Guid.NewGuid()}{fileExtension}";
+            // Standardized naming: invoices/{invoiceId}/InvoiceNumber.pdf
+            string sanitizedInvoiceNumber = SanitizeFileName(invoice.InvoiceNumber);
+            string storageKey = $"invoices/{invoice.InvoiceID}/{sanitizedInvoiceNumber}.pdf";
 
             // Upload to MinIO
             using (var stream = file.OpenReadStream())
@@ -599,5 +631,33 @@ public class InvoicesController : ControllerBase
             Invoice.InvoiceStampingStatus.Failed => "Failed",
             _ => "Unknown"
         };
+    }
+
+    /// <summary>
+    /// Sanitizes invoice number for filename use with safe fallback
+    /// Removes whitespace, slashes, and special symbols, then appends extension if needed
+    /// Example: "INV/2026-009" -> "INV2026009"
+    /// Falls back to "Invoice" if input is empty or invalid
+    /// </summary>
+    private static string SanitizeFileName(string invoiceNumber)
+    {
+        if (string.IsNullOrWhiteSpace(invoiceNumber))
+            return "Invoice"; // Safe fallback
+
+        try
+        {
+            // Remove all special characters, keeping only alphanumeric
+            var sanitized = System.Text.RegularExpressions.Regex.Replace(invoiceNumber, @"[^a-zA-Z0-9]", "");
+
+            // Ensure we have something left after sanitization
+            if (string.IsNullOrWhiteSpace(sanitized))
+                return "Invoice";
+
+            return sanitized;
+        }
+        catch
+        {
+            return "Invoice"; // Safe fallback on any error
+        }
     }
 }

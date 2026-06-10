@@ -9,8 +9,7 @@ public class DeliveryResponseDto
     public string? DeliveryRemarks { get; set; }
     public string? ShipToAddress { get; set; }
 
-    public string? OrderNumber { get; set; }
-    public string? BuyerPONumber { get; set; }
+    // Note: OrderNumber and BuyerPONumber moved to DeliveryLineResponseDto for heterogeneous routing support
 
     public Guid ReceiverToken { get; set; }
 

@@ -14,6 +14,10 @@ public class DeliveryLine
 
     public string? BatchNumber { get; set; }
 
+    // PO and Order fields moved from DeliveryHeader for heterogeneous routing support
+    public string? OrderNumber { get; set; }
+    public string? BuyerPONumber { get; set; }
+
     public decimal SalesQuantity { get; set; }
     public string SalesUOM { get; set; } = null!;
 

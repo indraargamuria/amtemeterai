@@ -23,6 +23,8 @@ interface DeliveryLine {
   deliveryItemCode: string
   deliveryItemDescription: string
   batchNumber?: string | null
+  orderNumber?: string | null
+  buyerPONumber?: string | null
   salesQuantity: number
   salesUOM: string
   packQuantity: number
@@ -31,6 +33,24 @@ interface DeliveryLine {
   packQuantityReturned: number
   packQuantityRejected: number
   lineComment?: string | null
+}
+
+// ItemGroup for batched items aggregation
+interface ItemGroup {
+  id: string // Group key
+  itemDescription: string
+  orderNumber: string | null
+  buyerPONumber: string | null
+  uom: string
+  minLineNumber: number // For sorting (100, 200, 300)
+  lines: DeliveryLine[]
+  totals: {
+    scheduled: number
+    received: number
+    returned: number
+    rejected: number
+  }
+  status: 'accepted' | 'discrepancy' | 'pending'
 }
 
 interface DeliveryDetail {
@@ -126,6 +146,106 @@ interface GuardrailModalProps {
 
 const API_URL = import.meta.env.VITE_API_URL
 const MAX_FILE_SIZE = 5 * 1024 * 1024
+const ITEMS_PER_PAGE = 10
+
+// ============================================================================
+// UOM TRANSFORMATION HELPER
+// ============================================================================
+
+const transformUOM = (uom: string): string => {
+  // Transform "ST" to "PC" for display
+  return uom === "ST" ? "PC" : uom
+}
+
+// ============================================================================
+// ITEM GROUP AGGREGATION HELPER
+// ============================================================================
+
+const createItemGroups = (lines: DeliveryLine[]): ItemGroup[] => {
+  const groupMap = new Map<string, ItemGroup>()
+
+  lines.forEach((line) => {
+    // Standalone items (no batch number) - will be handled separately
+    if (!line.batchNumber || line.batchNumber.trim() === "") {
+      return
+    }
+
+    // Create group key from: Item Description + Order Number + Buyer PO Number + UOM
+    const groupKey = `${line.deliveryItemDescription}|${line.orderNumber || ""}|${line.buyerPONumber || ""}|${line.packUOM}`
+
+    if (!groupMap.has(groupKey)) {
+      groupMap.set(groupKey, {
+        id: groupKey,
+        itemDescription: line.deliveryItemDescription,
+        orderNumber: line.orderNumber || null,
+        buyerPONumber: line.buyerPONumber || null,
+        uom: line.packUOM,
+        minLineNumber: parseInt(line.deliveryLineNumber) || 0,
+        lines: [],
+        totals: {
+          scheduled: 0,
+          received: 0,
+          returned: 0,
+          rejected: 0
+        },
+        status: 'pending'
+      })
+    }
+
+    const group = groupMap.get(groupKey)!
+    group.lines.push(line)
+    group.totals.scheduled += line.packQuantity
+
+    // Track minimum line number for sorting
+    const lineNum = parseInt(line.deliveryLineNumber) || 0
+    if (lineNum < group.minLineNumber) {
+      group.minLineNumber = lineNum
+    }
+  })
+
+  // Convert to array and assign uniform indexing coordinates (100, 200, 300)
+  const sortedGroups = Array.from(groupMap.values())
+    .sort((a, b) => a.minLineNumber - b.minLineNumber)
+
+  // Assign display indices
+  sortedGroups.forEach((group, index) => {
+    group.minLineNumber = (index + 1) * 100
+  })
+
+  return sortedGroups
+}
+
+// ============================================================================
+// STATUS CALCULATION HELPER
+// ============================================================================
+
+const calculateGroupStatus = (
+  received: number,
+  returned: number,
+  rejected: number,
+  scheduled: number
+): 'accepted' | 'discrepancy' | 'pending' => {
+  // All zeros = pending
+  if (received === 0 && returned === 0 && rejected === 0) {
+    return 'pending'
+  }
+
+  // Perfect match = accepted
+  if (received === scheduled && returned === 0 && rejected === 0) {
+    return 'accepted'
+  }
+
+  // Any discrepancy or rejects/returns = discrepancy
+  return 'discrepancy'
+}
+
+// ============================================================================
+// STANDALINE ITEMS HELPER
+// ============================================================================
+
+const getStandaloneItems = (lines: DeliveryLine[]): DeliveryLine[] => {
+  return lines.filter(line => !line.batchNumber || line.batchNumber.trim() === "")
+}
 
 // ============================================================================
 // HELPER FUNCTIONS
@@ -256,7 +376,7 @@ const LineItemRow = memo(({
             )}
           </div>
           <div className="flex items-center gap-3 text-xs text-slate-500">
-            <span>Delivery: <strong className="text-slate-700">{line.packQuantity} {line.packUOM}</strong></span>
+            <span>Quantity: <strong className="text-slate-700">{line.packQuantity} {transformUOM(line.packUOM)}</strong></span>
             {line.batchNumber && (
               <>
                 <span>•</span>
@@ -562,6 +682,291 @@ const GuardrailModal = memo(({ show, issuesCount, onClose, onConfirm }: Guardrai
 GuardrailModal.displayName = "GuardrailModal"
 
 // ============================================================================
+// ITEM GROUP ROW COMPONENT
+// ============================================================================
+
+interface ItemGroupRowProps {
+  group: ItemGroup
+  isExpanded: boolean
+  isInvoiced: boolean
+  isSubmitting: boolean
+  linesMap: Map<string, LineFormState>
+  onToggleExpansion: () => void
+  onInputChange: (lineNumber: string, field: keyof LineFormState, value: string) => void
+}
+
+const ItemGroupRow = memo(({
+  group,
+  isExpanded,
+  isInvoiced,
+  isSubmitting,
+  linesMap,
+  onToggleExpansion,
+  onInputChange
+}: ItemGroupRowProps) => {
+  // Local state for parent-level inputs
+  const [localValues, setLocalValues] = useState({
+    delivered: "0",
+    returned: "0",
+    rejected: "0"
+  })
+
+  // Calculate current totals from all child lines
+  useEffect(() => {
+    const totals = {
+      delivered: 0,
+      returned: 0,
+      rejected: 0
+    }
+
+    group.lines.forEach((line) => {
+      const lineState = linesMap.get(line.deliveryLineNumber)
+      if (lineState) {
+        totals.delivered += parseFloat(lineState.delivered) || 0
+        totals.returned += parseFloat(lineState.returned) || 0
+        totals.rejected += parseFloat(lineState.rejected) || 0
+      }
+    })
+
+    setLocalValues({
+      delivered: totals.delivered.toString(),
+      returned: totals.returned.toString(),
+      rejected: totals.rejected.toString()
+    })
+  }, [linesMap, group.lines])
+
+  const handleParentInputChange = (field: 'delivered' | 'returned' | 'rejected', value: string) => {
+    setLocalValues(prev => ({ ...prev, [field]: value }))
+
+    // Distribute the change proportionally across all child lines
+    const numValue = parseFloat(value) || 0
+    const lineCount = group.lines.length
+
+    group.lines.forEach((line) => {
+      // Distribute equally for simplicity - can be enhanced for proportional distribution
+      const distributedValue = (numValue / lineCount).toFixed(2)
+      onInputChange(line.deliveryLineNumber, field, distributedValue)
+    })
+  }
+
+  const handleBlur = (field: 'delivered' | 'returned' | 'rejected') => {
+    if (localValues[field].trim() === "" || localValues[field] === "-") {
+      setLocalValues(prev => ({ ...prev, [field]: "0" }))
+      handleParentInputChange(field, "0")
+    } else {
+      const num = parseFloat(localValues[field])
+      if (num < 0) {
+        setLocalValues(prev => ({ ...prev, [field]: "0" }))
+        handleParentInputChange(field, "0")
+      }
+    }
+  }
+
+  const groupStatus = calculateGroupStatus(
+    parseFloat(localValues.delivered) || 0,
+    parseFloat(localValues.returned) || 0,
+    parseFloat(localValues.rejected) || 0,
+    group.totals.scheduled
+  )
+
+  const statusConfig = {
+    accepted: { color: 'bg-emerald-50 border-emerald-200 text-emerald-700', label: 'Accepted' },
+    discrepancy: { color: 'bg-amber-50 border-amber-200 text-amber-700', label: 'Discrepancy' },
+    pending: { color: 'bg-slate-50 border-slate-200 text-slate-500', label: 'Pending' }
+  }
+
+  const statusStyle = statusConfig[groupStatus]
+
+  return (
+    <div className="border-b border-slate-100 last:border-b-0">
+      {/* Parent ItemGroup Row */}
+      <button
+        type="button"
+        onClick={onToggleExpansion}
+        className="w-full p-4 flex items-start gap-4 hover:bg-blue-5/30 transition-colors text-left bg-white"
+      >
+        {/* Expand/Collapse Icon */}
+        <div className="w-8 h-8 rounded-lg bg-blue-5 flex items-center justify-center shrink-0">
+          <Package className="w-4 h-4 text-[#1d2351]" />
+        </div>
+
+        {/* Main Content */}
+        <div className="flex-1 min-w-0 space-y-2">
+          {/* Header with Description */}
+          <div className="flex items-start justify-between">
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 mb-1">
+                <span className="text-sm font-semibold text-slate-900">{group.itemDescription}</span>
+                <Badge className={`text-[10px] px-2 py-0.5 border ${statusStyle.color}`}>
+                  {statusStyle.label}
+                </Badge>
+              </div>
+
+              {/* Order/PO Info */}
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500">
+                {group.orderNumber && (
+                  <span>Order: <strong className="text-slate-700">{group.orderNumber}</strong></span>
+                )}
+                {group.buyerPONumber && (
+                  <span>PO: <strong className="text-slate-700">{group.buyerPONumber}</strong></span>
+                )}
+                <span>UOM: <strong className="text-slate-700">{transformUOM(group.uom)}</strong></span>
+                <span>Batches: <strong className="text-slate-700">{group.lines.length}</strong></span>
+              </div>
+            </div>
+
+            {/* Index Badge */}
+            <div className="w-8 h-8 rounded-full bg-blue-5 flex items-center justify-center shrink-0">
+              <span className="text-xs font-bold text-[#1d2351]">{group.minLineNumber}</span>
+            </div>
+          </div>
+
+          {/* Aggregate Input Fields */}
+          <div className="grid grid-cols-3 gap-3 sm:gap-4 mt-2">
+            <div className="space-y-1">
+              <Label className="text-[10px] font-medium text-slate-500 uppercase">Quantity</Label>
+              <Input
+                type="number"
+                step="0.01"
+                min="0"
+                value={localValues.delivered}
+                onChange={(e) => handleParentInputChange('delivered', e.target.value)}
+                onBlur={() => handleBlur('delivered')}
+                disabled={isInvoiced || isSubmitting}
+                className="h-9 text-xs border-slate-300 focus:border-[#1d2351] focus:ring-[#1d2351]"
+              />
+              <div className="text-[10px] text-slate-400">of {group.totals.scheduled} {transformUOM(group.uom)}</div>
+            </div>
+            <div className="space-y-1">
+              <Label className="text-[10px] font-medium text-slate-500 uppercase">Returned</Label>
+              <Input
+                type="number"
+                step="0.01"
+                min="0"
+                value={localValues.returned}
+                onChange={(e) => handleParentInputChange('returned', e.target.value)}
+                onBlur={() => handleBlur('returned')}
+                disabled={isInvoiced || isSubmitting}
+                className="h-9 text-xs border-slate-300 focus:border-[#1d2351] focus:ring-[#1d2351]"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-[10px] font-medium text-slate-500 uppercase">Rejected</Label>
+              <Input
+                type="number"
+                step="0.01"
+                min="0"
+                value={localValues.rejected}
+                onChange={(e) => handleParentInputChange('rejected', e.target.value)}
+                onBlur={() => handleBlur('rejected')}
+                disabled={isInvoiced || isSubmitting}
+                className="h-9 text-xs border-slate-300 focus:border-[#1d2351] focus:ring-[#1d2351]"
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Expand/Collapse Icon */}
+        <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center shrink-0 ml-2">
+          {isExpanded ? <ChevronUp className="w-4 h-4 text-slate-600" /> : <ChevronDown className="w-4 h-4 text-slate-600" />}
+        </div>
+      </button>
+
+      {/* Expanded Child Rows */}
+      {isExpanded && (
+        <div className="px-4 pb-3 pt-2 bg-slate-50/50 border-t border-slate-100 animate-in slide-in-from-top-1">
+          <div className="space-y-2">
+            {group.lines.map((line) => {
+              const lineState = linesMap.get(line.deliveryLineNumber)
+              if (!lineState) return null
+
+              return (
+                <div
+                  key={line.deliveryLineNumber}
+                  className="flex items-center gap-3 pl-4 pr-2 py-2 bg-white rounded border border-slate-200 text-xs"
+                >
+                  <div className="w-6 h-6 rounded bg-slate-100 flex items-center justify-center shrink-0">
+                    <Package className="w-3 h-3 text-slate-500" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="font-medium text-slate-900 truncate">{line.deliveryItemDescription}</div>
+                    {line.batchNumber && (
+                      <div className="text-slate-500">Batch: {line.batchNumber}</div>
+                    )}
+                  </div>
+                  <div className="text-right">
+                    <span className="text-slate-600">{lineState.delivered} / {line.packQuantity} {transformUOM(line.packUOM)}</span>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+})
+
+ItemGroupRow.displayName = "ItemGroupRow"
+
+// ============================================================================
+// DASHBOARD SUMMARY CARD COMPONENT
+// ============================================================================
+
+interface DashboardSummaryProps {
+  totalItems: number
+  totalBatches: number
+  summaries: {
+    accepted: number
+    discrepancy: number
+    pending: number
+  }
+}
+
+const DashboardSummary = memo(({ totalItems, totalBatches, summaries }: DashboardSummaryProps) => {
+  return (
+    <div className="bg-gradient-to-br from-[#1d2351] to-[#2a3266] rounded-xl p-5 shadow-lg shadow-[#1d2351]/20">
+      <div className="grid grid-cols-4 gap-4 sm:gap-6">
+        {/* Total Items */}
+        <div className="text-center">
+          <div className="text-3xl font-bold text-white mb-1">{totalItems}</div>
+          <div className="text-[10px] font-medium uppercase tracking-wider text-blue-200">Total Items</div>
+        </div>
+
+        {/* Total Batches */}
+        <div className="text-center">
+          <div className="text-3xl font-bold text-white mb-1">{totalBatches}</div>
+          <div className="text-[10px] font-medium uppercase tracking-wider text-blue-200">Total Batches</div>
+        </div>
+
+        {/* Status Indicators */}
+        <div className="col-span-2 grid grid-cols-3 gap-2">
+          {/* Accepted */}
+          <div className="bg-emerald-500/20 rounded-lg p-3 text-center border border-emerald-400/30">
+            <div className="text-2xl font-bold text-emerald-300">{summaries.accepted}</div>
+            <div className="text-[10px] font-medium uppercase tracking-wider text-emerald-200">Accepted</div>
+          </div>
+
+          {/* Discrepancy */}
+          <div className="bg-amber-500/20 rounded-lg p-3 text-center border border-amber-400/30">
+            <div className="text-2xl font-bold text-amber-300">{summaries.discrepancy}</div>
+            <div className="text-[10px] font-medium uppercase tracking-wider text-amber-200">Discrepancy</div>
+          </div>
+
+          {/* Pending */}
+          <div className="bg-slate-400/20 rounded-lg p-3 text-center border border-slate-300/30">
+            <div className="text-2xl font-bold text-slate-300">{summaries.pending}</div>
+            <div className="text-[10px] font-medium uppercase tracking-wider text-slate-200">Pending</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+})
+
+DashboardSummary.displayName = "DashboardSummary"
+
+// ============================================================================
 // MAIN COMPONENT
 // ============================================================================
 
@@ -605,6 +1010,10 @@ export function DeliveryReceivePage() {
   const deferredSearchQuery = useDeferredValue(searchQuery.toLowerCase())
   const [activeTab, setActiveTab] = useState<"all" | "issues">("all")
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set())
+
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1)
 
   // PIN Verification state
   const [isVerified, setIsVerified] = useState(false)
@@ -674,37 +1083,139 @@ export function DeliveryReceivePage() {
     [delivery?.invoiced, submitting, activePhotosCount]
   )
 
-  // Memoized filtered lines - O(N) but only when search changes
-  const filteredLines = useMemo(() => {
-    if (!delivery) return []
+  // ============================================================================
+  // ITEM GROUPS & DASHBOARD SUMMARIES
+  // ============================================================================
 
-    // Early return if no search
-    if (!deferredSearchQuery && activeTab === "all") {
-      return delivery.lines
+  // Create ItemGroups from delivery lines (memoized)
+  const itemGroups = useMemo(() => {
+    if (!delivery) return []
+    return createItemGroups(delivery.lines)
+  }, [delivery?.lines])
+
+  // Get standalone items (non-batched)
+  const standaloneItems = useMemo(() => {
+    if (!delivery) return []
+    return getStandaloneItems(delivery.lines)
+  }, [delivery?.lines])
+
+  // Total root elements (ItemGroups + Standalone Items)
+  const totalRootElements = useMemo(() => {
+    return itemGroups.length + standaloneItems.length
+  }, [itemGroups.length, standaloneItems.length])
+
+  // Total concrete batches (all delivery lines)
+  const totalBatches = useMemo(() => {
+    return delivery?.lines.length || 0
+  }, [delivery?.lines.length])
+
+  // Dashboard status summaries with live calculation
+  const dashboardSummaries = useMemo(() => {
+    const summaries = {
+      accepted: 0,
+      discrepancy: 0,
+      pending: 0
     }
 
-    return delivery.lines.filter((line) => {
-      // Search filter
-      if (deferredSearchQuery) {
-        const matchesSearch =
-          line.deliveryItemCode.toLowerCase().includes(deferredSearchQuery) ||
-          line.deliveryItemDescription.toLowerCase().includes(deferredSearchQuery)
-        if (!matchesSearch) return false
-      }
+    // Count ItemGroups status
+    itemGroups.forEach((group) => {
+      const groupReceived = group.lines.reduce((sum, line) => {
+        const lineState = linesMap.get(line.deliveryLineNumber)
+        return sum + (parseFloat(lineState?.delivered || "0") || 0)
+      }, 0)
+      const groupReturned = group.lines.reduce((sum, line) => {
+        const lineState = linesMap.get(line.deliveryLineNumber)
+        return sum + (parseFloat(lineState?.returned || "0") || 0)
+      }, 0)
+      const groupRejected = group.lines.reduce((sum, line) => {
+        const lineState = linesMap.get(line.deliveryLineNumber)
+        return sum + (parseFloat(lineState?.rejected || "0") || 0)
+      }, 0)
 
-      // Issues tab filter
-      if (activeTab === "issues") {
-        return issueLines.has(line.deliveryLineNumber)
-      }
-
-      return true
+      const status = calculateGroupStatus(
+        groupReceived,
+        groupReturned,
+        groupRejected,
+        group.totals.scheduled
+      )
+      summaries[status]++
     })
-  }, [delivery, deferredSearchQuery, activeTab, issueLines])
+
+    // Count standalone items status
+    standaloneItems.forEach((item) => {
+      const lineState = linesMap.get(item.deliveryLineNumber)
+      if (!lineState) return
+
+      const delivered = parseFloat(lineState.delivered) || 0
+      const returned = parseFloat(lineState.returned) || 0
+      const rejected = parseFloat(lineState.rejected) || 0
+
+      const status = calculateGroupStatus(delivered, returned, rejected, item.packQuantity)
+      summaries[status]++
+    })
+
+    return summaries
+  }, [itemGroups, standaloneItems, linesMap])
+
+  // Enhanced search with OrderNumber, BuyerPONumber, BatchNumber
+  const searchFilter = useCallback((line: DeliveryLine | ItemGroup): boolean => {
+    if (!deferredSearchQuery) return true
+
+    const searchLower = deferredSearchQuery.toLowerCase()
+
+    // For ItemGroup
+    if ('lines' in line) {
+      const group = line as ItemGroup
+      return (
+        group.itemDescription.toLowerCase().includes(searchLower) ||
+        (group.orderNumber || "").toLowerCase().includes(searchLower) ||
+        (group.buyerPONumber || "").toLowerCase().includes(searchLower) ||
+        group.lines.some(l => (l.batchNumber || "").toLowerCase().includes(searchLower))
+      )
+    }
+
+    // For DeliveryLine
+    const l = line as DeliveryLine
+    return (
+      l.deliveryItemDescription.toLowerCase().includes(searchLower) ||
+      (l.orderNumber || "").toLowerCase().includes(searchLower) ||
+      (l.buyerPONumber || "").toLowerCase().includes(searchLower) ||
+      (l.batchNumber || "").toLowerCase().includes(searchLower)
+    )
+  }, [deferredSearchQuery])
+
+  // Filter ItemGroups and standalone items
+  const filteredItemGroups = useMemo(() => {
+    return itemGroups.filter(searchFilter)
+  }, [itemGroups, searchFilter])
+
+  const filteredStandaloneItems = useMemo(() => {
+    return standaloneItems.filter(searchFilter)
+  }, [standaloneItems, searchFilter])
+
+  // Combined filtered list with ItemGroups first, then standalone items
+  const allFilteredItems = useMemo(() => {
+    return [...filteredItemGroups, ...filteredStandaloneItems]
+  }, [filteredItemGroups, filteredStandaloneItems])
+
+  // Pagination - get current page items
+  const paginatedItems = useMemo(() => {
+    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE
+    const endIndex = startIndex + ITEMS_PER_PAGE
+    return allFilteredItems.slice(startIndex, endIndex)
+  }, [allFilteredItems, currentPage])
+
+  const totalPages = Math.ceil(allFilteredItems.length / ITEMS_PER_PAGE)
 
   // Photo URLs memoization
   const photoUrls = useMemo(() => {
     return photoFiles.map(file => URL.createObjectURL(file))
   }, [photoFiles])
+
+  // Reset pagination when search changes
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [deferredSearchQuery, activeTab])
 
   // ============================================================================
   // EFFECTS
@@ -867,6 +1378,19 @@ export function DeliveryReceivePage() {
         newSet.delete(lineNumber)
       } else {
         newSet.add(lineNumber)
+      }
+      return newSet
+    })
+  }, [])
+
+  // Toggle ItemGroup expansion
+  const toggleGroupExpansion = useCallback((groupId: string) => {
+    setExpandedGroups(prev => {
+      const newSet = new Set(prev)
+      if (newSet.has(groupId)) {
+        newSet.delete(groupId)
+      } else {
+        newSet.add(groupId)
       }
       return newSet
     })
@@ -1467,19 +1991,26 @@ export function DeliveryReceivePage() {
 
         <form id="delivery-form" onSubmit={(e) => handleValidationCheck(e)} className="space-y-5">
 
+          {/* Dashboard Summary */}
+          <DashboardSummary
+            totalItems={totalRootElements}
+            totalBatches={totalBatches}
+            summaries={dashboardSummaries}
+          />
+
           {/* Items List */}
           <Card className="border-slate-200 shadow-sm bg-white overflow-hidden">
             <div className="p-4 border-b border-slate-100 space-y-4">
               <div className="flex items-center justify-between">
                 <CardTitle className="text-sm font-semibold text-slate-800">Line Items</CardTitle>
-                <span className="text-xs text-slate-500">{filteredLines.length} of {delivery.lines.length}</span>
+                <span className="text-xs text-slate-500">{allFilteredItems.length} of {delivery.lines.length}</span>
               </div>
 
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                 <Input
                   type="text"
-                  placeholder="Search items..."
+                  placeholder="Search by Description, Order #, PO #, Batch..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="pl-10 h-10 text-sm border-slate-300 focus:border-[#1d2351] focus:ring-[#1d2351]"
@@ -1495,7 +2026,7 @@ export function DeliveryReceivePage() {
                     : "border-transparent text-slate-500 hover:text-slate-700"
                     }`}
                 >
-                  All Items ({delivery.lines.length})
+                  All Items ({allFilteredItems.length})
                 </button>
                 <button
                   type="button"
@@ -1510,44 +2041,94 @@ export function DeliveryReceivePage() {
               </div>
             </div>
 
-            {/* OPTIMIZATION: Virtual scrolling ready container - Items List */}
-            <div className="divide-y divide-slate-100 max-h-[400px] overflow-y-auto">
-              {filteredLines.length === 0 ? (
+            {/* Items List with ItemGroups and Standalone Items */}
+            <div className="divide-y divide-slate-100 max-h-[500px] overflow-y-auto">
+              {allFilteredItems.length === 0 ? (
                 <div className="p-8 text-center">
                   <Package className="w-10 h-10 text-slate-300 mx-auto mb-2" />
                   <p className="text-sm text-slate-500">No items found</p>
                 </div>
               ) : (
-                filteredLines.map((line) => {
-                  // OPTIMIZATION: O(1) Map lookups instead of array.find()
-                  const lineState = linesMap.get(line.deliveryLineNumber) || {
-                    delivered: line.packQuantity.toString(),
-                    returned: "0",
-                    rejected: "0",
-                    lineComment: ""
-                  }
-                  const calc = calculationsMap.get(line.deliveryLineNumber) || calculateLineData(lineState, line.packQuantity, delivery.received)
-                  const isExpanded = expandedRows.has(line.deliveryLineNumber)
-                  const handlers = getRowHandlers(line.deliveryLineNumber)
+                <>
+                  {paginatedItems.map((item) => {
+                    if ('lines' in item) {
+                      // ItemGroup
+                      const group = item as ItemGroup
+                      const isExpanded = expandedGroups.has(group.id)
+                      return (
+                        <ItemGroupRow
+                          key={group.id}
+                          group={group}
+                          isExpanded={isExpanded}
+                          isInvoiced={delivery.invoiced}
+                          isSubmitting={submitting}
+                          linesMap={linesMap}
+                          onToggleExpansion={() => toggleGroupExpansion(group.id)}
+                          onInputChange={(lineNumber, field, value) => updateLineField(lineNumber, field, value)}
+                        />
+                      )
+                    } else {
+                      // Standalone line
+                      const line = item as DeliveryLine
+                      const lineState = linesMap.get(line.deliveryLineNumber) || {
+                        delivered: line.packQuantity.toString(),
+                        returned: "0",
+                        rejected: "0",
+                        lineComment: ""
+                      }
+                      const calc = calculationsMap.get(line.deliveryLineNumber) || calculateLineData(lineState, line.packQuantity, delivery.received)
+                      const isExpanded = expandedRows.has(line.deliveryLineNumber)
+                      const handlers = getRowHandlers(line.deliveryLineNumber)
 
-                  return (
-                    <LineItemRow
-                      key={line.deliveryLineNumber}
-                      line={line}
-                      lineState={lineState}
-                      calc={calc}
-                      isExpanded={isExpanded}
-                      deliveryReceived={delivery.received}
-                      isInvoiced={delivery.invoiced}
-                      isSubmitting={submitting}
-                      isSubmitted={submitted}
-                      onToggleExpansion={handlers.onToggleExpansion}
-                      onInputChange={handlers.onInputChange}
-                    />
-                  )
-                })
+                      return (
+                        <LineItemRow
+                          key={line.deliveryLineNumber}
+                          line={line}
+                          lineState={lineState}
+                          calc={calc}
+                          isExpanded={isExpanded}
+                          deliveryReceived={delivery.received}
+                          isInvoiced={delivery.invoiced}
+                          isSubmitting={submitting}
+                          isSubmitted={submitted}
+                          onToggleExpansion={handlers.onToggleExpansion}
+                          onInputChange={handlers.onInputChange}
+                        />
+                      )
+                    }
+                  })}
+                </>
               )}
             </div>
+
+            {/* Pagination */}
+            {totalPages > 1 && (
+              <div className="px-4 py-3 border-t border-slate-100 flex items-center justify-between gap-4">
+                <span className="text-xs text-slate-500">
+                  Page {currentPage} of {totalPages}
+                </span>
+                <div className="flex items-center gap-1">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                    disabled={currentPage === 1}
+                    className="h-8 w-8 p-0 border-slate-300 text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+                  >
+                    <ChevronUp className="w-4 h-4" />
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                    disabled={currentPage === totalPages}
+                    className="h-8 w-8 p-0 border-slate-300 text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+                  >
+                    <ChevronDown className="w-4 h-4" />
+                  </Button>
+                </div>
+              </div>
+            )}
           </Card>
 
           {/* Photo Upload */}

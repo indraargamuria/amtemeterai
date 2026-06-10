@@ -61,12 +61,18 @@ public class SapSimulationController : ControllerBase
         // Calculate total amount from delivery lines
         // Using sales quantity * a simulated unit price for demo purposes
         decimal totalAmount = 0;
+        string? buyerPONumber = null;
         if (delivery.Lines != null && delivery.Lines.Any())
         {
             // Simulate unit price calculation: 10000 IDR per sales quantity unit
             foreach (var line in delivery.Lines)
             {
                 totalAmount += line.SalesQuantity * 10000;
+                // Get BuyerPONumber from first line (now at line level)
+                if (buyerPONumber == null && !string.IsNullOrEmpty(line.BuyerPONumber))
+                {
+                    buyerPONumber = line.BuyerPONumber;
+                }
             }
         }
 
@@ -82,7 +88,7 @@ public class SapSimulationController : ControllerBase
             Currency = "IDR",
             CustomerNumber = delivery.Customer?.CustomerCode ?? "UNKNOWN",
             CustomerName = delivery.Customer?.CustomerName ?? "Unknown Customer",
-            PoNumber = delivery.BuyerPONumber,
+            PoNumber = buyerPONumber,
             DeliveryNumber = delivery.DeliveryNumber
         };
 

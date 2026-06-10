@@ -216,9 +216,7 @@ public class DeliveriesController : ControllerBase
             DeliveryDate = delivery.DeliveryDate,
             DeliveryRemarks = delivery.DeliveryRemarks,
             ShipToAddress = delivery.ShipToAddress,
-            // Conditional: Hide OrderNumber and BuyerPONumber for warehouse role
-            OrderNumber = isWarehouseRole ? null : delivery.OrderNumber,
-            BuyerPONumber = isWarehouseRole ? null : delivery.BuyerPONumber,
+            // Note: OrderNumber and BuyerPONumber moved to line level
             // Conditional: Hide CustomerCode and CustomerName for warehouse role
             CustomerCode = isWarehouseRole ? string.Empty : (delivery.Customer?.CustomerCode ?? "UNKNOWN"),
             CustomerName = isWarehouseRole ? string.Empty : (delivery.Customer?.CustomerName ?? "UNKNOWN"),
@@ -255,6 +253,8 @@ public class DeliveriesController : ControllerBase
                 DeliveryItemCode = l.DeliveryItemCode,
                 DeliveryItemDescription = l.DeliveryItemDescription,
                 BatchNumber = l.BatchNumber,
+                OrderNumber = isWarehouseRole ? null : l.OrderNumber,
+                BuyerPONumber = isWarehouseRole ? null : l.BuyerPONumber,
                 SalesQuantity = l.SalesQuantity,
                 SalesUOM = l.SalesUOM,
                 PackQuantity = l.PackQuantity,
@@ -292,8 +292,7 @@ public class DeliveriesController : ControllerBase
             ShipToAddress = data.ShipToAddress,
             CustomerCode = data.Customer?.CustomerCode ?? "UNKNOWN",
             CustomerName = data.Customer?.CustomerName ?? "UNKNOWN",
-            OrderNumber = data.OrderNumber,
-            BuyerPONumber = data.BuyerPONumber,
+            // Note: OrderNumber and BuyerPONumber moved to line level
             ReceiverToken = data.ReceiverToken,
             ReceiverName = data.ReceiverName,
             ReceiverNotes = data.ReceiverNotes,
@@ -307,6 +306,8 @@ public class DeliveriesController : ControllerBase
                 DeliveryItemCode = l.DeliveryItemCode,
                 DeliveryItemDescription = l.DeliveryItemDescription,
                 BatchNumber = l.BatchNumber,
+                OrderNumber = l.OrderNumber,
+                BuyerPONumber = l.BuyerPONumber,
                 SalesQuantity = l.SalesQuantity,
                 SalesUOM = l.SalesUOM,
                 PackQuantity = l.PackQuantity,
@@ -369,8 +370,7 @@ public class DeliveriesController : ControllerBase
             Plant = dto.Plant,
             SalesPersonName = dto.SalesPersonName,
             SalesPersonEmail = dto.SalesPersonEmail,
-            OrderNumber = dto.OrderNumber,
-            BuyerPONumber = dto.BuyerPONumber,
+            // Note: OrderNumber and BuyerPONumber moved to line level
             Type = (DeliveryHeader.DeliveryType)dto.Type,
             ReceiverToken = Guid.NewGuid()
         };
@@ -381,6 +381,8 @@ public class DeliveriesController : ControllerBase
             DeliveryItemCode = l.DeliveryItemCode,
             DeliveryItemDescription = l.DeliveryItemDescription,
             BatchNumber = l.BatchNumber,
+            OrderNumber = l.OrderNumber,
+            BuyerPONumber = l.BuyerPONumber,
             SalesQuantity = l.SalesQuantity,
             SalesUOM = l.SalesUOM,
             PackQuantity = l.PackQuantity,
@@ -432,10 +434,9 @@ public class DeliveriesController : ControllerBase
         existing.Plant = dto.Plant;
         existing.SalesPersonName = dto.SalesPersonName;
         existing.SalesPersonEmail = dto.SalesPersonEmail;
-        existing.OrderNumber = dto.OrderNumber;
-        existing.BuyerPONumber = dto.BuyerPONumber;
+        // Note: OrderNumber and BuyerPONumber moved to line level
         existing.Type = (DeliveryHeader.DeliveryType)dto.Type;
-        
+
         _db.DeliveryLines.RemoveRange(existing.Lines);
 
         existing.Lines = dto.Lines.Select(l => new DeliveryLine
@@ -444,6 +445,8 @@ public class DeliveriesController : ControllerBase
             DeliveryItemCode = l.DeliveryItemCode,
             DeliveryItemDescription = l.DeliveryItemDescription,
             BatchNumber = l.BatchNumber,
+            OrderNumber = l.OrderNumber,
+            BuyerPONumber = l.BuyerPONumber,
             SalesQuantity = l.SalesQuantity,
             SalesUOM = l.SalesUOM,
             PackQuantity = l.PackQuantity,

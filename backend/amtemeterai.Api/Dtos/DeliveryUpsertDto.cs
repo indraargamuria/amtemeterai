@@ -10,10 +10,7 @@ public class DeliveryUpsertDto
 
     public string? ShipToAddress { get; set; }
 
-    public string? OrderNumber { get; set; }
-    public string? BuyerPONumber { get; set; }
-    
-
+    // Note: OrderNumber and BuyerPONumber moved to DeliveryLineDto for heterogeneous routing support
 
     // New Creation Context Parameters - 2026-05-19 17:41:33
     public string? Plant { get; set; }
