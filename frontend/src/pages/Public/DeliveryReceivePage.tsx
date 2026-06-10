@@ -724,12 +724,39 @@ const ItemGroupRow = memo(({
     return totals
   }, [linesMap, group.lines])
 
-  const groupStatus = calculateGroupStatus(
-    aggregatedValues.delivered,
-    aggregatedValues.returned,
-    aggregatedValues.rejected,
-    group.totals.scheduled
-  )
+  // Calculate group status based on batch-level evaluation
+  const groupStatus = useMemo(() => {
+    let allAccepted = true
+    let allPending = true
+
+    group.lines.forEach((line) => {
+      const lineState = linesMap.get(line.deliveryLineNumber)
+      if (!lineState) return
+
+      const delivered = parseFloat(lineState.delivered) || 0
+      const returned = parseFloat(lineState.returned) || 0
+      const rejected = parseFloat(lineState.rejected) || 0
+      const scheduled = line.packQuantity
+
+      // All zeros = pending
+      if (delivered === 0 && returned === 0 && rejected === 0) {
+        // Still pending, continue checking
+      } else {
+        allPending = false
+      }
+
+      // Perfect match = received equals scheduled, rejected/returned are 0
+      if (delivered === scheduled && returned === 0 && rejected === 0) {
+        // Accepted batch
+      } else {
+        allAccepted = false
+      }
+    })
+
+    if (allPending) return 'pending'
+    if (allAccepted) return 'accepted'
+    return 'discrepancy'
+  }, [linesMap, group.lines])
 
   const statusConfig = {
     accepted: { color: 'bg-emerald-50 border-emerald-200 text-emerald-700', label: 'Accepted' },
@@ -738,6 +765,7 @@ const ItemGroupRow = memo(({
   }
 
   const statusStyle = statusConfig[groupStatus]
+  const lineNoDisplay = `Line No. ${group.minLineNumber}`
 
   return (
     <div className="border-b border-slate-100 last:border-b-0">
@@ -754,14 +782,18 @@ const ItemGroupRow = memo(({
 
         {/* Main Content */}
         <div className="flex-1 min-w-0 space-y-2">
-          {/* Header with Description */}
+          {/* Header with Description and Line Number */}
           <div className="flex items-start justify-between">
             <div className="flex-1 min-w-0">
+              {/* First Row: Item Description + Badge + Line Number */}
               <div className="flex items-center gap-2 mb-1">
                 <span className="text-sm font-semibold text-slate-900">{group.itemDescription}</span>
                 <Badge className={`text-[10px] px-2 py-0.5 border ${statusStyle.color}`}>
                   {statusStyle.label}
                 </Badge>
+                <span className="ml-auto text-xs font-bold text-[#1d2351] bg-blue-5 px-2 py-1 rounded-md">
+                  {lineNoDisplay}
+                </span>
               </div>
 
               {/* Order/PO Info */}
@@ -776,29 +808,29 @@ const ItemGroupRow = memo(({
                 <span>Batches: <strong className="text-slate-700">{group.lines.length}</strong></span>
               </div>
             </div>
-
-            {/* Index Badge */}
-            <div className="w-8 h-8 rounded-full bg-blue-5 flex items-center justify-center shrink-0">
-              <span className="text-xs font-bold text-[#1d2351]">{group.minLineNumber}</span>
-            </div>
           </div>
 
-          {/* Aggregate Display (Read-Only) */}
-          <div className="grid grid-cols-3 gap-3 sm:gap-4 mt-2">
+          {/* Four-Metric Financial/Inventory Audit Display (Read-Only) */}
+          <div className="grid grid-cols-4 gap-2 mt-2">
             <div className="bg-slate-50 rounded border border-slate-200 p-2 space-y-1">
               <div className="text-[10px] font-medium text-slate-500 uppercase">Quantity</div>
-              <div className="flex items-baseline gap-1">
-                <span className="text-sm font-bold text-slate-900">{aggregatedValues.delivered.toFixed(2)}</span>
-                <span className="text-[10px] text-slate-400">/ {group.totals.scheduled} {transformUOM(group.uom)}</span>
-              </div>
+              <div className="text-sm font-bold text-slate-900">{group.totals.scheduled.toFixed(2)}</div>
+              <div className="text-[10px] text-slate-400">{transformUOM(group.uom)}</div>
             </div>
             <div className="bg-slate-50 rounded border border-slate-200 p-2 space-y-1">
-              <div className="text-[10px] font-medium text-slate-500 uppercase">Returned</div>
-              <div className="text-sm font-bold text-slate-900">{aggregatedValues.returned.toFixed(2)}</div>
+              <div className="text-[10px] font-medium text-slate-500 uppercase">Total Recv</div>
+              <div className="text-sm font-bold text-emerald-700">{aggregatedValues.delivered.toFixed(2)}</div>
+              <div className="text-[10px] text-slate-400">{transformUOM(group.uom)}</div>
             </div>
             <div className="bg-slate-50 rounded border border-slate-200 p-2 space-y-1">
-              <div className="text-[10px] font-medium text-slate-500 uppercase">Rejected</div>
-              <div className="text-sm font-bold text-slate-900">{aggregatedValues.rejected.toFixed(2)}</div>
+              <div className="text-[10px] font-medium text-slate-500 uppercase">Total Rej</div>
+              <div className="text-sm font-bold text-amber-700">{aggregatedValues.rejected.toFixed(2)}</div>
+              <div className="text-[10px] text-slate-400">{transformUOM(group.uom)}</div>
+            </div>
+            <div className="bg-slate-50 rounded border border-slate-200 p-2 space-y-1">
+              <div className="text-[10px] font-medium text-slate-500 uppercase">Total Ret</div>
+              <div className="text-sm font-bold text-red-700">{aggregatedValues.returned.toFixed(2)}</div>
+              <div className="text-[10px] text-slate-400">{transformUOM(group.uom)}</div>
             </div>
           </div>
         </div>
@@ -809,10 +841,10 @@ const ItemGroupRow = memo(({
         </div>
       </button>
 
-      {/* Expanded Child Rows */}
+      {/* Expanded Child Rows - High-Density Side-by-Side Layout */}
       {isExpanded && (
         <div className="px-4 pb-3 pt-2 bg-slate-50/50 border-t border-slate-100 animate-in slide-in-from-top-1">
-          <div className="space-y-3">
+          <div className="space-y-2">
             {group.lines.map((line) => {
               const lineState = linesMap.get(line.deliveryLineNumber)
               if (!lineState) return null
@@ -820,75 +852,89 @@ const ItemGroupRow = memo(({
               return (
                 <div
                   key={line.deliveryLineNumber}
-                  className="bg-white rounded-lg border border-slate-200 p-3"
+                  className="bg-white rounded-lg border border-slate-200 p-2"
                 >
-                  {/* Batch Header */}
-                  <div className="flex items-center gap-2 mb-3 pb-2 border-b border-slate-100">
-                    <div className="w-6 h-6 rounded bg-blue-50 flex items-center justify-center shrink-0">
-                      <Package className="w-3 h-3 text-[#1d2351]" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="font-medium text-slate-900 text-xs truncate">
-                        {line.deliveryItemDescription}
+                  {/* Single-row side-by-side layout */}
+                  <div className="flex items-center gap-3">
+                    {/* Left Side: Informational Details */}
+                    <div className="flex items-center gap-2 min-w-0 flex-1">
+                      <div className="w-6 h-6 rounded bg-blue-50 flex items-center justify-center shrink-0">
+                        <Package className="w-3 h-3 text-[#1d2351]" />
                       </div>
-                      <div className="text-[10px] text-slate-500">
-                        Batch: <span className="font-mono font-semibold">{line.batchNumber}</span>
-                        <span className="mx-1">•</span>
-                        Scheduled: <span className="font-semibold">{line.packQuantity} {transformUOM(line.packUOM)}</span>
+                      <div className="flex items-center gap-x-2 gap-y-1 text-xs text-slate-600 flex-wrap">
+                        <span className="font-medium text-slate-900">{line.deliveryItemDescription}</span>
+                        <span className="text-slate-300">|</span>
+                        <span>Qty: <strong className="text-slate-700">{line.packQuantity} {transformUOM(line.packUOM)}</strong></span>
+                        <span className="text-slate-300">|</span>
+                        <span>Batch: <strong className="font-mono text-slate-700">{line.batchNumber}</strong></span>
+                        {group.orderNumber && (
+                          <>
+                            <span className="text-slate-300">|</span>
+                            <span>Order: <strong className="text-slate-700">{group.orderNumber}</strong></span>
+                          </>
+                        )}
+                        {group.buyerPONumber && (
+                          <>
+                            <span className="text-slate-300">|</span>
+                            <span>PO: <strong className="text-slate-700">{group.buyerPONumber}</strong></span>
+                          </>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Right Side: Interactive Form Controls */}
+                    <div className="flex items-center gap-2 shrink-0">
+                      <div className="flex items-center gap-1">
+                        <div className="space-y-0">
+                          <Label className="text-[9px] font-medium text-slate-500 uppercase block mb-0.5">Recv</Label>
+                          <Input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            value={lineState.delivered}
+                            onChange={(e) => onInputChange(line.deliveryLineNumber, 'delivered', e.target.value)}
+                            disabled={isInvoiced || isSubmitting}
+                            className="h-7 w-16 text-xs border-slate-300 focus:border-[#1d2351] focus:ring-[#1d2351] px-2"
+                          />
+                        </div>
+                        <div className="space-y-0">
+                          <Label className="text-[9px] font-medium text-slate-500 uppercase block mb-0.5">Rej</Label>
+                          <Input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            value={lineState.rejected}
+                            onChange={(e) => onInputChange(line.deliveryLineNumber, 'rejected', e.target.value)}
+                            disabled={isInvoiced || isSubmitting}
+                            className="h-7 w-16 text-xs border-slate-300 focus:border-[#1d2351] focus:ring-[#1d2351] px-2"
+                          />
+                        </div>
+                        <div className="space-y-0">
+                          <Label className="text-[9px] font-medium text-slate-500 uppercase block mb-0.5">Ret</Label>
+                          <Input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            value={lineState.returned}
+                            onChange={(e) => onInputChange(line.deliveryLineNumber, 'returned', e.target.value)}
+                            disabled={isInvoiced || isSubmitting}
+                            className="h-7 w-16 text-xs border-slate-300 focus:border-[#1d2351] focus:ring-[#1d2351] px-2"
+                          />
+                        </div>
                       </div>
                     </div>
                   </div>
 
-                  {/* Editable Input Fields */}
-                  <div className="grid grid-cols-3 gap-2">
-                    <div className="space-y-1">
-                      <Label className="text-[10px] font-medium text-slate-500 uppercase">Received</Label>
-                      <Input
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        value={lineState.delivered}
-                        onChange={(e) => onInputChange(line.deliveryLineNumber, 'delivered', e.target.value)}
-                        disabled={isInvoiced || isSubmitting}
-                        className="h-8 text-xs border-slate-300 focus:border-[#1d2351] focus:ring-[#1d2351]"
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <Label className="text-[10px] font-medium text-slate-500 uppercase">Returned</Label>
-                      <Input
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        value={lineState.returned}
-                        onChange={(e) => onInputChange(line.deliveryLineNumber, 'returned', e.target.value)}
-                        disabled={isInvoiced || isSubmitting}
-                        className="h-8 text-xs border-slate-300 focus:border-[#1d2351] focus:ring-[#1d2351]"
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <Label className="text-[10px] font-medium text-slate-500 uppercase">Rejected</Label>
-                      <Input
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        value={lineState.rejected}
-                        onChange={(e) => onInputChange(line.deliveryLineNumber, 'rejected', e.target.value)}
-                        disabled={isInvoiced || isSubmitting}
-                        className="h-8 text-xs border-slate-300 focus:border-[#1d2351] focus:ring-[#1d2351]"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Notes Field for this batch */}
-                  <div className="mt-2 space-y-1">
-                    <Label className="text-[10px] font-medium text-slate-500 uppercase">Batch Notes</Label>
+                  {/* Notes Field for this batch - compact */}
+                  <div className="mt-2 flex items-center gap-2">
+                    <Label className="text-[10px] font-medium text-slate-500 uppercase shrink-0">Notes:</Label>
                     <Input
                       type="text"
                       value={lineState.lineComment}
                       onChange={(e) => onInputChange(line.deliveryLineNumber, 'lineComment', e.target.value)}
                       disabled={isInvoiced || isSubmitting}
                       placeholder="Add notes for this batch..."
-                      className="h-8 text-xs border-slate-300 focus:border-[#1d2351] focus:ring-[#1d2351]"
+                      className="h-7 text-xs border-slate-300 focus:border-[#1d2351] focus:ring-[#1d2351]"
                     />
                   </div>
                 </div>
@@ -1103,7 +1149,7 @@ export function DeliveryReceivePage() {
     return delivery?.lines.length || 0
   }, [delivery?.lines.length])
 
-  // Dashboard status summaries with live calculation
+  // Dashboard status summaries with live calculation - evaluated at batch level
   const dashboardSummaries = useMemo(() => {
     const summaries = {
       accepted: 0,
@@ -1111,40 +1157,59 @@ export function DeliveryReceivePage() {
       pending: 0
     }
 
-    // Count ItemGroups status
-    itemGroups.forEach((group) => {
-      const groupReceived = group.lines.reduce((sum, line) => {
-        const lineState = linesMap.get(line.deliveryLineNumber)
-        return sum + (parseFloat(lineState?.delivered || "0") || 0)
-      }, 0)
-      const groupReturned = group.lines.reduce((sum, line) => {
-        const lineState = linesMap.get(line.deliveryLineNumber)
-        return sum + (parseFloat(lineState?.returned || "0") || 0)
-      }, 0)
-      const groupRejected = group.lines.reduce((sum, line) => {
-        const lineState = linesMap.get(line.deliveryLineNumber)
-        return sum + (parseFloat(lineState?.rejected || "0") || 0)
-      }, 0)
-
-      const status = calculateGroupStatus(
-        groupReceived,
-        groupReturned,
-        groupRejected,
-        group.totals.scheduled
-      )
-      summaries[status]++
-    })
-
-    // Count standalone items status
-    standaloneItems.forEach((item) => {
-      const lineState = linesMap.get(item.deliveryLineNumber)
-      if (!lineState) return
+    // Helper to determine status for a single batch line
+    const getBatchStatus = (line: DeliveryLine): 'accepted' | 'discrepancy' | 'pending' => {
+      const lineState = linesMap.get(line.deliveryLineNumber)
+      if (!lineState) return 'pending'
 
       const delivered = parseFloat(lineState.delivered) || 0
       const returned = parseFloat(lineState.returned) || 0
       const rejected = parseFloat(lineState.rejected) || 0
+      const scheduled = line.packQuantity
 
-      const status = calculateGroupStatus(delivered, returned, rejected, item.packQuantity)
+      // All zeros = pending
+      if (delivered === 0 && returned === 0 && rejected === 0) {
+        return 'pending'
+      }
+
+      // Perfect match = received equals scheduled, rejected/returned are 0
+      if (delivered === scheduled && returned === 0 && rejected === 0) {
+        return 'accepted'
+      }
+
+      // Any discrepancy = discrepancy
+      return 'discrepancy'
+    }
+
+    // Count ItemGroups status based on batch-level evaluation
+    itemGroups.forEach((group) => {
+      let allAccepted = true
+      let allPending = true
+      let hasDiscrepancy = false
+
+      group.lines.forEach((line) => {
+        const batchStatus = getBatchStatus(line)
+        if (batchStatus !== 'accepted') allAccepted = false
+        if (batchStatus !== 'pending') allPending = false
+        if (batchStatus === 'discrepancy') hasDiscrepancy = true
+      })
+
+      // Group status logic:
+      // - All batches pending → group pending
+      // - All batches accepted → group accepted
+      // - Mixed or any discrepancy → group discrepancy
+      if (allPending) {
+        summaries.pending++
+      } else if (allAccepted && !hasDiscrepancy) {
+        summaries.accepted++
+      } else {
+        summaries.discrepancy++
+      }
+    })
+
+    // Count standalone items status (already at batch level)
+    standaloneItems.forEach((item) => {
+      const status = getBatchStatus(item)
       summaries[status]++
     })
 
