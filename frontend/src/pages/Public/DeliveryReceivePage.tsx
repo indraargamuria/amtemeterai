@@ -704,15 +704,8 @@ const ItemGroupRow = memo(({
   onToggleExpansion,
   onInputChange
 }: ItemGroupRowProps) => {
-  // Local state for parent-level inputs
-  const [localValues, setLocalValues] = useState({
-    delivered: "0",
-    returned: "0",
-    rejected: "0"
-  })
-
-  // Calculate current totals from all child lines
-  useEffect(() => {
+  // Calculate current totals from all child lines (read-only aggregation)
+  const aggregatedValues = useMemo(() => {
     const totals = {
       delivered: 0,
       returned: 0,
@@ -728,44 +721,13 @@ const ItemGroupRow = memo(({
       }
     })
 
-    setLocalValues({
-      delivered: totals.delivered.toString(),
-      returned: totals.returned.toString(),
-      rejected: totals.rejected.toString()
-    })
+    return totals
   }, [linesMap, group.lines])
 
-  const handleParentInputChange = (field: 'delivered' | 'returned' | 'rejected', value: string) => {
-    setLocalValues(prev => ({ ...prev, [field]: value }))
-
-    // Distribute the change proportionally across all child lines
-    const numValue = parseFloat(value) || 0
-    const lineCount = group.lines.length
-
-    group.lines.forEach((line) => {
-      // Distribute equally for simplicity - can be enhanced for proportional distribution
-      const distributedValue = (numValue / lineCount).toFixed(2)
-      onInputChange(line.deliveryLineNumber, field, distributedValue)
-    })
-  }
-
-  const handleBlur = (field: 'delivered' | 'returned' | 'rejected') => {
-    if (localValues[field].trim() === "" || localValues[field] === "-") {
-      setLocalValues(prev => ({ ...prev, [field]: "0" }))
-      handleParentInputChange(field, "0")
-    } else {
-      const num = parseFloat(localValues[field])
-      if (num < 0) {
-        setLocalValues(prev => ({ ...prev, [field]: "0" }))
-        handleParentInputChange(field, "0")
-      }
-    }
-  }
-
   const groupStatus = calculateGroupStatus(
-    parseFloat(localValues.delivered) || 0,
-    parseFloat(localValues.returned) || 0,
-    parseFloat(localValues.rejected) || 0,
+    aggregatedValues.delivered,
+    aggregatedValues.returned,
+    aggregatedValues.rejected,
     group.totals.scheduled
   )
 
@@ -821,47 +783,22 @@ const ItemGroupRow = memo(({
             </div>
           </div>
 
-          {/* Aggregate Input Fields */}
+          {/* Aggregate Display (Read-Only) */}
           <div className="grid grid-cols-3 gap-3 sm:gap-4 mt-2">
-            <div className="space-y-1">
-              <Label className="text-[10px] font-medium text-slate-500 uppercase">Quantity</Label>
-              <Input
-                type="number"
-                step="0.01"
-                min="0"
-                value={localValues.delivered}
-                onChange={(e) => handleParentInputChange('delivered', e.target.value)}
-                onBlur={() => handleBlur('delivered')}
-                disabled={isInvoiced || isSubmitting}
-                className="h-9 text-xs border-slate-300 focus:border-[#1d2351] focus:ring-[#1d2351]"
-              />
-              <div className="text-[10px] text-slate-400">of {group.totals.scheduled} {transformUOM(group.uom)}</div>
+            <div className="bg-slate-50 rounded border border-slate-200 p-2 space-y-1">
+              <div className="text-[10px] font-medium text-slate-500 uppercase">Quantity</div>
+              <div className="flex items-baseline gap-1">
+                <span className="text-sm font-bold text-slate-900">{aggregatedValues.delivered.toFixed(2)}</span>
+                <span className="text-[10px] text-slate-400">/ {group.totals.scheduled} {transformUOM(group.uom)}</span>
+              </div>
             </div>
-            <div className="space-y-1">
-              <Label className="text-[10px] font-medium text-slate-500 uppercase">Returned</Label>
-              <Input
-                type="number"
-                step="0.01"
-                min="0"
-                value={localValues.returned}
-                onChange={(e) => handleParentInputChange('returned', e.target.value)}
-                onBlur={() => handleBlur('returned')}
-                disabled={isInvoiced || isSubmitting}
-                className="h-9 text-xs border-slate-300 focus:border-[#1d2351] focus:ring-[#1d2351]"
-              />
+            <div className="bg-slate-50 rounded border border-slate-200 p-2 space-y-1">
+              <div className="text-[10px] font-medium text-slate-500 uppercase">Returned</div>
+              <div className="text-sm font-bold text-slate-900">{aggregatedValues.returned.toFixed(2)}</div>
             </div>
-            <div className="space-y-1">
-              <Label className="text-[10px] font-medium text-slate-500 uppercase">Rejected</Label>
-              <Input
-                type="number"
-                step="0.01"
-                min="0"
-                value={localValues.rejected}
-                onChange={(e) => handleParentInputChange('rejected', e.target.value)}
-                onBlur={() => handleBlur('rejected')}
-                disabled={isInvoiced || isSubmitting}
-                className="h-9 text-xs border-slate-300 focus:border-[#1d2351] focus:ring-[#1d2351]"
-              />
+            <div className="bg-slate-50 rounded border border-slate-200 p-2 space-y-1">
+              <div className="text-[10px] font-medium text-slate-500 uppercase">Rejected</div>
+              <div className="text-sm font-bold text-slate-900">{aggregatedValues.rejected.toFixed(2)}</div>
             </div>
           </div>
         </div>
@@ -875,7 +812,7 @@ const ItemGroupRow = memo(({
       {/* Expanded Child Rows */}
       {isExpanded && (
         <div className="px-4 pb-3 pt-2 bg-slate-50/50 border-t border-slate-100 animate-in slide-in-from-top-1">
-          <div className="space-y-2">
+          <div className="space-y-3">
             {group.lines.map((line) => {
               const lineState = linesMap.get(line.deliveryLineNumber)
               if (!lineState) return null
@@ -883,19 +820,76 @@ const ItemGroupRow = memo(({
               return (
                 <div
                   key={line.deliveryLineNumber}
-                  className="flex items-center gap-3 pl-4 pr-2 py-2 bg-white rounded border border-slate-200 text-xs"
+                  className="bg-white rounded-lg border border-slate-200 p-3"
                 >
-                  <div className="w-6 h-6 rounded bg-slate-100 flex items-center justify-center shrink-0">
-                    <Package className="w-3 h-3 text-slate-500" />
+                  {/* Batch Header */}
+                  <div className="flex items-center gap-2 mb-3 pb-2 border-b border-slate-100">
+                    <div className="w-6 h-6 rounded bg-blue-50 flex items-center justify-center shrink-0">
+                      <Package className="w-3 h-3 text-[#1d2351]" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium text-slate-900 text-xs truncate">
+                        {line.deliveryItemDescription}
+                      </div>
+                      <div className="text-[10px] text-slate-500">
+                        Batch: <span className="font-mono font-semibold">{line.batchNumber}</span>
+                        <span className="mx-1">•</span>
+                        Scheduled: <span className="font-semibold">{line.packQuantity} {transformUOM(line.packUOM)}</span>
+                      </div>
+                    </div>
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="font-medium text-slate-900 truncate">{line.deliveryItemDescription}</div>
-                    {line.batchNumber && (
-                      <div className="text-slate-500">Batch: {line.batchNumber}</div>
-                    )}
+
+                  {/* Editable Input Fields */}
+                  <div className="grid grid-cols-3 gap-2">
+                    <div className="space-y-1">
+                      <Label className="text-[10px] font-medium text-slate-500 uppercase">Received</Label>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={lineState.delivered}
+                        onChange={(e) => onInputChange(line.deliveryLineNumber, 'delivered', e.target.value)}
+                        disabled={isInvoiced || isSubmitting}
+                        className="h-8 text-xs border-slate-300 focus:border-[#1d2351] focus:ring-[#1d2351]"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-[10px] font-medium text-slate-500 uppercase">Returned</Label>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={lineState.returned}
+                        onChange={(e) => onInputChange(line.deliveryLineNumber, 'returned', e.target.value)}
+                        disabled={isInvoiced || isSubmitting}
+                        className="h-8 text-xs border-slate-300 focus:border-[#1d2351] focus:ring-[#1d2351]"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-[10px] font-medium text-slate-500 uppercase">Rejected</Label>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={lineState.rejected}
+                        onChange={(e) => onInputChange(line.deliveryLineNumber, 'rejected', e.target.value)}
+                        disabled={isInvoiced || isSubmitting}
+                        className="h-8 text-xs border-slate-300 focus:border-[#1d2351] focus:ring-[#1d2351]"
+                      />
+                    </div>
                   </div>
-                  <div className="text-right">
-                    <span className="text-slate-600">{lineState.delivered} / {line.packQuantity} {transformUOM(line.packUOM)}</span>
+
+                  {/* Notes Field for this batch */}
+                  <div className="mt-2 space-y-1">
+                    <Label className="text-[10px] font-medium text-slate-500 uppercase">Batch Notes</Label>
+                    <Input
+                      type="text"
+                      value={lineState.lineComment}
+                      onChange={(e) => onInputChange(line.deliveryLineNumber, 'lineComment', e.target.value)}
+                      disabled={isInvoiced || isSubmitting}
+                      placeholder="Add notes for this batch..."
+                      className="h-8 text-xs border-slate-300 focus:border-[#1d2351] focus:ring-[#1d2351]"
+                    />
                   </div>
                 </div>
               )
