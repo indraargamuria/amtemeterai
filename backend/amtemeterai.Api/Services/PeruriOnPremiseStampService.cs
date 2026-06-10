@@ -115,10 +115,15 @@ public class PeruriOnPremiseStampService : IPeruriOnPremiseStampService
         try
         {
             // =================================================================
-            // PHASE 2: WRITE UNSIGNED PDF TO SHARED FOLDER
+            // PHASE 2: WRITE UNSIGNED PDF TO SHARED FOLDER (EXPLICIT FLUSH)
             // =================================================================
-            _logger.LogInformation("PHASE 1: Writing unsigned PDF to {LocalPdfPath}", localPdfPath);
-            await File.WriteAllBytesAsync(localPdfPath, request.PdfContent);
+            _logger.LogInformation("PHASE 1: Writing unsigned PDF to {LocalPdfPath} with explicit stream flush", localPdfPath);
+            // Use explicit FileStream with FlushAsync to guarantee full OS release of file handle
+            using (var fs = new FileStream(localPdfPath, FileMode.Create, FileAccess.Write, FileShare.None, 4096, useAsync: true))
+            {
+                await fs.WriteAsync(request.PdfContent, 0, request.PdfContent.Length);
+                await fs.FlushAsync(); // Force physical sector commitment
+            }
             transientFiles.Add(localPdfPath);
 
             // =================================================================
@@ -153,8 +158,9 @@ public class PeruriOnPremiseStampService : IPeruriOnPremiseStampService
                     try
                     {
                         using var qrStream = await _storageService.GetFileStreamAsync(qrImageStorageKey);
-                        using var fileStream = File.Create(localQrPath);
+                        using var fileStream = new FileStream(localQrPath, FileMode.Create, FileAccess.Write, FileShare.None, 4096, useAsync: true);
                         await qrStream.CopyToAsync(fileStream);
+                        await fileStream.FlushAsync(); // Force physical sector commitment
                         transientFiles.Add(localQrPath);
                         _logger.LogInformation("QR code restored from MinIO to local workspace.");
                     }
@@ -309,10 +315,13 @@ public class PeruriOnPremiseStampService : IPeruriOnPremiseStampService
                 // =================================================================
                 _logger.LogInformation("PHASE 3: Uploading e-Meterai QR code to MinIO storage");
 
+                // Declare qrBytes outside try block so it can be used for both MinIO upload and local file write
+                byte[] qrBytes;
+
                 try
                 {
                     // Decode Base64 to bytes
-                    byte[] qrBytes = Convert.FromBase64String(qrBase64);
+                    qrBytes = Convert.FromBase64String(qrBase64);
 
                     // Remove data URL prefix if present
                     if (qrBase64.Contains(","))
@@ -348,10 +357,21 @@ public class PeruriOnPremiseStampService : IPeruriOnPremiseStampService
                     return result;
                 }
 
-                // Write QR locally for KeyStamp (will be cleaned up in finally block)
-                await File.WriteAllBytesAsync(localQrPath, Convert.FromBase64String(qrBase64));
+                // Write QR locally for KeyStamp with explicit flush (will be cleaned up in finally block)
+                // qrBytes is already decoded from the MinIO upload block above
+                using (var fs = new FileStream(localQrPath, FileMode.Create, FileAccess.Write, FileShare.None, 4096, useAsync: true))
+                {
+                    await fs.WriteAsync(qrBytes, 0, qrBytes.Length);
+                    await fs.FlushAsync(); // Force physical sector commitment
+                }
                 transientFiles.Add(localQrPath);
             }
+
+            // =================================================================
+            // I/O SYNCHRONIZATION BUFFER (PHASE 3 → PHASE 4)
+            // =================================================================
+            _logger.LogInformation("PHASE 3 Complete: Workspace files written to disk. Introducing synchronization buffer.");
+            await Task.Delay(350); // Gives Docker volume mounting a clear frame to register the files safely
 
             // =================================================================
             // PHASE 6: EXECUTE LOCAL KEYSTAMP CONTAINER SIGNING
@@ -359,6 +379,10 @@ public class PeruriOnPremiseStampService : IPeruriOnPremiseStampService
             _logger.LogInformation("PHASE 4: Invoking KeyStamp Docker adapter at port 9999");
 
             var signingClient = _httpClientFactory.CreateClient();
+
+            // A cryptographic PDF signing call over localhost should never exceed 15 seconds
+            // Fail-fast timeout prevents infinite hangs from volume locks or network issues
+            signingClient.Timeout = TimeSpan.FromSeconds(15);
             var signingUrl = $"{_options.KeyStamp.TrimEnd('/')}/adapter/pdfsigning/rest/docSigningZ";
 
             var signingRequest = new KeyStampSigningRequestDto
@@ -386,6 +410,8 @@ public class PeruriOnPremiseStampService : IPeruriOnPremiseStampService
 
             _logger.LogDebug("KeyStamp Request: src={Src}, dest={Dest}, spesimenPath={SpesimenPath}, refToken={RefToken}",
                 signingRequest.src, signingRequest.dest, signingRequest.spesimenPath, signingRequest.refToken);
+
+            _logger.LogInformation("PHASE 4: Calling KeyStamp Docker adapter at {Url} with a 15s timeout limit.", signingUrl);
 
             var signingResponse = await signingClient.PostAsJsonAsync(signingUrl, signingRequest);
             var signingResponseString = await signingResponse.Content.ReadAsStringAsync();

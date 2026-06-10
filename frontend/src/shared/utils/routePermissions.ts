@@ -8,6 +8,7 @@ export const routePermissions: Record<string, string> = {
   '/customers': 'customer:read',
   '/deliveries': 'delivery:read',
   '/invoices': 'invoice:read',
+  '/documents': 'invoice:read',
   '/admin/uam': 'uam:read',
 }
 

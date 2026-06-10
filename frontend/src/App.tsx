@@ -9,6 +9,7 @@ import { CustomersPage } from "./pages/Customers"
 import { DeliveriesPage, DeliveryDetailPage } from "./pages/Deliveries"
 import { DeliveryReceivePage } from "./pages/Public"
 import { InvoicesPage } from "./pages/Invoices"
+import { DocumentsPage } from "./pages/Documents"
 import { UserAccessManagementPage } from "./pages/UserAccessManagement"
 import { UnauthorizedPage } from "./pages/Unauthorized"
 import { DashboardLayout } from "./shared/layouts"
@@ -100,6 +101,18 @@ function AppRoutes() {
             <RouteGuard>
               <DashboardLayout>
                 <InvoicesPage />
+              </DashboardLayout>
+            </RouteGuard>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/documents"
+        element={
+          <ProtectedRoute>
+            <RouteGuard>
+              <DashboardLayout>
+                <DocumentsPage />
               </DashboardLayout>
             </RouteGuard>
           </ProtectedRoute>

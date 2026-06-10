@@ -140,6 +140,7 @@ export const routePermissions: Record<string, string> = {
   '/customers': 'customer:read',
   '/deliveries': 'delivery:read',
   '/invoices': 'invoice:read',
+  '/documents': 'invoice:read',
   '/admin/uam': 'uam:read',
 }
 
@@ -207,6 +208,9 @@ frontend/src/
 │   │   └── index.ts              # Export barrel
 │   ├── Invoices/                  # Invoice processing
 │   │   ├── InvoicesPage.tsx       # Invoice list and stamping
+│   │   └── index.ts              # Export barrel
+│   ├── Documents/                 # Document Hub - Unified invoices + deliveries
+│   │   ├── DocumentsPage.tsx     # Transaction-agnostic document view
 │   │   └── index.ts              # Export barrel
 │   ├── UserAccessManagement/      # Admin UAM for RBAC management
 │   │   ├── UserAccessManagementPage.tsx # User & role configuration
@@ -382,6 +386,58 @@ Pending Delivery → Fully Received → Invoiced
 - `GET /api/invoices` - List all invoices
 - `POST /api/invoices/{id}/upload-printout` - Upload invoice document
 - `POST /api/invoices/{id}/stamp` - Trigger e-Meterai stamping
+
+## Document Hub (`/documents`)
+
+### Features
+- **Transaction-Agnostic Paradigm**: Unified view of both linked invoices (with delivery) and standalone invoices
+- **Top-Level Filter Toggles**: All Documents, Delivery-Centric, Invoice-Centric
+- **High-Density Table Layout**:
+  - **Billing Invoice Ref**: Monospace font with document icon
+  - **Fulfillment Tracking**: Shows `deliveryNumber` for linked, "Direct Standalone Bill" badge for standalone
+  - **Financial Weight**: Rp currency format (Indonesian Rupiah)
+  - **Compliance Status**: Stamped (emerald), Unsigned/Draft (slate), Pending (amber)
+  - **Operations Matrix**: DO button (disabled for standalone with tooltip), Inspect Workspace button
+- **Inspect Workspace**: Right-side sliding sheet (40% width / 480px)
+- **Dynamic Sheet Tabs**:
+  - Linked flow: [View Delivery Order] + [View Invoice PDF]
+  - Standalone flow: Only [View Invoice PDF] tab
+- **Summary Cards**: Total, Linked Flow, Standalone, Stamped, Pending Stamp
+
+### Design Philosophy
+The Document Hub implements a **"Refined Industrial Utility"** aesthetic inspired by financial trading terminals and logistics command centers:
+
+- **Typography**: Monospace fonts (JetBrains Mono style) for invoice numbers and IDs; refined sans-serif for headers
+- **Color Strategy**: Dominant brand-blue (#1d2351) with emerald for stamped success, slate for pending, amber for alerts
+- **Density**: Compact rows (py-2.5) with generous column spacing for high information density
+- **Visual States**:
+  - Dotted border badge for standalone invoices (visual metaphor: "no upstream link")
+  - Pulsing amber indicator for pending stamps
+  - Disabled DO button with tooltip for standalone entries
+- **Motion**: Smooth slide-in animation for sheet; hover reveals on rows
+
+### Required Permission
+- `invoice:read` - To view Document Hub (same as invoices page)
+
+### API Endpoints Used
+- `GET /api/invoices` - Fetch all invoices, transformed into unified document rows
+
+### Transaction-Agnostic Implementation
+The component gracefully handles missing delivery relationships:
+
+```typescript
+interface DocumentRow {
+  invoiceNumber: string
+  deliveryNumber: string | null  // Null for standalone
+  isStandalone: boolean           // Computed flag
+  // ... other fields
+}
+```
+
+**Conditional Logic:**
+- **Linked invoices**: Show delivery badge with truck icon, enable DO button
+- **Standalone invoices**: Show "Direct Standalone Bill" badge, disable DO button with tooltip
+- **Sheet tabs**: Automatically hide delivery tab for standalone invoices
 
 ## User Access Management (`/admin/uam`)
 
@@ -702,6 +758,7 @@ uploadDeliveryPrintout(id, file) // POST /api/deliveries/{id}/upload-printout
 /deliveries                     // Delivery list
 /deliveries/:deliveryId         // Delivery details
 /invoices                       // Invoice processing
+/documents                     // Document Hub (unified invoices + deliveries)
 /admin/uam                      // User Access Management (sysadmin only)
 
 // Error Routes
