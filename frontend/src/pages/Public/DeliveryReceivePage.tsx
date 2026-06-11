@@ -819,8 +819,11 @@ const ItemGroupRow = memo(({
           {/* Header with Description and Line Number */}
           <div className="flex items-start justify-between">
             <div className="flex-1 min-w-0">
-              {/* First Row: Item Description + Badges + Line Number */}
+              {/* First Row: Line Number + Item Description + Badges */}
               <div className="flex items-center gap-2 mb-1 flex-wrap">
+                <span className="text-xs font-bold text-[#1d2351] bg-blue-5 px-2 py-1 rounded-md shrink-0">
+                  {lineNoDisplay}
+                </span>
                 <span className="text-sm font-semibold text-slate-900">{group.itemDescription}</span>
                 <Badge className={`text-[10px] px-2 py-0.5 border ${statusStyle.color}`}>
                   {statusStyle.label}
@@ -830,9 +833,6 @@ const ItemGroupRow = memo(({
                     {discrepancyBadge.text}
                   </Badge>
                 )}
-                <span className="ml-auto text-xs font-bold text-[#1d2351] bg-blue-5 px-2 py-1 rounded-md">
-                  {lineNoDisplay}
-                </span>
               </div>
 
               {/* Order/PO Info */}
@@ -1909,43 +1909,41 @@ export function DeliveryReceivePage() {
             </CardTitle>
           </CardHeader>
           <CardContent className="p-4 space-y-4">
-            {/* Optimized layout with 4 columns across all screen sizes */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            {/* Optimized layout with 3 columns across all screen sizes */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="space-y-1">
-                <p className="text-[10px] font-medium uppercase tracking-wider text-slate-400">Delivery Number</p>
-                <p className="text-sm font-semibold text-[#1d2351] font-mono">{delivery.deliveryNumber}</p>
+                <p className="text-xs font-medium uppercase tracking-wider text-slate-500">Delivery Number</p>
+                <p className="text-sm font-semibold text-slate-900">{delivery.deliveryNumber}</p>
               </div>
               <div className="space-y-1">
-                <p className="text-[10px] font-medium uppercase tracking-wider text-slate-400">Customer Name</p>
-                <p className="text-sm font-semibold text-slate-700">{delivery.customerName || "—"}</p>
+                <p className="text-xs font-medium uppercase tracking-wider text-slate-500">Customer Name</p>
+                <p className="text-sm font-semibold text-slate-900">{delivery.customerName || "—"}</p>
               </div>
               <div className="space-y-1">
-                <p className="text-[10px] font-medium uppercase tracking-wider text-slate-400">Delivery Date</p>
-                <p className="text-sm font-semibold text-slate-700">{formatDate(delivery.deliveryDate)}</p>
-              </div>
-              <div className="space-y-1">
-                <p className="text-[10px] font-medium uppercase tracking-wider text-slate-400">Total Items</p>
-                <p className="text-sm font-semibold text-slate-700">
-                  <strong className="font-semibold">{delivery.lines.length}</strong> <span className="text-slate-400">items</span>
-                </p>
+                <p className="text-xs font-medium uppercase tracking-wider text-slate-500">Delivery Date</p>
+                <p className="text-sm font-semibold text-slate-900">{formatDate(delivery.deliveryDate)}</p>
               </div>
             </div>
 
-            {delivery.deliveryRemarks && (
-              <div className="mt-4 pt-4 border-t border-slate-100 space-y-2">
-                <p className="text-[10px] font-medium uppercase tracking-wider text-slate-400">Shipping Notes</p>
-                <div className="bg-slate-50 border border-slate-100 rounded-xl p-3">
-                  <p className="text-sm font-semibold text-slate-600">{delivery.deliveryRemarks}</p>
-                </div>
-              </div>
-            )}
-
-            {delivery.shipToAddress && (
-              <div className="mt-4 pt-4 border-t border-slate-100 space-y-2">
-                <p className="text-[10px] font-medium uppercase tracking-wider text-slate-400">Ship To Address</p>
-                <div className="bg-blue-50 border border-blue-100 rounded-xl p-3">
-                  <p className="text-sm font-semibold text-slate-700">{delivery.shipToAddress}</p>
-                </div>
+            {/* Shipping Notes and Ship To Address - Side by Side */}
+            {(delivery.deliveryRemarks || delivery.shipToAddress) && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 border-t border-slate-200">
+                {delivery.deliveryRemarks && (
+                  <div className="space-y-2">
+                    <p className="text-xs font-medium uppercase tracking-wider text-slate-500">Shipping Notes</p>
+                    <div className="bg-slate-50 border border-slate-200 rounded-lg p-3">
+                      <p className="text-sm text-slate-900">{delivery.deliveryRemarks}</p>
+                    </div>
+                  </div>
+                )}
+                {delivery.shipToAddress && (
+                  <div className="space-y-2">
+                    <p className="text-xs font-medium uppercase tracking-wider text-slate-500">Ship To Address</p>
+                    <div className="bg-slate-50 border border-slate-200 rounded-lg p-3">
+                      <p className="text-sm text-slate-900">{delivery.shipToAddress}</p>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </CardContent>

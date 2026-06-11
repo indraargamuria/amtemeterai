@@ -330,9 +330,8 @@ public class PeruriOnPremiseStampService : IPeruriOnPremiseStampService
                         qrBytes = Convert.FromBase64String(qrBase64);
                     }
 
-                    // Create storage key: invoices/{invoiceId}/InvoiceNumber_QR.png
-                    string sanitizedInvoiceNumber = SanitizeFileName(invoiceNumber);
-                    string qrStorageKey = $"invoices/{invoiceId}/{sanitizedInvoiceNumber}_QR.png";
+                    // Create storage key: invoices/{invoiceId}/qr/{serialNumber}.png
+                    string qrStorageKey = $"invoices/{invoiceId}/qr/{sn}.png";
 
                     // Upload to MinIO
                     using (var qrStream = new MemoryStream(qrBytes))
@@ -477,9 +476,7 @@ public class PeruriOnPremiseStampService : IPeruriOnPremiseStampService
 
             try
             {
-                // Create storage key: invoices/{invoiceId}/InvoiceNumber_stamped.pdf
-                string sanitizedInvoiceNumber = SanitizeFileName(invoiceNumber);
-                string stampedStorageKey = $"invoices/{invoiceId}/{sanitizedInvoiceNumber}_stamped.pdf";
+                string stampedStorageKey = $"invoices/{invoiceId}/stamped/{sn}_stamped.pdf";
 
                 using (var stampedStream = new MemoryStream(signedPdf))
                 {
