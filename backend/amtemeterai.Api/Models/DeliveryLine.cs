@@ -8,6 +8,8 @@ public class DeliveryLine
     public DeliveryHeader DeliveryHeader { get; set; } = null!;
 
     public string DeliveryLineNumber { get; set; } = null!;
+    public string ParentLineNumber { get; set; } = null!;
+    
 
     public string DeliveryItemCode { get; set; } = null!;
     public string DeliveryItemDescription { get; set; } = null!;

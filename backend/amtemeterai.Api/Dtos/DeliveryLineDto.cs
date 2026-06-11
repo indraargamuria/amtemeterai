@@ -11,6 +11,7 @@ public class DeliveryLineDto
     // PO and Order fields moved from DeliveryHeader for heterogeneous routing support
     public string? OrderNumber { get; set; }
     public string? BuyerPONumber { get; set; }
+    public string ParentLineNumber { get; set; } = "0";
 
     public decimal SalesQuantity { get; set; }
     public string SalesUOM { get; set; } = null!;
