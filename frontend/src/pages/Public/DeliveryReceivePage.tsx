@@ -889,7 +889,7 @@ SingleBatchRow.displayName = "SingleBatchRow"
 // Condition 3: Child Row - nested editable row (used within SplitBatchParentRow)
 // High-contrast distinction: ml-6 indentation, border-l-2 track, zebra background
 // Omits redundant attributes: NO buyerPONumber, orderNumber, or UOM
-// Shows batchNumber (unique per child)
+// Balanced two-column layout: Left (Metadata Stack 40%) + Right (Input Dashboard 60%)
 const ChildRow = memo(({
   childLine,
   lineState,
@@ -940,46 +940,51 @@ const ChildRow = memo(({
 
   return (
     <div className={`py-2.5 px-4 ml-6 border-l-2 border-slate-200 pl-4 bg-slate-50/70 ${calc.isModified ? "bg-red-50/50" : ""}`}>
-      <div className="flex items-start gap-3">
-        {/* Left side: Child info - REDUCED attributes */}
-        <div className="flex-1 min-w-0 space-y-1">
-          {/* Header: Line number + Description + Modified badge */}
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-[10px] font-semibold text-slate-500 bg-slate-200 px-1.5 py-0.5 rounded">
+      {/* Balanced two-column horizontal layout */}
+      <div className="flex flex-row items-center justify-between w-full gap-4">
+
+        {/* LEFT COLUMN: Metadata Stack (40% max width) */}
+        <div className="max-w-[40%] shrink-0 min-w-[200px] space-y-1">
+          {/* Top Line: Line Number + Item Code/Description */}
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] font-bold text-slate-500 bg-slate-200 px-1.5 py-0.5 rounded shrink-0">
               L{childLine.deliveryLineNumber}
             </span>
-            <span className="text-xs font-medium text-slate-900">{childLine.deliveryItemDescription}</span>
+            <span className="text-xs font-medium text-slate-900 truncate" title={childLine.deliveryItemDescription}>
+              {childLine.deliveryItemCode}
+            </span>
             {calc.isModified && (
-              <Badge className="bg-red-100 text-red-700 border-none text-[9px] px-1.5 h-4 font-semibold">
+              <Badge className="bg-red-100 text-red-700 border-none text-[9px] px-1.5 h-4 font-semibold shrink-0">
                 Modified
               </Badge>
             )}
           </div>
 
-          {/* Details: Qty + Batch only - NO orderNumber, buyerPONumber, or UOM */}
-          <div className="flex items-center gap-x-2 gap-y-0.5 text-[11px] text-slate-500 flex-wrap">
-            <span>Qty: <strong className="text-slate-700">{childLine.packQuantity}</strong></span>
+          {/* Bottom Line: Batch Number + Quantity */}
+          <div className="flex items-center gap-2 text-[11px] text-slate-500">
+            {/* <span className="truncate max-w-[120px]" title={childLine.deliveryItemDescription}>
+              {childLine.deliveryItemDescription}
+            </span> */}
             {childLine.batchNumber && (
               <>
-                <span className="text-slate-300">|</span>
-                <span>Batch: <strong className="font-mono text-slate-700">{childLine.batchNumber}</strong></span>
+                {/* <span className="text-slate-300 shrink-0">|</span> */}
+                <span className="font-mono text-slate-600 whitespace-nowrap">Batch: {childLine.batchNumber}</span>
               </>
             )}
-            {calc.isModified && (
-              <>
-                <span className="text-slate-300">|</span>
-                <span className="text-red-600 font-medium">
-                  Actual: <strong>{calc.actualTotal}</strong>
-                </span>
-              </>
-            )}
+            <span className="text-slate-300 shrink-0">|</span>
+            <span className="font-medium text-slate-700 whitespace-nowrap">
+              Qty: {childLine.packQuantity}
+            </span>
           </div>
         </div>
 
-        {/* Right side: Compact input blocks - hyper-compact */}
-        <div className="flex items-center gap-1.5 shrink-0">
-          <div className="space-y-0">
-            <Label className="text-[8px] font-medium text-slate-500 uppercase block mb-0.5">Recv</Label>
+        {/* RIGHT COLUMN: Input Dashboard (60% flex-1) */}
+        {/* Layout: [Received] -> [Rejected] -> [Returned] -> [Notes] */}
+        <div className="flex-1 flex items-center gap-2">
+
+          {/* Received Input - fixed width w-16 */}
+          <div className="shrink-0 w-16">
+            <Label className="text-[10px] font-medium text-slate-500 uppercase block mb-0.5">Received</Label>
             <Input
               type="number"
               step="0.01"
@@ -989,11 +994,13 @@ const ChildRow = memo(({
               onBlur={() => handleBlur("delivered")}
               onChange={(e) => handleFieldChange("delivered", e.target.value)}
               disabled={isInvoiced || isSubmitting}
-              className="h-6 w-14 text-xs border-slate-300 focus:border-[#1d2351] focus:ring-[#1d2351] px-1.5"
+              className="h-7 w-full text-xs border-slate-300 focus:border-[#1d2351] focus:ring-[#1d2351] px-2"
             />
           </div>
-          <div className="space-y-0">
-            <Label className="text-[8px] font-medium text-slate-500 uppercase block mb-0.5">Rej</Label>
+
+          {/* Rejected Input - fixed width w-16 */}
+          <div className="shrink-0 w-16">
+            <Label className="text-[10px] font-medium text-slate-500 uppercase block mb-0.5">Rejected</Label>
             <Input
               type="number"
               step="0.01"
@@ -1003,11 +1010,13 @@ const ChildRow = memo(({
               onBlur={() => handleBlur("rejected")}
               onChange={(e) => handleFieldChange("rejected", e.target.value)}
               disabled={isInvoiced || isSubmitting}
-              className="h-6 w-14 text-xs border-slate-300 focus:border-[#1d2351] focus:ring-[#1d2351] px-1.5"
+              className="h-7 w-full text-xs border-slate-300 focus:border-[#1d2351] focus:ring-[#1d2351] px-2"
             />
           </div>
-          <div className="space-y-0">
-            <Label className="text-[8px] font-medium text-slate-500 uppercase block mb-0.5">Ret</Label>
+
+          {/* Returned Input - fixed width w-16 */}
+          <div className="shrink-0 w-16">
+            <Label className="text-[10px] font-medium text-slate-500 uppercase block mb-0.5">Returned</Label>
             <Input
               type="number"
               step="0.01"
@@ -1017,23 +1026,23 @@ const ChildRow = memo(({
               onBlur={() => handleBlur("returned")}
               onChange={(e) => handleFieldChange("returned", e.target.value)}
               disabled={isInvoiced || isSubmitting}
-              className="h-6 w-14 text-xs border-slate-300 focus:border-[#1d2351] focus:ring-[#1d2351] px-1.5"
+              className="h-7 w-full text-xs border-slate-300 focus:border-[#1d2351] focus:ring-[#1d2351] px-2"
+            />
+          </div>
+
+          {/* Notes Input - flexible fill directly beside Returned */}
+          <div className="flex-1 min-w-[120px]">
+            <Label className="text-[10px] font-medium text-slate-500 uppercase block mb-0.5">Notes</Label>
+            <Input
+              type="text"
+              value={localValues.lineComment}
+              onChange={(e) => handleFieldChange("lineComment", e.target.value)}
+              disabled={isInvoiced || isSubmitting}
+              placeholder="Add notes..."
+              className="h-7 w-full text-xs border-slate-300 focus:border-[#1d2351] focus:ring-[#1d2351] px-2"
             />
           </div>
         </div>
-      </div>
-
-      {/* Notes field for this child - compact */}
-      <div className="mt-1.5 flex items-center gap-2">
-        <Label className="text-[9px] font-medium text-slate-500 uppercase shrink-0">Notes:</Label>
-        <Input
-          type="text"
-          value={localValues.lineComment}
-          onChange={(e) => handleFieldChange("lineComment", e.target.value)}
-          disabled={isInvoiced || isSubmitting}
-          placeholder="Add notes..."
-          className="h-6 text-xs border-slate-300 focus:border-[#1d2351] focus:ring-[#1d2351] px-2"
-        />
       </div>
     </div>
   )
@@ -1162,7 +1171,7 @@ const SplitBatchParentRow = memo(({
             {/* Right Side: Aggregated Totals Display - SAME layout as SingleBatchRow */}
             <div className="flex items-center gap-3 shrink-0 ml-4">
               <div className="text-right">
-                <div className="text-[10px] text-slate-500 uppercase font-medium">Intended</div>
+                <div className="text-[10px] text-slate-500 uppercase font-medium">Quantity</div>
                 <div className="text-sm font-bold text-slate-900">{totalScheduled}</div>
               </div>
               <div className="text-right">
