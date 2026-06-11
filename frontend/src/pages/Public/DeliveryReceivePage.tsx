@@ -758,6 +758,40 @@ const ItemGroupRow = memo(({
     return 'discrepancy'
   }, [linesMap, group.lines])
 
+  // Calculate discrepancy percentage badge
+  const discrepancyBadge = useMemo(() => {
+    const totalReceived = aggregatedValues.delivered
+    const totalIntended = group.totals.scheduled
+
+    // Only calculate and render if total received > 0
+    if (totalReceived <= 0) return null
+
+    // Calculate variance percentage
+    const rawVariance = ((totalIntended - totalReceived) / totalIntended) * 100
+    const variancePercent = Math.abs(rawVariance).toFixed(1)
+
+    // Determine badge style and text based on variance state
+    if (rawVariance === 0) {
+      // Perfect match
+      return {
+        text: `0.0% Discrepancy`,
+        className: 'bg-emerald-50 text-emerald-700 border-emerald-100'
+      }
+    } else if (totalReceived < totalIntended) {
+      // Short-delivery
+      return {
+        text: `⚠️ -${variancePercent}% Short`,
+        className: 'bg-amber-50 text-amber-700 border-amber-200'
+      }
+    } else {
+      // Over-delivery
+      return {
+        text: `📦 +${variancePercent}% Surplus`,
+        className: 'bg-blue-50 text-blue-700 border-blue-200'
+      }
+    }
+  }, [aggregatedValues.delivered, group.totals.scheduled])
+
   const statusConfig = {
     accepted: { color: 'bg-emerald-50 border-emerald-200 text-emerald-700', label: 'Accepted' },
     discrepancy: { color: 'bg-amber-50 border-amber-200 text-amber-700', label: 'Discrepancy' },
@@ -785,12 +819,17 @@ const ItemGroupRow = memo(({
           {/* Header with Description and Line Number */}
           <div className="flex items-start justify-between">
             <div className="flex-1 min-w-0">
-              {/* First Row: Item Description + Badge + Line Number */}
-              <div className="flex items-center gap-2 mb-1">
+              {/* First Row: Item Description + Badges + Line Number */}
+              <div className="flex items-center gap-2 mb-1 flex-wrap">
                 <span className="text-sm font-semibold text-slate-900">{group.itemDescription}</span>
                 <Badge className={`text-[10px] px-2 py-0.5 border ${statusStyle.color}`}>
                   {statusStyle.label}
                 </Badge>
+                {discrepancyBadge && (
+                  <Badge className={`text-[10px] px-2 py-0.5 border ${discrepancyBadge.className}`}>
+                    {discrepancyBadge.text}
+                  </Badge>
+                )}
                 <span className="ml-auto text-xs font-bold text-[#1d2351] bg-blue-5 px-2 py-1 rounded-md">
                   {lineNoDisplay}
                 </span>
@@ -1709,7 +1748,7 @@ export function DeliveryReceivePage() {
   if (error || !delivery) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
-        <Card className="w-full max-w-md border-slate-200 shadow-lg bg-white">
+        <Card className="w-full max-w-md shadow-sm border border-slate-200/80 rounded-xl bg-white">
           <CardContent className="py-12 text-center space-y-5">
             <div className="w-14 h-14 bg-red-50 rounded-full flex items-center justify-center mx-auto">
               <AlertTriangle className="w-7 h-7 text-red-600" />
@@ -1746,7 +1785,7 @@ export function DeliveryReceivePage() {
               <p className="text-sm text-slate-500">Enter your security PIN to verify this delivery</p>
             </div>
 
-            <Card className="border-slate-200 shadow-xl bg-white">
+            <Card className="shadow-sm border border-slate-200/80 rounded-xl bg-white">
               <CardContent className="p-6 space-y-5">
                 <div className="space-y-2">
                   <Label htmlFor="pin" className="text-xs font-semibold uppercase tracking-wider text-slate-500">Security PIN</Label>
@@ -1862,7 +1901,7 @@ export function DeliveryReceivePage() {
         )}
 
         {/* Delivery Info Card */}
-        <Card className="border-slate-200 shadow-sm bg-white">
+        <Card className="shadow-sm border border-slate-200/80 rounded-xl bg-white">
           <CardHeader className="px-4 py-3 border-b border-slate-100">
             <CardTitle className="text-sm font-semibold text-slate-800 flex items-center gap-2">
               <FileText className="w-4 h-4 text-slate-800" />
@@ -1870,7 +1909,8 @@ export function DeliveryReceivePage() {
             </CardTitle>
           </CardHeader>
           <CardContent className="p-4 space-y-4">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {/* Optimized layout with 4 columns across all screen sizes */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               <div className="space-y-1">
                 <p className="text-[10px] font-medium uppercase tracking-wider text-slate-400">Delivery Number</p>
                 <p className="text-sm font-semibold text-[#1d2351] font-mono">{delivery.deliveryNumber}</p>
@@ -1878,17 +1918,6 @@ export function DeliveryReceivePage() {
               <div className="space-y-1">
                 <p className="text-[10px] font-medium uppercase tracking-wider text-slate-400">Customer Name</p>
                 <p className="text-sm font-semibold text-slate-700">{delivery.customerName || "—"}</p>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-4 border-t border-slate-100">
-              <div className="space-y-1">
-                <p className="text-[10px] font-medium uppercase tracking-wider text-slate-400">Buyer PO Number</p>
-                <p className="text-sm font-semibold text-slate-700 font-mono">{delivery.buyerPONumber || "—"}</p>
-              </div>
-              <div className="space-y-1">
-                <p className="text-[10px] font-medium uppercase tracking-wider text-slate-400">Order Number</p>
-                <p className="text-sm font-semibold text-slate-700 font-mono">{delivery.orderNumber || "—"}</p>
               </div>
               <div className="space-y-1">
                 <p className="text-[10px] font-medium uppercase tracking-wider text-slate-400">Delivery Date</p>
@@ -1923,7 +1952,7 @@ export function DeliveryReceivePage() {
         </Card>
 
         {/* Receiver Info */}
-        <Card className="border-slate-200 shadow-sm bg-white">
+        <Card className="shadow-sm border border-slate-200/80 rounded-xl bg-white">
           <CardHeader className="px-4 py-3 border-b border-slate-100">
             <CardTitle className="text-sm font-semibold text-slate-800 flex items-center gap-2">
               <FileText className="w-4 h-4 text-slate-500" />
@@ -2030,7 +2059,7 @@ export function DeliveryReceivePage() {
           />
 
           {/* Items List */}
-          <Card className="border-slate-200 shadow-sm bg-white overflow-hidden">
+          <Card className="shadow-sm border border-slate-200/80 rounded-xl bg-white overflow-hidden">
             <div className="p-4 border-b border-slate-100 space-y-4">
               <div className="flex items-center justify-between">
                 <CardTitle className="text-sm font-semibold text-slate-800">Line Items</CardTitle>
@@ -2163,7 +2192,7 @@ export function DeliveryReceivePage() {
           </Card>
 
           {/* Photo Upload */}
-          <Card className="border-slate-200 shadow-sm bg-white">
+          <Card className="shadow-sm border border-slate-200/80 rounded-xl bg-white">
             <CardHeader className="px-4 py-3 border-b border-slate-100">
               <CardTitle className="text-sm font-semibold text-slate-800 flex items-center gap-2">
                 <Camera className="w-4 h-4 text-slate-500" />
