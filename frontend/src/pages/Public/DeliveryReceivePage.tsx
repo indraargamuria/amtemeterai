@@ -818,17 +818,17 @@ const ItemGroupRow = memo(({
               <div className="text-[10px] text-slate-400">{transformUOM(group.uom)}</div>
             </div>
             <div className="bg-slate-50 rounded border border-slate-200 p-2 space-y-1">
-              <div className="text-[10px] font-medium text-slate-500 uppercase">Total Recv</div>
+              <div className="text-[10px] font-medium text-slate-500 uppercase">Total Received</div>
               <div className="text-sm font-bold text-emerald-700">{aggregatedValues.delivered.toFixed(2)}</div>
               <div className="text-[10px] text-slate-400">{transformUOM(group.uom)}</div>
             </div>
             <div className="bg-slate-50 rounded border border-slate-200 p-2 space-y-1">
-              <div className="text-[10px] font-medium text-slate-500 uppercase">Total Rej</div>
+              <div className="text-[10px] font-medium text-slate-500 uppercase">Total Rejected</div>
               <div className="text-sm font-bold text-amber-700">{aggregatedValues.rejected.toFixed(2)}</div>
               <div className="text-[10px] text-slate-400">{transformUOM(group.uom)}</div>
             </div>
             <div className="bg-slate-50 rounded border border-slate-200 p-2 space-y-1">
-              <div className="text-[10px] font-medium text-slate-500 uppercase">Total Ret</div>
+              <div className="text-[10px] font-medium text-slate-500 uppercase">Total Returned</div>
               <div className="text-sm font-bold text-red-700">{aggregatedValues.returned.toFixed(2)}</div>
               <div className="text-[10px] text-slate-400">{transformUOM(group.uom)}</div>
             </div>
@@ -886,7 +886,7 @@ const ItemGroupRow = memo(({
                     <div className="flex items-center gap-2 shrink-0">
                       <div className="flex items-center gap-1">
                         <div className="space-y-0">
-                          <Label className="text-[9px] font-medium text-slate-500 uppercase block mb-0.5">Recv</Label>
+                          <Label className="text-[9px] font-medium text-slate-500 uppercase block mb-0.5">Received</Label>
                           <Input
                             type="number"
                             step="0.01"
@@ -898,7 +898,7 @@ const ItemGroupRow = memo(({
                           />
                         </div>
                         <div className="space-y-0">
-                          <Label className="text-[9px] font-medium text-slate-500 uppercase block mb-0.5">Rej</Label>
+                          <Label className="text-[9px] font-medium text-slate-500 uppercase block mb-0.5">Rejected</Label>
                           <Input
                             type="number"
                             step="0.01"
@@ -910,7 +910,7 @@ const ItemGroupRow = memo(({
                           />
                         </div>
                         <div className="space-y-0">
-                          <Label className="text-[9px] font-medium text-slate-500 uppercase block mb-0.5">Ret</Label>
+                          <Label className="text-[9px] font-medium text-slate-500 uppercase block mb-0.5">Returned</Label>
                           <Input
                             type="number"
                             step="0.01"
@@ -1149,7 +1149,7 @@ export function DeliveryReceivePage() {
     return delivery?.lines.length || 0
   }, [delivery?.lines.length])
 
-  // Dashboard status summaries with live calculation - evaluated at batch level
+  // Dashboard status summaries with live calculation - evaluated at granular batch level
   const dashboardSummaries = useMemo(() => {
     const summaries = {
       accepted: 0,
@@ -1157,64 +1157,36 @@ export function DeliveryReceivePage() {
       pending: 0
     }
 
-    // Helper to determine status for a single batch line
-    const getBatchStatus = (line: DeliveryLine): 'accepted' | 'discrepancy' | 'pending' => {
+    // Evaluate each individual batch line directly from form state
+    delivery?.lines.forEach((line) => {
       const lineState = linesMap.get(line.deliveryLineNumber)
-      if (!lineState) return 'pending'
+      if (!lineState) {
+        // No form state = pending
+        summaries.pending++
+        return
+      }
 
       const delivered = parseFloat(lineState.delivered) || 0
       const returned = parseFloat(lineState.returned) || 0
       const rejected = parseFloat(lineState.rejected) || 0
-      const scheduled = line.packQuantity
+      const targetQty = line.packQuantity // Original expected delivery quantity
 
-      // All zeros = pending
-      if (delivered === 0 && returned === 0 && rejected === 0) {
-        return 'pending'
-      }
-
-      // Perfect match = received equals scheduled, rejected/returned are 0
-      if (delivered === scheduled && returned === 0 && rejected === 0) {
-        return 'accepted'
-      }
-
-      // Any discrepancy = discrepancy
-      return 'discrepancy'
-    }
-
-    // Count ItemGroups status based on batch-level evaluation
-    itemGroups.forEach((group) => {
-      let allAccepted = true
-      let allPending = true
-      let hasDiscrepancy = false
-
-      group.lines.forEach((line) => {
-        const batchStatus = getBatchStatus(line)
-        if (batchStatus !== 'accepted') allAccepted = false
-        if (batchStatus !== 'pending') allPending = false
-        if (batchStatus === 'discrepancy') hasDiscrepancy = true
-      })
-
-      // Group status logic:
-      // - All batches pending → group pending
-      // - All batches accepted → group accepted
-      // - Mixed or any discrepancy → group discrepancy
-      if (allPending) {
+      // Pending: untouched row (all zeros)
+      if (delivered === 0 && rejected === 0 && returned === 0) {
         summaries.pending++
-      } else if (allAccepted && !hasDiscrepancy) {
+      }
+      // Accepted: perfectly matched row (received == target, rejected/returned are 0)
+      else if (delivered === targetQty && rejected === 0 && returned === 0) {
         summaries.accepted++
-      } else {
+      }
+      // Discrepancy: any variance, short-delivery, rejection, or return
+      else {
         summaries.discrepancy++
       }
     })
 
-    // Count standalone items status (already at batch level)
-    standaloneItems.forEach((item) => {
-      const status = getBatchStatus(item)
-      summaries[status]++
-    })
-
     return summaries
-  }, [itemGroups, standaloneItems, linesMap])
+  }, [delivery?.lines, linesMap])
 
   // Enhanced search with OrderNumber, BuyerPONumber, BatchNumber
   const searchFilter = useCallback((line: DeliveryLine | ItemGroup): boolean => {
