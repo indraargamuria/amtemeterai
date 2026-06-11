@@ -735,12 +735,34 @@ const SingleBatchRow = memo(({
           {/* Header with Line Number + Description + Badges */}
           <div className="flex items-start justify-between">
             <div className="flex-1 min-w-0">
-              {/* First Row: Line Number + Item Description + Badges */}
-              <div className="flex items-center gap-2 mb-1 flex-wrap">
+              {/* First Row: Line Number + Item Description only */}
+              <div className="flex items-center gap-2 mb-1.5 flex-wrap">
                 <span className="text-xs font-bold text-[#1d2351] bg-blue-5 px-2 py-1 rounded-md shrink-0">
                   Line #{line.deliveryLineNumber}
                 </span>
                 <span className="text-sm font-semibold text-slate-900">{line.deliveryItemDescription}</span>
+              </div>
+
+              {/* Second Row: Order/PO Info + Batch Indicator + Status Badges */}
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs">
+                <span className="text-slate-500">
+                  Order: <strong className="text-slate-700">{line.orderNumber || '-'}</strong>
+                </span>
+                <span className="text-slate-500">
+                  PO: <strong className="text-slate-700">{line.buyerPONumber || '-'}</strong>
+                </span>
+                <span className="text-slate-500">
+                  UOM: <strong className="text-slate-700">{transformUOM(line.packUOM)}</strong>
+                </span>
+                {line.batchNumber && (
+                  <span className="text-slate-500">
+                    Batch: <strong className="text-slate-700">{line.batchNumber}</strong>
+                  </span>
+                )}
+                {/* Badges on same row */}
+                <Badge className="bg-emerald-100 text-emerald-700 text-[10px] px-2 py-0.5 border border-emerald-200">
+                  1 Batch
+                </Badge>
                 <Badge className={`text-[10px] px-2 py-0.5 border ${statusInfo.color}`}>
                   {statusInfo.label}
                 </Badge>
@@ -748,21 +770,6 @@ const SingleBatchRow = memo(({
                   <Badge className={`text-[10px] px-2 py-0.5 border ${varianceInfo.className}`}>
                     {varianceInfo.text}
                   </Badge>
-                )}
-              </div>
-
-              {/* Order/PO Info - SAME as SplitBatchParentRow structure */}
-              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500">
-                {line.orderNumber && (
-                  <span>Order: <strong className="text-slate-700">{line.orderNumber}</strong></span>
-                )}
-                {line.buyerPONumber && (
-                  <span>PO: <strong className="text-slate-700">{line.buyerPONumber}</strong></span>
-                )}
-                <span>UOM: <strong className="text-slate-700">{transformUOM(line.packUOM)}</strong></span>
-                {/* Show batch number for Single Batch */}
-                {line.batchNumber && (
-                  <span>Batch: <strong className="text-slate-700">{line.batchNumber}</strong></span>
                 )}
               </div>
             </div>
@@ -797,19 +804,15 @@ const SingleBatchRow = memo(({
         </div>
       </div>
 
-      {/* Input Row - Always visible (like ChildRow but without indentation/border) */}
-      <div className={`bg-slate-50/70 border-t border-slate-100 ${calc.isModified ? "bg-red-50/50" : ""}`}>
-        {/* Same two-column layout as ChildRow but without ml-6 indentation */}
-        <div className="py-2.5 px-4 flex flex-row items-center w-full gap-4">
+      {/* Input Row - Seamlessly integrated continuation of header */}
+      <div className={`bg-gradient-to-b from-white to-slate-50/50 border-t border-slate-100/60 ${calc.isModified ? "from-red-50/40 to-red-50/60" : ""}`}>
+        <div className="px-4 pb-3 pt-2.5 flex items-start w-full gap-4">
 
-          {/* LEFT COLUMN: Metadata Stack (Max 40% Width) */}
-          <div className="max-w-[40%] shrink-0 min-w-[200px] space-y-1">
-            {/* Top Line: Line Number + Item Code */}
+          {/* LEFT COLUMN: Item Code + Batch Info (streamlined, no line number) */}
+          <div className="max-w-[40%] shrink-0 min-w-[200px] space-y-1.5">
+            {/* Top Line: Item Code only - line number already shown above */}
             <div className="flex items-center gap-2">
-              <span className="text-[10px] font-bold text-slate-500 bg-slate-200 px-1.5 py-0.5 rounded shrink-0">
-                L{line.deliveryLineNumber}
-              </span>
-              <span className="text-xs font-medium text-slate-900 truncate" title={line.deliveryItemCode}>
+              <span className="text-xs font-medium text-slate-700 truncate" title={line.deliveryItemCode}>
                 {line.deliveryItemCode}
               </span>
               {calc.isModified && (
@@ -971,6 +974,10 @@ const ChildRow = memo(({
             </span>
             <span className="text-xs font-medium text-slate-900 truncate" title={childLine.deliveryItemCode}>
               {childLine.deliveryItemCode}
+            </span>
+            {/* Batch indicator - shows this is a split-batch child */}
+            <span className="text-[9px] font-medium text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded shrink-0">
+              Batch
             </span>
             {calc.isModified && (
               <Badge className="bg-red-100 text-red-700 border-none text-[9px] px-1.5 h-4 font-semibold shrink-0">
@@ -1153,13 +1160,33 @@ const SplitBatchParentRow = memo(({
           {/* Header with Line Number + Description + Badges */}
           <div className="flex items-start justify-between">
             <div className="flex-1 min-w-0">
-              
-              {/* First Row: Line Number + Item Description + Badges */}
-              <div className="flex items-center gap-2 mb-1 flex-wrap">
+
+              {/* First Row: Line Number + Item Description only */}
+              <div className="flex items-center gap-2 mb-1.5 flex-wrap">
                 <span className="text-xs font-bold text-[#1d2351] bg-blue-5 px-2 py-1 rounded-md shrink-0">
                   Line #{parentLine.deliveryLineNumber}
                 </span>
                 <span className="text-sm font-semibold text-slate-900">{parentLine.deliveryItemDescription}</span>
+              </div>
+
+              {/* Second Row: Order/PO Info + Batch Indicator + Status Badges */}
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs">
+                <span className="text-slate-500">
+                  Order: <strong className="text-slate-700">{parentLine.orderNumber || '-'}</strong>
+                </span>
+                <span className="text-slate-500">
+                  PO: <strong className="text-slate-700">{parentLine.buyerPONumber || '-'}</strong>
+                </span>
+                <span className="text-slate-500">
+                  UOM: <strong className="text-slate-700">{transformUOM(parentLine.packUOM)}</strong>
+                </span>
+                <span className="text-slate-500">
+                  Batches: <strong className="text-slate-700">{children.length}</strong>
+                </span>
+                {/* Badges on same row */}
+                <Badge className="bg-[#1d2351] text-white text-[10px] px-2 py-0.5 border-none">
+                  {children.length} {children.length === 1 ? 'Batch' : 'Batches'}
+                </Badge>
                 <Badge className={`text-[10px] px-2 py-0.5 border ${statusInfo.color}`}>
                   {statusInfo.label}
                 </Badge>
@@ -1168,19 +1195,6 @@ const SplitBatchParentRow = memo(({
                     {varianceInfo.text}
                   </Badge>
                 )}
-              </div>
-
-              {/* Order/PO Info - SAME as SingleBatchRow structure */}
-              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500">
-                {parentLine.orderNumber && (
-                  <span>Order: <strong className="text-slate-700">{parentLine.orderNumber}</strong></span>
-                )}
-                {parentLine.buyerPONumber && (
-                  <span>PO: <strong className="text-slate-700">{parentLine.buyerPONumber}</strong></span>
-                )}
-                <span>UOM: <strong className="text-slate-700">{transformUOM(parentLine.packUOM)}</strong></span>
-                {/* NO batch number on parent - shown on children instead */}
-                <span>Batches: <strong className="text-slate-700">{children.length}</strong></span>
               </div>
             </div>
 
