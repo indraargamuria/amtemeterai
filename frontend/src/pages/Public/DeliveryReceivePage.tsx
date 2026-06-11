@@ -20,6 +20,7 @@ interface DeliveryPhoto {
 
 interface DeliveryLine {
   deliveryLineNumber: string
+  parentLineNumber?: string | null
   deliveryItemCode: string
   deliveryItemDescription: string
   batchNumber?: string | null
@@ -34,6 +35,39 @@ interface DeliveryLine {
   packQuantityRejected: number
   lineComment?: string | null
 }
+
+// ============================================================================
+// NEW 3-CONDITION ARCHITECTURE TYPES
+// ============================================================================
+
+// Condition 1: Parent Single Batch - standalone editable row
+interface ParentSingleBatch {
+  type: 'single-batch'
+  line: DeliveryLine
+}
+
+// Condition 2: Parent with Split Batch - read-only summary with children
+interface ParentWithSplitBatch {
+  type: 'split-batch'
+  parentLine: DeliveryLine
+  children: DeliveryLine[]
+  aggregatedTotals: {
+    scheduled: number
+    delivered: number
+    returned: number
+    rejected: number
+  }
+}
+
+// Condition 3: Child Line - handled within ParentWithSplitBatch
+// No separate type needed as children are DeliveryLine instances
+
+// Union type for all displayable items
+type DisplayableLineItem = ParentSingleBatch | ParentWithSplitBatch
+
+// ============================================================================
+// LEGACY ItemGroup (kept for reference during migration)
+// ============================================================================
 
 // ItemGroup for batched items aggregation
 interface ItemGroup {
@@ -245,6 +279,80 @@ const createItemGroups = (lines: DeliveryLine[]): ItemGroup[] => {
 
 const getStandaloneItems = (lines: DeliveryLine[]): DeliveryLine[] => {
   return lines.filter(line => !line.batchNumber || line.batchNumber.trim() === "")
+}
+
+// ============================================================================
+// NEW 3-CONDITION ARCHITECTURE TRANSFORMATION ENGINE
+// ============================================================================
+
+/**
+ * Transforms flat delivery lines into the new 3-condition architecture:
+ *
+ * Condition 1: Parent Single Batch (parentLineNumber="0" AND has batchNumber)
+ *   - Displays as standalone editable row
+ *
+ * Condition 2: Parent with Split Batch (parentLineNumber="0" AND no batchNumber)
+ *   - Displays as read-only summary with expandable children
+ *
+ * Condition 3: Child Lines (parentLineNumber matches parent's deliveryLineNumber)
+ *   - Nested under their parent, editable when expanded
+ */
+const buildLineItemTree = (lines: DeliveryLine[]): DisplayableLineItem[] => {
+  const result: DisplayableLineItem[] = []
+
+  // Separate parent lines from child lines
+  const parentLines = lines.filter(
+    line => !line.parentLineNumber || line.parentLineNumber === "0"
+  )
+  const childLines = lines.filter(
+    line => line.parentLineNumber && line.parentLineNumber !== "0"
+  )
+
+  // Create a map for quick child lookup
+  const childrenMap = new Map<string, DeliveryLine[]>()
+  childLines.forEach(child => {
+    const parentLineNumber = child.parentLineNumber!
+    if (!childrenMap.has(parentLineNumber)) {
+      childrenMap.set(parentLineNumber, [])
+    }
+    childrenMap.get(parentLineNumber)!.push(child)
+  })
+
+  // Process each parent line
+  parentLines.forEach(parentLine => {
+    const hasBatchNumber = parentLine.batchNumber && parentLine.batchNumber.trim() !== ""
+    const children = childrenMap.get(parentLine.deliveryLineNumber) || []
+
+    if (hasBatchNumber) {
+      // Condition 1: Parent Single Batch - standalone editable row
+      result.push({
+        type: 'single-batch',
+        line: parentLine
+      })
+    } else {
+      // Condition 2: Parent with Split Batch - read-only summary with children
+      result.push({
+        type: 'split-batch',
+        parentLine: parentLine,
+        children: children,
+        aggregatedTotals: {
+          scheduled: children.reduce((sum, child) => sum + child.packQuantity, 0) + parentLine.packQuantity,
+          delivered: 0, // Will be calculated dynamically from form state
+          returned: 0,   // Will be calculated dynamically from form state
+          rejected: 0    // Will be calculated dynamically from form state
+        }
+      })
+    }
+  })
+
+  // Sort by deliveryLineNumber for consistent display
+  result.sort((a, b) => {
+    const lineNumA = a.type === 'single-batch' ? a.line.deliveryLineNumber : a.parentLine.deliveryLineNumber
+    const lineNumB = b.type === 'single-batch' ? b.line.deliveryLineNumber : b.parentLine.deliveryLineNumber
+    return parseInt(lineNumA) - parseInt(lineNumB)
+  })
+
+  return result
 }
 
 // ============================================================================
@@ -479,6 +587,638 @@ const LineItemRow = memo(({
 }, areLineItemRowPropsEqual)
 
 LineItemRow.displayName = "LineItemRow"
+
+// ============================================================================
+// NEW 3-CONDITION ARCHITECTURE UI COMPONENTS
+// ============================================================================
+
+// Props for the new SingleBatchRow component (Condition 1)
+interface SingleBatchRowProps {
+  line: DeliveryLine
+  lineState: LineFormState
+  calc: LineCalculation
+  isExpanded: boolean
+  isInvoiced: boolean
+  isSubmitting: boolean
+  onToggleExpansion: () => void
+  onInputChange: (field: keyof LineFormState, value: string) => void
+}
+
+// Props for the new SplitBatchParentRow component (Condition 2)
+interface SplitBatchParentRowProps {
+  parentLine: DeliveryLine
+  children: DeliveryLine[]
+  aggregatedTotals: {
+    scheduled: number
+    delivered: number
+    returned: number
+    rejected: number
+  }
+  isExpanded: boolean
+  isInvoiced: boolean
+  isSubmitting: boolean
+  onToggleExpansion: () => void
+  linesMap: Map<string, LineFormState>
+  onInputChange: (lineNumber: string, field: keyof LineFormState, value: string) => void
+}
+
+// Props for the ChildRow component (Condition 3)
+interface ChildRowProps {
+  childLine: DeliveryLine
+  lineState: LineFormState
+  calc: LineCalculation
+  isInvoiced: boolean
+  isSubmitting: boolean
+  onInputChange: (field: keyof LineFormState, value: string) => void
+}
+
+// Condition 1: Single Batch Row - standalone editable row
+// Layout is IDENTICAL to SplitBatchParentRow except for the expand/collapse icon
+const SingleBatchRow = memo(({
+  line,
+  lineState,
+  calc,
+  isExpanded,
+  isInvoiced,
+  isSubmitting,
+  onToggleExpansion,
+  onInputChange,
+}: SingleBatchRowProps) => {
+  const [localValues, setLocalValues] = useState({
+    delivered: lineState.delivered,
+    returned: lineState.returned,
+    rejected: lineState.rejected,
+    lineComment: lineState.lineComment
+  })
+
+  useEffect(() => {
+    setLocalValues({
+      delivered: lineState.delivered,
+      returned: lineState.returned,
+      rejected: lineState.rejected,
+      lineComment: lineState.lineComment
+    })
+  }, [lineState])
+
+  const handleFieldChange = (field: keyof LineFormState, value: string) => {
+    setLocalValues(prev => ({ ...prev, [field]: value }))
+    onInputChange(field, value)
+  }
+
+  const handleFocus = (field: "delivered" | "returned" | "rejected") => {
+    if (localValues[field] === "0") {
+      setLocalValues(prev => ({ ...prev, [field]: "" }))
+    }
+  }
+
+  const handleBlur = (field: "delivered" | "returned" | "rejected") => {
+    if (localValues[field].trim() === "" || localValues[field] === "-") {
+      setLocalValues(prev => ({ ...prev, [field]: "0" }))
+      onInputChange(field, "0")
+    } else {
+      const num = parseFloat(localValues[field])
+      if (num < 0) {
+        setLocalValues(prev => ({ ...prev, [field]: "0" }))
+        onInputChange(field, "0")
+      }
+    }
+  }
+
+  // Calculate status for consistency with SplitBatchParentRow
+  const statusInfo = useMemo(() => {
+    const delivered = parseFloat(localValues.delivered) || 0
+    const returned = parseFloat(localValues.returned) || 0
+    const rejected = parseFloat(localValues.rejected) || 0
+    const targetQty = line.packQuantity
+
+    if (delivered === 0 && rejected === 0 && returned === 0) {
+      return { status: 'pending', label: 'Pending', color: 'bg-slate-50 border-slate-200 text-slate-500' }
+    }
+
+    if (delivered === targetQty && returned === 0 && rejected === 0) {
+      return { status: 'accepted', label: 'Accepted', color: 'bg-emerald-50 border-emerald-200 text-emerald-700' }
+    }
+
+    return { status: 'discrepancy', label: 'Discrepancy', color: 'bg-amber-50 border-amber-200 text-amber-700' }
+  }, [localValues, line.packQuantity])
+
+  const varianceInfo = useMemo(() => {
+    const delivered = parseFloat(localValues.delivered) || 0
+    const returned = parseFloat(localValues.returned) || 0
+    const rejected = parseFloat(localValues.rejected) || 0
+    const totalActual = delivered + returned + rejected
+    const targetQty = line.packQuantity
+
+    if (totalActual === 0) return null
+
+    const rawVariance = ((targetQty - totalActual) / targetQty) * 100
+    const variancePercent = Math.abs(rawVariance).toFixed(1)
+
+    if (rawVariance === 0) {
+      return { text: `0.0% Variance`, className: 'bg-emerald-50 text-emerald-700 border-emerald-100' }
+    } else if (totalActual < targetQty) {
+      return { text: `-${variancePercent}% Short`, className: 'bg-amber-50 text-amber-700 border-amber-200' }
+    } else {
+      return { text: `+${variancePercent}% Surplus`, className: 'bg-blue-50 text-blue-700 border-blue-200' }
+    }
+  }, [localValues, line.packQuantity])
+
+  const delivered = parseFloat(localValues.delivered) || 0
+  const returned = parseFloat(localValues.returned) || 0
+  const rejected = parseFloat(localValues.rejected) || 0
+  const totalActual = delivered + returned + rejected
+
+  return (
+    <div className={`border-b border-slate-100 last:border-b-0 ${calc.isModified ? "bg-red-50/30" : ""}`}>
+      {/* Parent Row - IDENTICAL layout to SplitBatchParentRow */}
+      <button
+        type="button"
+        onClick={onToggleExpansion}
+        className="w-full p-4 flex items-start gap-4 hover:bg-slate-50 transition-colors text-left bg-white"
+      >
+        {/* Icon Container - SAME as SplitBatchParentRow */}
+        <div className="w-8 h-8 rounded-lg bg-blue-5 flex items-center justify-center shrink-0">
+          <Package className="w-4 h-4 text-[#1d2351]" />
+        </div>
+
+        {/* Main Content - SAME structure as SplitBatchParentRow */}
+        <div className="flex-1 min-w-0 space-y-2">
+          {/* Header with Line Number + Description + Badges */}
+          <div className="flex items-start justify-between">
+            <div className="flex-1 min-w-0">
+              {/* First Row: Line Number + Item Description + Badges */}
+              <div className="flex items-center gap-2 mb-1 flex-wrap">
+                <span className="text-xs font-bold text-[#1d2351] bg-blue-5 px-2 py-1 rounded-md shrink-0">
+                  Line #{line.deliveryLineNumber}
+                </span>
+                <span className="text-sm font-semibold text-slate-900">{line.deliveryItemDescription}</span>
+                <Badge className={`text-[10px] px-2 py-0.5 border ${statusInfo.color}`}>
+                  {statusInfo.label}
+                </Badge>
+                {varianceInfo && totalActual > 0 && (
+                  <Badge className={`text-[10px] px-2 py-0.5 border ${varianceInfo.className}`}>
+                    {varianceInfo.text}
+                  </Badge>
+                )}
+              </div>
+
+              {/* Order/PO/Batch Info - SAME as SplitBatchParentRow structure */}
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500">
+                {line.orderNumber && (
+                  <span>Order: <strong className="text-slate-700">{line.orderNumber}</strong></span>
+                )}
+                {line.buyerPONumber && (
+                  <span>PO: <strong className="text-slate-700">{line.buyerPONumber}</strong></span>
+                )}
+                <span>UOM: <strong className="text-slate-700">{transformUOM(line.packUOM)}</strong></span>
+                {/* Show batch number for Single Batch Parent */}
+                {line.batchNumber && (
+                  <span>Batch: <strong className="text-slate-700">{line.batchNumber}</strong></span>
+                )}
+              </div>
+            </div>
+
+            {/* Right Side: Totals Display - SAME layout as SplitBatchParentRow */}
+            <div className="flex items-center gap-3 shrink-0 ml-4">
+              <div className="text-right">
+                <div className="text-[10px] text-slate-500 uppercase font-medium">Intended</div>
+                <div className="text-sm font-bold text-slate-900">{line.packQuantity}</div>
+              </div>
+              <div className="text-right">
+                <div className="text-[10px] text-slate-500 uppercase font-medium">Received</div>
+                <div className="text-sm font-bold text-emerald-600">{delivered}</div>
+              </div>
+              <div className="text-right">
+                <div className="text-[10px] text-slate-500 uppercase font-medium">Returned</div>
+                <div className="text-sm font-bold text-amber-600">{returned}</div>
+              </div>
+              <div className="text-right">
+                <div className="text-[10px] text-slate-500 uppercase font-medium">Rejected</div>
+                <div className="text-sm font-bold text-red-600">{rejected}</div>
+              </div>
+            </div>
+
+            {/* Expand/Collapse Chevron - EMPTY for SingleBatch (no toggle functionality) */}
+            <div className="shrink-0 ml-2 w-5 flex justify-center">
+              {/* No icon for SingleBatch - space preserved for layout consistency */}
+            </div>
+          </div>
+        </div>
+      </button>
+
+      {/* Expanded Form - Compact inline input fields */}
+      {isExpanded && (
+        <div className="px-4 pb-4 pt-0 ml-12 border-l-2 border-slate-200 bg-slate-50/70">
+          <div className="space-y-3">
+            {/* Top row: Item info */}
+            <div className="flex items-center gap-3 text-xs">
+              <span className="text-slate-500">Item Code:</span>
+              <span className="font-medium text-slate-900">{line.deliveryItemCode}</span>
+              <span className="text-slate-300 mx-1">|</span>
+              <span className="text-slate-500">Sales Qty:</span>
+              <span className="font-medium text-slate-900">{line.salesQuantity} {transformUOM(line.salesUOM)}</span>
+            </div>
+
+            {/* Middle row: Compact input blocks */}
+            <div className="flex items-center gap-2">
+              <div className="space-y-0">
+                <Label className="text-[9px] font-medium text-slate-500 uppercase block mb-0.5">Received</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={localValues.delivered}
+                  onFocus={() => handleFocus("delivered")}
+                  onBlur={() => handleBlur("delivered")}
+                  onChange={(e) => handleFieldChange("delivered", e.target.value)}
+                  disabled={isInvoiced || isSubmitting}
+                  className="h-7 w-16 text-xs border-slate-300 focus:border-[#1d2351] focus:ring-[#1d2351] px-2"
+                />
+              </div>
+              <div className="space-y-0">
+                <Label className="text-[9px] font-medium text-slate-500 uppercase block mb-0.5">Rejected</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={localValues.rejected}
+                  onFocus={() => handleFocus("rejected")}
+                  onBlur={() => handleBlur("rejected")}
+                  onChange={(e) => handleFieldChange("rejected", e.target.value)}
+                  disabled={isInvoiced || isSubmitting}
+                  className="h-7 w-16 text-xs border-slate-300 focus:border-[#1d2351] focus:ring-[#1d2351] px-2"
+                />
+              </div>
+              <div className="space-y-0">
+                <Label className="text-[9px] font-medium text-slate-500 uppercase block mb-0.5">Returned</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={localValues.returned}
+                  onFocus={() => handleFocus("returned")}
+                  onBlur={() => handleBlur("returned")}
+                  onChange={(e) => handleFieldChange("returned", e.target.value)}
+                  disabled={isInvoiced || isSubmitting}
+                  className="h-7 w-16 text-xs border-slate-300 focus:border-[#1d2351] focus:ring-[#1d2351] px-2"
+                />
+              </div>
+            </div>
+
+            {/* Bottom row: Comment field */}
+            <div className="flex items-center gap-2">
+              <Label className="text-[10px] font-medium text-slate-500 uppercase shrink-0">Notes:</Label>
+              <Input
+                type="text"
+                value={localValues.lineComment}
+                onChange={(e) => handleFieldChange("lineComment", e.target.value)}
+                disabled={isInvoiced || isSubmitting}
+                placeholder="Add notes..."
+                className="h-7 text-xs border-slate-300 focus:border-[#1d2351] focus:ring-[#1d2351]"
+              />
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+})
+
+SingleBatchRow.displayName = "SingleBatchRow"
+
+// Condition 3: Child Row - nested editable row (used within SplitBatchParentRow)
+// High-contrast distinction: ml-6 indentation, border-l-2 track, zebra background
+// Omits redundant attributes: NO buyerPONumber, orderNumber, or UOM
+// Shows batchNumber (unique per child)
+const ChildRow = memo(({
+  childLine,
+  lineState,
+  calc,
+  isInvoiced,
+  isSubmitting,
+  onInputChange,
+}: ChildRowProps) => {
+  const [localValues, setLocalValues] = useState({
+    delivered: lineState.delivered,
+    returned: lineState.returned,
+    rejected: lineState.rejected,
+    lineComment: lineState.lineComment
+  })
+
+  useEffect(() => {
+    setLocalValues({
+      delivered: lineState.delivered,
+      returned: lineState.returned,
+      rejected: lineState.rejected,
+      lineComment: lineState.lineComment
+    })
+  }, [lineState])
+
+  const handleFieldChange = (field: keyof LineFormState, value: string) => {
+    setLocalValues(prev => ({ ...prev, [field]: value }))
+    onInputChange(field, value)
+  }
+
+  const handleFocus = (field: "delivered" | "returned" | "rejected") => {
+    if (localValues[field] === "0") {
+      setLocalValues(prev => ({ ...prev, [field]: "" }))
+    }
+  }
+
+  const handleBlur = (field: "delivered" | "returned" | "rejected") => {
+    if (localValues[field].trim() === "" || localValues[field] === "-") {
+      setLocalValues(prev => ({ ...prev, [field]: "0" }))
+      onInputChange(field, "0")
+    } else {
+      const num = parseFloat(localValues[field])
+      if (num < 0) {
+        setLocalValues(prev => ({ ...prev, [field]: "0" }))
+        onInputChange(field, "0")
+      }
+    }
+  }
+
+  return (
+    <div className={`py-2.5 px-4 ml-6 border-l-2 border-slate-200 pl-4 bg-slate-50/70 ${calc.isModified ? "bg-red-50/50" : ""}`}>
+      <div className="flex items-start gap-3">
+        {/* Left side: Child info - REDUCED attributes */}
+        <div className="flex-1 min-w-0 space-y-1">
+          {/* Header: Line number + Description + Modified badge */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-[10px] font-semibold text-slate-500 bg-slate-200 px-1.5 py-0.5 rounded">
+              L{childLine.deliveryLineNumber}
+            </span>
+            <span className="text-xs font-medium text-slate-900">{childLine.deliveryItemDescription}</span>
+            {calc.isModified && (
+              <Badge className="bg-red-100 text-red-700 border-none text-[9px] px-1.5 h-4 font-semibold">
+                Modified
+              </Badge>
+            )}
+          </div>
+
+          {/* Details: Qty + Batch only - NO orderNumber, buyerPONumber, or UOM */}
+          <div className="flex items-center gap-x-2 gap-y-0.5 text-[11px] text-slate-500 flex-wrap">
+            <span>Qty: <strong className="text-slate-700">{childLine.packQuantity}</strong></span>
+            {childLine.batchNumber && (
+              <>
+                <span className="text-slate-300">|</span>
+                <span>Batch: <strong className="font-mono text-slate-700">{childLine.batchNumber}</strong></span>
+              </>
+            )}
+            {calc.isModified && (
+              <>
+                <span className="text-slate-300">|</span>
+                <span className="text-red-600 font-medium">
+                  Actual: <strong>{calc.actualTotal}</strong>
+                </span>
+              </>
+            )}
+          </div>
+        </div>
+
+        {/* Right side: Compact input blocks - hyper-compact */}
+        <div className="flex items-center gap-1.5 shrink-0">
+          <div className="space-y-0">
+            <Label className="text-[8px] font-medium text-slate-500 uppercase block mb-0.5">Recv</Label>
+            <Input
+              type="number"
+              step="0.01"
+              min="0"
+              value={localValues.delivered}
+              onFocus={() => handleFocus("delivered")}
+              onBlur={() => handleBlur("delivered")}
+              onChange={(e) => handleFieldChange("delivered", e.target.value)}
+              disabled={isInvoiced || isSubmitting}
+              className="h-6 w-14 text-xs border-slate-300 focus:border-[#1d2351] focus:ring-[#1d2351] px-1.5"
+            />
+          </div>
+          <div className="space-y-0">
+            <Label className="text-[8px] font-medium text-slate-500 uppercase block mb-0.5">Rej</Label>
+            <Input
+              type="number"
+              step="0.01"
+              min="0"
+              value={localValues.rejected}
+              onFocus={() => handleFocus("rejected")}
+              onBlur={() => handleBlur("rejected")}
+              onChange={(e) => handleFieldChange("rejected", e.target.value)}
+              disabled={isInvoiced || isSubmitting}
+              className="h-6 w-14 text-xs border-slate-300 focus:border-[#1d2351] focus:ring-[#1d2351] px-1.5"
+            />
+          </div>
+          <div className="space-y-0">
+            <Label className="text-[8px] font-medium text-slate-500 uppercase block mb-0.5">Ret</Label>
+            <Input
+              type="number"
+              step="0.01"
+              min="0"
+              value={localValues.returned}
+              onFocus={() => handleFocus("returned")}
+              onBlur={() => handleBlur("returned")}
+              onChange={(e) => handleFieldChange("returned", e.target.value)}
+              disabled={isInvoiced || isSubmitting}
+              className="h-6 w-14 text-xs border-slate-300 focus:border-[#1d2351] focus:ring-[#1d2351] px-1.5"
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Notes field for this child - compact */}
+      <div className="mt-1.5 flex items-center gap-2">
+        <Label className="text-[9px] font-medium text-slate-500 uppercase shrink-0">Notes:</Label>
+        <Input
+          type="text"
+          value={localValues.lineComment}
+          onChange={(e) => handleFieldChange("lineComment", e.target.value)}
+          disabled={isInvoiced || isSubmitting}
+          placeholder="Add notes..."
+          className="h-6 text-xs border-slate-300 focus:border-[#1d2351] focus:ring-[#1d2351] px-2"
+        />
+      </div>
+    </div>
+  )
+})
+
+ChildRow.displayName = "ChildRow"
+
+// Condition 2: Split Batch Parent Row - read-only summary with expandable children
+const SplitBatchParentRow = memo(({
+  parentLine,
+  children,
+  aggregatedTotals,
+  isExpanded,
+  isInvoiced,
+  isSubmitting,
+  onToggleExpansion,
+  linesMap,
+  onInputChange,
+}: SplitBatchParentRowProps) => {
+  // Calculate aggregated values from form state
+  const currentAggregated = useMemo(() => {
+    const totals = {
+      delivered: 0,
+      returned: 0,
+      rejected: 0
+    }
+
+    // Sum up all child values
+    children.forEach(child => {
+      const childState = linesMap.get(child.deliveryLineNumber)
+      if (childState) {
+        totals.delivered += parseFloat(childState.delivered) || 0
+        totals.returned += parseFloat(childState.returned) || 0
+        totals.rejected += parseFloat(childState.rejected) || 0
+      }
+    })
+
+    return totals
+  }, [linesMap, children])
+
+  // Calculate status and variance
+  const statusInfo = useMemo(() => {
+    const totalActual = currentAggregated.delivered + currentAggregated.returned + currentAggregated.rejected
+    const totalScheduled = children.reduce((sum, child) => sum + child.packQuantity, 0)
+
+    if (totalActual === 0) {
+      return { status: 'pending', label: 'Pending', color: 'bg-slate-50 border-slate-200 text-slate-500' }
+    }
+
+    if (totalActual === totalScheduled && currentAggregated.returned === 0 && currentAggregated.rejected === 0) {
+      return { status: 'accepted', label: 'Accepted', color: 'bg-emerald-50 border-emerald-200 text-emerald-700' }
+    }
+
+    return { status: 'discrepancy', label: 'Discrepancy', color: 'bg-amber-50 border-amber-200 text-amber-700' }
+  }, [currentAggregated, children])
+
+  const varianceInfo = useMemo(() => {
+    const totalActual = currentAggregated.delivered + currentAggregated.returned + currentAggregated.rejected
+    const totalScheduled = children.reduce((sum, child) => sum + child.packQuantity, 0)
+
+    if (totalActual === 0) return null
+
+    const rawVariance = ((totalScheduled - totalActual) / totalScheduled) * 100
+    const variancePercent = Math.abs(rawVariance).toFixed(1)
+
+    if (rawVariance === 0) {
+      return { text: `0.0% Variance`, className: 'bg-emerald-50 text-emerald-700 border-emerald-100' }
+    } else if (totalActual < totalScheduled) {
+      return { text: `-${variancePercent}% Short`, className: 'bg-amber-50 text-amber-700 border-amber-200' }
+    } else {
+      return { text: `+${variancePercent}% Surplus`, className: 'bg-blue-50 text-blue-700 border-blue-200' }
+    }
+  }, [currentAggregated, children])
+
+  const totalActual = currentAggregated.delivered + currentAggregated.returned + currentAggregated.rejected
+  const totalScheduled = children.reduce((sum, child) => sum + child.packQuantity, 0)
+
+  return (
+    <div className="border-b border-slate-100 last:border-b-0">
+      {/* Parent Row - IDENTICAL layout to SingleBatchRow */}
+      <button
+        type="button"
+        onClick={onToggleExpansion}
+        className="w-full p-4 flex items-start gap-4 hover:bg-slate-50 transition-colors text-left bg-white"
+      >
+        {/* Icon Container - SAME as SingleBatchRow */}
+        <div className="w-8 h-8 rounded-lg bg-blue-5 flex items-center justify-center shrink-0">
+          <Package className="w-4 h-4 text-[#1d2351]" />
+        </div>
+
+        {/* Main Content - SAME structure as SingleBatchRow */}
+        <div className="flex-1 min-w-0 space-y-2">
+          {/* Header with Line Number + Description + Badges */}
+          <div className="flex items-start justify-between">
+            <div className="flex-1 min-w-0">
+              {/* First Row: Line Number + Item Description + Badges */}
+              <div className="flex items-center gap-2 mb-1 flex-wrap">
+                <span className="text-xs font-bold text-[#1d2351] bg-blue-5 px-2 py-1 rounded-md shrink-0">
+                  Line #{parentLine.deliveryLineNumber}
+                </span>
+                <span className="text-sm font-semibold text-slate-900">{parentLine.deliveryItemDescription}</span>
+                <Badge className={`text-[10px] px-2 py-0.5 border ${statusInfo.color}`}>
+                  {statusInfo.label}
+                </Badge>
+                {varianceInfo && totalActual > 0 && (
+                  <Badge className={`text-[10px] px-2 py-0.5 border ${varianceInfo.className}`}>
+                    {varianceInfo.text}
+                  </Badge>
+                )}
+              </div>
+
+              {/* Order/PO Info - SAME as SingleBatchRow structure */}
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500">
+                {parentLine.orderNumber && (
+                  <span>Order: <strong className="text-slate-700">{parentLine.orderNumber}</strong></span>
+                )}
+                {parentLine.buyerPONumber && (
+                  <span>PO: <strong className="text-slate-700">{parentLine.buyerPONumber}</strong></span>
+                )}
+                <span>UOM: <strong className="text-slate-700">{transformUOM(parentLine.packUOM)}</strong></span>
+                {/* NO batch number on parent - shown on children instead */}
+                <span>Batches: <strong className="text-slate-700">{children.length}</strong></span>
+              </div>
+            </div>
+
+            {/* Right Side: Aggregated Totals Display - SAME layout as SingleBatchRow */}
+            <div className="flex items-center gap-3 shrink-0 ml-4">
+              <div className="text-right">
+                <div className="text-[10px] text-slate-500 uppercase font-medium">Intended</div>
+                <div className="text-sm font-bold text-slate-900">{totalScheduled}</div>
+              </div>
+              <div className="text-right">
+                <div className="text-[10px] text-slate-500 uppercase font-medium">Received</div>
+                <div className="text-sm font-bold text-emerald-600">{currentAggregated.delivered}</div>
+              </div>
+              <div className="text-right">
+                <div className="text-[10px] text-slate-500 uppercase font-medium">Returned</div>
+                <div className="text-sm font-bold text-amber-600">{currentAggregated.returned}</div>
+              </div>
+              <div className="text-right">
+                <div className="text-[10px] text-slate-500 uppercase font-medium">Rejected</div>
+                <div className="text-sm font-bold text-red-600">{currentAggregated.rejected}</div>
+              </div>
+            </div>
+
+            {/* Expand/Collapse Chevron - ONLY difference from SingleBatchRow */}
+            <div className="shrink-0 ml-2">
+              {isExpanded ? (
+                <ChevronUp className="w-5 h-5 text-slate-400" />
+              ) : (
+                <ChevronDown className="w-5 h-5 text-slate-400" />
+              )}
+            </div>
+          </div>
+        </div>
+      </button>
+
+      {/* Expanded Children - High-contrast distinction */}
+      {isExpanded && (
+        <div className="bg-slate-50/30 border-t border-slate-100">
+          {children.map(child => {
+            const childState = linesMap.get(child.deliveryLineNumber)
+            if (!childState) return null
+
+            const childCalc = calculateLineData(childState, child.packQuantity, false)
+
+            return (
+              <ChildRow
+                key={child.deliveryLineNumber}
+                childLine={child}
+                lineState={childState}
+                calc={childCalc}
+                isInvoiced={isInvoiced}
+                isSubmitting={isSubmitting}
+                onInputChange={(field, value) => onInputChange(child.deliveryLineNumber, field, value)}
+              />
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+})
+
+SplitBatchParentRow.displayName = "SplitBatchParentRow"
 
 const ToastNotification = memo(({ show, type, onClose, title, message }: ToastNotificationProps) => {
   if (!show) return null
@@ -1166,22 +1906,33 @@ export function DeliveryReceivePage() {
   // ITEM GROUPS & DASHBOARD SUMMARIES
   // ============================================================================
 
-  // Create ItemGroups from delivery lines (memoized)
+  // Create ItemGroups from delivery lines (memoized) - LEGACY
   const itemGroups = useMemo(() => {
     if (!delivery) return []
     return createItemGroups(delivery.lines)
   }, [delivery?.lines])
 
-  // Get standalone items (non-batched)
+  // Get standalone items (non-batched) - LEGACY
   const standaloneItems = useMemo(() => {
     if (!delivery) return []
     return getStandaloneItems(delivery.lines)
   }, [delivery?.lines])
 
-  // Total root elements (ItemGroups + Standalone Items)
+  // NEW: Build line item tree using 3-condition architecture
+  const displayableItems = useMemo(() => {
+    if (!delivery) return []
+    return buildLineItemTree(delivery.lines)
+  }, [delivery?.lines])
+
+  // Total root elements (ItemGroups + Standalone Items) - LEGACY
   const totalRootElements = useMemo(() => {
     return itemGroups.length + standaloneItems.length
   }, [itemGroups.length, standaloneItems.length])
+
+  // Total root elements - NEW
+  const totalDisplayableItems = useMemo(() => {
+    return displayableItems.length
+  }, [displayableItems.length])
 
   // Total concrete batches (all delivery lines)
   const totalBatches = useMemo(() => {
@@ -1254,6 +2005,37 @@ export function DeliveryReceivePage() {
     )
   }, [deferredSearchQuery])
 
+  // NEW: Search filter for DisplayableLineItem
+  const searchFilterDisplayable = useCallback((item: DisplayableLineItem): boolean => {
+    if (!deferredSearchQuery) return true
+
+    const searchLower = deferredSearchQuery.toLowerCase()
+
+    if (item.type === 'single-batch') {
+      const line = item.line
+      return (
+        line.deliveryItemDescription.toLowerCase().includes(searchLower) ||
+        (line.orderNumber || "").toLowerCase().includes(searchLower) ||
+        (line.buyerPONumber || "").toLowerCase().includes(searchLower) ||
+        (line.batchNumber || "").toLowerCase().includes(searchLower)
+      )
+    } else {
+      // split-batch
+      const parent = item.parentLine
+      const parentMatch =
+        parent.deliveryItemDescription.toLowerCase().includes(searchLower) ||
+        (parent.orderNumber || "").toLowerCase().includes(searchLower) ||
+        (parent.buyerPONumber || "").toLowerCase().includes(searchLower)
+
+      const childMatch = item.children.some(child =>
+        (child.batchNumber || "").toLowerCase().includes(searchLower) ||
+        child.deliveryItemDescription.toLowerCase().includes(searchLower)
+      )
+
+      return parentMatch || childMatch
+    }
+  }, [deferredSearchQuery])
+
   // Filter ItemGroups and standalone items
   const filteredItemGroups = useMemo(() => {
     return itemGroups.filter(searchFilter)
@@ -1268,6 +2050,11 @@ export function DeliveryReceivePage() {
     return [...filteredItemGroups, ...filteredStandaloneItems]
   }, [filteredItemGroups, filteredStandaloneItems])
 
+  // NEW: Filter displayable items
+  const filteredDisplayableItems = useMemo(() => {
+    return displayableItems.filter(searchFilterDisplayable)
+  }, [displayableItems, searchFilterDisplayable])
+
   // Pagination - get current page items
   const paginatedItems = useMemo(() => {
     const startIndex = (currentPage - 1) * ITEMS_PER_PAGE
@@ -1275,7 +2062,17 @@ export function DeliveryReceivePage() {
     return allFilteredItems.slice(startIndex, endIndex)
   }, [allFilteredItems, currentPage])
 
+  // NEW: Pagination for displayable items
+  const paginatedDisplayableItems = useMemo(() => {
+    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE
+    const endIndex = startIndex + ITEMS_PER_PAGE
+    return filteredDisplayableItems.slice(startIndex, endIndex)
+  }, [filteredDisplayableItems, currentPage])
+
   const totalPages = Math.ceil(allFilteredItems.length / ITEMS_PER_PAGE)
+
+  // NEW: Total pages for displayable items
+  const totalDisplayablePages = Math.ceil(filteredDisplayableItems.length / ITEMS_PER_PAGE)
 
   // Photo URLs memoization
   const photoUrls = useMemo(() => {
@@ -2051,7 +2848,7 @@ export function DeliveryReceivePage() {
 
           {/* Dashboard Summary */}
           <DashboardSummary
-            totalItems={totalRootElements}
+            totalItems={totalDisplayableItems}
             totalBatches={totalBatches}
             summaries={dashboardSummaries}
           />
@@ -2061,7 +2858,7 @@ export function DeliveryReceivePage() {
             <div className="p-4 border-b border-slate-100 space-y-4">
               <div className="flex items-center justify-between">
                 <CardTitle className="text-sm font-semibold text-slate-800">Line Items</CardTitle>
-                <span className="text-xs text-slate-500">{allFilteredItems.length} of {delivery.lines.length}</span>
+                <span className="text-xs text-slate-500">{filteredDisplayableItems.length} of {delivery.lines.length}</span>
               </div>
 
               <div className="relative">
@@ -2099,35 +2896,20 @@ export function DeliveryReceivePage() {
               </div>
             </div>
 
-            {/* Items List with ItemGroups and Standalone Items */}
+            {/* Items List with Displayable Items */}
             <div className="divide-y divide-slate-100 max-h-[500px] overflow-y-auto">
-              {allFilteredItems.length === 0 ? (
+              {filteredDisplayableItems.length === 0 ? (
                 <div className="p-8 text-center">
                   <Package className="w-10 h-10 text-slate-300 mx-auto mb-2" />
                   <p className="text-sm text-slate-500">No items found</p>
                 </div>
               ) : (
                 <>
-                  {paginatedItems.map((item) => {
-                    if ('lines' in item) {
-                      // ItemGroup
-                      const group = item as ItemGroup
-                      const isExpanded = expandedGroups.has(group.id)
-                      return (
-                        <ItemGroupRow
-                          key={group.id}
-                          group={group}
-                          isExpanded={isExpanded}
-                          isInvoiced={delivery.invoiced}
-                          isSubmitting={submitting}
-                          linesMap={linesMap}
-                          onToggleExpansion={() => toggleGroupExpansion(group.id)}
-                          onInputChange={(lineNumber, field, value) => updateLineField(lineNumber, field, value)}
-                        />
-                      )
-                    } else {
-                      // Standalone line
-                      const line = item as DeliveryLine
+                  {/* NEW: Render using 3-condition architecture */}
+                  {paginatedDisplayableItems.map((item) => {
+                    if (item.type === 'single-batch') {
+                      // Condition 1: Parent Single Batch - standalone editable row
+                      const { line } = item
                       const lineState = linesMap.get(line.deliveryLineNumber) || {
                         delivered: line.packQuantity.toString(),
                         returned: "0",
@@ -2139,18 +2921,35 @@ export function DeliveryReceivePage() {
                       const handlers = getRowHandlers(line.deliveryLineNumber)
 
                       return (
-                        <LineItemRow
+                        <SingleBatchRow
                           key={line.deliveryLineNumber}
                           line={line}
                           lineState={lineState}
                           calc={calc}
                           isExpanded={isExpanded}
-                          deliveryReceived={delivery.received}
                           isInvoiced={delivery.invoiced}
                           isSubmitting={submitting}
-                          isSubmitted={submitted}
                           onToggleExpansion={handlers.onToggleExpansion}
                           onInputChange={handlers.onInputChange}
+                        />
+                      )
+                    } else {
+                      // Condition 2: Parent with Split Batch - read-only summary with children
+                      const { parentLine, children } = item
+                      const isExpanded = expandedRows.has(parentLine.deliveryLineNumber)
+
+                      return (
+                        <SplitBatchParentRow
+                          key={parentLine.deliveryLineNumber}
+                          parentLine={parentLine}
+                          children={children}
+                          aggregatedTotals={item.aggregatedTotals}
+                          isExpanded={isExpanded}
+                          isInvoiced={delivery.invoiced}
+                          isSubmitting={submitting}
+                          onToggleExpansion={() => toggleRowExpansion(parentLine.deliveryLineNumber)}
+                          linesMap={linesMap}
+                          onInputChange={(lineNumber, field, value) => updateLineField(lineNumber, field, value)}
                         />
                       )
                     }
@@ -2160,10 +2959,10 @@ export function DeliveryReceivePage() {
             </div>
 
             {/* Pagination */}
-            {totalPages > 1 && (
+            {totalDisplayablePages > 1 && (
               <div className="px-4 py-3 border-t border-slate-100 flex items-center justify-between gap-4">
                 <span className="text-xs text-slate-500">
-                  Page {currentPage} of {totalPages}
+                  Page {currentPage} of {totalDisplayablePages}
                 </span>
                 <div className="flex items-center gap-1">
                   <Button
@@ -2178,8 +2977,8 @@ export function DeliveryReceivePage() {
                   <Button
                     type="button"
                     variant="outline"
-                    onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                    disabled={currentPage === totalPages}
+                    onClick={() => setCurrentPage(p => Math.min(totalDisplayablePages, p + 1))}
+                    disabled={currentPage === totalDisplayablePages}
                     className="h-8 w-8 p-0 border-slate-300 text-slate-600 hover:bg-slate-50 disabled:opacity-50"
                   >
                     <ChevronDown className="w-4 h-4" />
