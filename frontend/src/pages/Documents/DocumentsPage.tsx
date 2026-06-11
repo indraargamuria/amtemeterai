@@ -3,7 +3,7 @@ import { Card, CardContent } from "../../shared/components/ui/Card"
 import { Button } from "../../shared/components/ui/Button"
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "../../shared/components/ui/Table"
 import { Badge } from "../../shared/components/ui/Badge"
-import { getInvoices, type Invoice } from "../../shared/utils/api"
+import { getInvoices } from "../../shared/utils/api"
 import { cn } from "../../shared/utils/cn"
 import { FileText, Truck, Package, AlertCircle, ChevronRight, X, Loader2 } from "lucide-react"
 
@@ -626,8 +626,7 @@ function DetailRow({
 
 function DocumentLink({
   label,
-  url,
-  status
+  url
 }: {
   label: string
   url: string

@@ -219,25 +219,25 @@ const createItemGroups = (lines: DeliveryLine[]): ItemGroup[] => {
 // STATUS CALCULATION HELPER
 // ============================================================================
 
-const calculateGroupStatus = (
-  received: number,
-  returned: number,
-  rejected: number,
-  scheduled: number
-): 'accepted' | 'discrepancy' | 'pending' => {
-  // All zeros = pending
-  if (received === 0 && returned === 0 && rejected === 0) {
-    return 'pending'
-  }
+// const calculateGroupStatus = (
+//   received: number,
+//   returned: number,
+//   rejected: number,
+//   scheduled: number
+// ): 'accepted' | 'discrepancy' | 'pending' => {
+//   // All zeros = pending
+//   if (received === 0 && returned === 0 && rejected === 0) {
+//     return 'pending'
+//   }
 
-  // Perfect match = accepted
-  if (received === scheduled && returned === 0 && rejected === 0) {
-    return 'accepted'
-  }
+//   // Perfect match = accepted
+//   if (received === scheduled && returned === 0 && rejected === 0) {
+//     return 'accepted'
+//   }
 
-  // Any discrepancy or rejects/returns = discrepancy
-  return 'discrepancy'
-}
+//   // Any discrepancy or rejects/returns = discrepancy
+//   return 'discrepancy'
+// }
 
 // ============================================================================
 // STANDALINE ITEMS HELPER
