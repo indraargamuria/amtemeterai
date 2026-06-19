@@ -1048,7 +1048,7 @@ Authorization: Bearer {token}
 }
 ```
 
-### Create SAP Invoice (Production)
+### Create SAP Invoice (Production) - Idempotent
 **Endpoint:** `POST /api/deliveries/{deliveryNumber}/invoice`
 
 **Authorization:** Required
@@ -1056,10 +1056,12 @@ Authorization: Bearer {token}
 **Request Parameters:**
 - `deliveryNumber` (route parameter): The delivery number to create invoice for
 
-**Process Flow:**
+**Process Flow (Idempotent):**
 1. Validates delivery exists in the database
-2. Checks if delivery is already invoiced (returns BadRequest if true)
-3. Sends POST request to SAP billing endpoint: `http://10.2.38.138:8000/sap/bc/zr_createinv?sap-client=250`
+2. **Idempotency Check:** Checks if an invoice already exists in the `Invoices` table for this delivery (via `DeliveryHeaderId`)
+   - **Case A (New Billing):** If no existing invoice, proceeds to call SAP billing endpoint
+   - **Case B (Re-sync):** If existing invoice found, returns existing invoice data without calling SAP API
+3. For new billing: Sends POST request to SAP billing endpoint: `http://10.2.38.138:8000/sap/bc/zr_createinv?sap-client=250`
 4. Returns error if SAP server responds with non-success status
 5. Creates invoice record and marks delivery as invoiced in a transaction
 6. Logs activity for audit trail
@@ -1071,7 +1073,7 @@ Authorization: Bearer {token}
 }
 ```
 
-**Response Body:**
+**Response Body (New Invoice Created):**
 ```json
 {
   "success": true,
@@ -1083,13 +1085,26 @@ Authorization: Bearer {token}
 }
 ```
 
+**Response Body (Existing Invoice - Re-sync):**
+```json
+{
+  "success": true,
+  "message": "Invoice already created previously",
+  "invoiceNumber": "SAP-INV-20250520123456",
+  "invoiceAmount": 1500000,
+  "billingDate": "2025-05-20T10:30:00Z",
+  "deliveryNumber": "DLV1001"
+}
+```
+
 **Error Responses:**
 - `404 Not Found` - Delivery not found
-- `400 Bad Request` - Delivery already invoiced
 - `502 Bad Gateway` - SAP server error with details
 
 **Business Rules:**
-- Can only invoice deliveries that are not yet invoiced
+- **Idempotent Execution:** Endpoint can be safely called multiple times for the same delivery
+- **Local Database Check:** Pre-flight check in `Invoices` table prevents duplicate SAP API calls
+- **Re-sync Support:** Returns existing invoice data without calling SAP API
 - Uses clean HTTP client instance (not named client) to avoid base address issues
 - All database operations wrapped in transaction for atomicity
 - Returns same data structure as settlement simulation for consistency

@@ -352,6 +352,8 @@ Pending Delivery → Fully Received → Invoiced
 - **Buyer PO Number** display (conditional - shown only for non-warehouse roles)
 - **Order Number** display (conditional - shown only for non-warehouse roles)
 - **Receive Date** display (shown when delivery is confirmed)
+- **SAP Invoice Number Badge** (shown when invoice exists)
+- **SAP Invoice Generate/Sync Button** (shown for received deliveries)
 - Line items breakdown with batch number and variance percentage
 - Photo gallery
 - GPS location data
@@ -360,6 +362,23 @@ Pending Delivery → Fully Received → Invoiced
 ### Role-Based Visibility
 - **Warehouse role:** Customer code/name, Buyer PO Number, and Order Number are hidden (shows "Confidential")
 - **Other roles:** All delivery details including customer information and order numbers are displayed
+
+### SAP Invoice Generation
+- **Dynamic Button Label:**
+  - "Generate SAP Invoice" - when delivery is not yet invoiced
+  - "Sync SAP Invoice" - when invoice already exists (re-sync scenario)
+- **Button Visibility:** Only shown for received (non-canceled) deliveries
+- **Loading State:** Button disabled and shows "Processing..." during API call
+- **Toast Notifications:**
+  - On new invoice creation: "Invoice {InvoiceNumber} successfully created."
+  - On re-sync: "Invoice {InvoiceNumber} successfully synchronized."
+  - On error: Shows appropriate error message
+- **Data Refresh:** Delivery details are automatically refreshed after successful operation
+
+### Invoice Number Badge
+- Displayed in "Core Dispatch Information" card when `invoiceNumber` exists
+- Styled with blue background and border (`bg-blue-50 text-blue-700 border-blue-200`)
+- Shows the SAP invoice number returned from the billing endpoint
 
 ### Variance Display
 - Shows variance percentage for each line item

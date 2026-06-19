@@ -1,6 +1,7 @@
-import { useState, useEffect, useMemo } from "react"
+import { useState, useEffect, useMemo, memo } from "react"
 import { useParams, useNavigate } from "react-router-dom"
 import QRCode from "qrcode"
+import { CheckCircle, AlertTriangle } from "lucide-react"
 import { Button } from "../../shared/components/ui/Button"
 import { Badge } from "../../shared/components/ui/Badge"
 import { Card, CardContent, CardHeader, CardTitle } from "../../shared/components/ui/Card"
@@ -54,6 +55,7 @@ interface DeliveryDetail {
   received: boolean
   receiveDate?: string | null
   invoiced: boolean
+  invoiceNumber?: string | null // 🆕 Added: SAP invoice number from backend
   publicUrl: string
   plant?: string | null
   type?: number | null
@@ -71,7 +73,78 @@ interface DeliveryDetail {
   lines: DeliveryLine[]
 }
 
+// 🆕 Toast notification interface
+interface ToastNotificationProps {
+  show: boolean
+  type: "success" | "error" | "info"
+  title?: string
+  message?: string
+  onClose: () => void
+}
+
 const LINES_PER_PAGE = 10
+
+// 🆕 Toast notification component (memoized)
+const ToastNotification = memo(({ show, type, onClose, title, message }: ToastNotificationProps) => {
+  if (!show) return null
+
+  const defaultTitles = {
+    success: "Success",
+    error: "Action Required",
+    info: "Information"
+  }
+
+  const displayTitle = title ?? defaultTitles[type]
+
+  const typeStyles = {
+    success: {
+      border: "border-emerald-200",
+      bg: "bg-emerald-100",
+      iconColor: "text-emerald-600"
+    },
+    error: {
+      border: "border-red-200",
+      bg: "bg-red-100",
+      iconColor: "text-red-600"
+    },
+    info: {
+      border: "border-blue-200",
+      bg: "bg-blue-100",
+      iconColor: "text-blue-600"
+    }
+  }
+
+  const styles = typeStyles[type]
+
+  return (
+    <div className="fixed top-4 right-4 z-50 animate-in slide-in-from-top-4 fade-in duration-300">
+      <div className={`bg-white border rounded-lg shadow-xl p-4 flex items-start gap-3 min-w-[300px] ${styles.border}`}>
+        <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${styles.bg}`}>
+          {type === "error" ? (
+            <AlertTriangle className={`w-4 h-4 ${styles.iconColor}`} />
+          ) : (
+            <CheckCircle className={`w-4 h-4 ${styles.iconColor}`} />
+          )}
+        </div>
+        <div className="flex-1">
+          <h4 className="text-sm font-semibold text-slate-900">
+            {displayTitle}
+          </h4>
+          {message && (
+            <p className="text-xs text-slate-500 mt-0.5">
+              {message}
+            </p>
+          )}
+        </div>
+        <button onClick={onClose} className="text-slate-400 hover:text-slate-600 shrink-0 text-lg leading-none">
+          ×
+        </button>
+      </div>
+    </div>
+  )
+})
+
+ToastNotification.displayName = "ToastNotification"
 
 export function DeliveryDetailPage() {
   const { deliveryId } = useParams<{ deliveryId: string }>()
@@ -83,6 +156,13 @@ export function DeliveryDetailPage() {
   const [copySuccess, setCopySuccess] = useState(false)
   const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null)
   const [linePage, setLinePage] = useState(1)
+
+  // 🆕 SAP invoice generation state
+  const [processingBilling, setProcessingBilling] = useState(false)
+  const [showToast, setShowToast] = useState(false)
+  const [toastType, setToastType] = useState<"success" | "error" | "info">("success")
+  const [toastTitle, setToastTitle] = useState<string | undefined>(undefined)
+  const [toastMessage, setToastMessage] = useState<string | undefined>(undefined)
 
   const api = useApi()
 
@@ -100,6 +180,14 @@ export function DeliveryDetailPage() {
   useEffect(() => {
     setLinePage(1)
   }, [deliveryId])
+
+  // 🆕 Toast auto-dismiss
+  useEffect(() => {
+    if (showToast) {
+      const timer = setTimeout(() => setShowToast(false), 5000)
+      return () => clearTimeout(timer)
+    }
+  }, [showToast])
 
   useEffect(() => {
     const fetchDeliveryDetail = async () => {
@@ -155,6 +243,55 @@ export function DeliveryDetailPage() {
       link.href = qrCode
       link.download = `delivery-${delivery.deliveryNumber}.png`
       link.click()
+    }
+  }
+
+  // 🆕 Handle SAP invoice generation/sync
+  const handleGenerateInvoice = async () => {
+    if (!delivery || processingBilling) return
+
+    setProcessingBilling(true)
+
+    try {
+      const res = await api.post(`/api/deliveries/${delivery.deliveryNumber}/invoice`, {})
+
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({ message: "Failed to generate invoice" }))
+        setToastType("error")
+        setToastTitle("Invoice Generation Failed")
+        setToastMessage(errorData.message || "An error occurred while generating the SAP invoice.")
+        setShowToast(true)
+        setProcessingBilling(false)
+        return
+      }
+
+      const data = await res.json()
+
+      // Refresh delivery data to get updated invoice status
+      const deliveryRes = await api.get(`/api/deliveries/${deliveryId}`)
+      if (deliveryRes.ok) {
+        const updatedDelivery: DeliveryDetail = await deliveryRes.json()
+        setDelivery(updatedDelivery)
+      }
+
+      // Show appropriate success message based on response
+      if (data.message === "Invoice already created previously") {
+        setToastType("success")
+        setToastTitle("Invoice Synchronized")
+        setToastMessage(`Invoice ${data.invoiceNumber} successfully synchronized.`)
+      } else {
+        setToastType("success")
+        setToastTitle("Invoice Created")
+        setToastMessage(`Invoice ${data.invoiceNumber} successfully created.`)
+      }
+      setShowToast(true)
+    } catch (err) {
+      setToastType("error")
+      setToastTitle("Invoice Generation Failed")
+      setToastMessage("Network error occurred while communicating with the server.")
+      setShowToast(true)
+    } finally {
+      setProcessingBilling(false)
     }
   }
 
@@ -259,6 +396,24 @@ export function DeliveryDetailPage() {
               Uninvoiced
             </Badge>
           )}
+          {/* 🆕 SAP Invoice Generate/Sync Button */}
+          {delivery.received && delivery.status !== 3 && (
+            <Button
+              variant={delivery.invoiced || delivery.invoiceNumber ? "outline" : "default"}
+              size="sm"
+              onClick={handleGenerateInvoice}
+              disabled={processingBilling}
+              className="whitespace-nowrap"
+            >
+              {processingBilling ? (
+                <>Processing...</>
+              ) : delivery.invoiced || delivery.invoiceNumber ? (
+                <>Sync SAP Invoice</>
+              ) : (
+                <>Generate SAP Invoice</>
+              )}
+            </Button>
+          )}
         </div>
       </div>
 
@@ -318,6 +473,18 @@ export function DeliveryDetailPage() {
                   <p className="text-sm text-brand-blue/80">
                     {formatDate(delivery.receiveDate)}
                   </p>
+                </div>
+              )}
+
+              {/* 🆕 Invoice Number Badge - Shown when invoice exists */}
+              {delivery.invoiceNumber && (
+                <div className="space-y-1">
+                  <p className="text-xs font-medium text-brand-blue/50 uppercase tracking-wider">
+                    SAP Invoice Number
+                  </p>
+                  <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 font-normal text-xs">
+                    {delivery.invoiceNumber}
+                  </Badge>
                 </div>
               )}
 
@@ -749,6 +916,19 @@ export function DeliveryDetailPage() {
           </div>
         </div>
       )}
+
+      {/* 🆕 Toast Notification */}
+      <ToastNotification
+        show={showToast}
+        type={toastType}
+        title={toastTitle}
+        message={toastMessage}
+        onClose={() => {
+          setShowToast(false)
+          setToastTitle(undefined)
+          setToastMessage(undefined)
+        }}
+      />
     </div>
   )
 }

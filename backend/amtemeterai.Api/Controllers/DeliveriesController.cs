@@ -1135,6 +1135,7 @@ public class DeliveriesController : ControllerBase
     /// <summary>
     /// Trigger actual SAP Invoice creation for a delivery number
     /// This endpoint calls the real SAP billing endpoint to create an invoice
+    /// Now supports idempotent execution - returns existing invoice if already created
     /// </summary>
     [HttpPost("{deliveryNumber}/invoice")]
     [Authorize]
@@ -1162,13 +1163,33 @@ public class DeliveriesController : ControllerBase
                 return NotFound($"Delivery {deliveryNumber} not found.");
             }
 
-            // === Step 2: Locking - Check if already invoiced ===
-            if (delivery.Invoiced)
+            // === Step 2: Idempotency Check - Local Database Invoice Lookup ===
+            // Check if an invoice already exists for this delivery (re-sync scenario)
+            var existingInvoice = await _db.Invoices
+                .FirstOrDefaultAsync(i => i.DeliveryHeaderId == delivery.DeliveryID);
+
+            if (existingInvoice != null)
             {
-                return BadRequest($"Delivery {deliveryNumber} is already invoiced.");
+                // Case B: Re-sync / Record Already Exists
+                // Return existing invoice data without calling SAP API
+                _logger.LogInformation(
+                    "Invoice {InvoiceNumber} already exists for delivery {DeliveryNumber}. Returning existing record.",
+                    existingInvoice.InvoiceNumber,
+                    deliveryNumber);
+
+                return Ok(new DeliverySettlementResponseDto
+                {
+                    Success = true,
+                    Message = "Invoice already created previously",
+                    InvoiceNumber = existingInvoice.InvoiceNumber,
+                    InvoiceAmount = existingInvoice.InvoiceAmount,
+                    BillingDate = existingInvoice.InvoicedDate,
+                    DeliveryNumber = deliveryNumber
+                });
             }
 
             // === Step 3: Outbound Request - Call SAP billing endpoint ===
+            // Only reached if existingInvoice == null (new billing scenario)
             _logger.LogInformation(
                 "Calling SAP billing endpoint for delivery {DeliveryNumber}",
                 deliveryNumber);
