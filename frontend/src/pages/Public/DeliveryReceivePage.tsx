@@ -1868,7 +1868,7 @@ export function DeliveryReceivePage() {
   const deferredSearchQuery = useDeferredValue(searchQuery.toLowerCase())
   const [activeTab, setActiveTab] = useState<"all" | "issues">("all")
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
-  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set())
+  // const [_expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set())
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1)
@@ -1964,9 +1964,9 @@ export function DeliveryReceivePage() {
   }, [delivery?.lines])
 
   // Total root elements (ItemGroups + Standalone Items) - LEGACY
-  const totalRootElements = useMemo(() => {
-    return itemGroups.length + standaloneItems.length
-  }, [itemGroups.length, standaloneItems.length])
+  // const totalRootElements = useMemo(() => {
+  //   return itemGroups.length + standaloneItems.length
+  // }, [itemGroups.length, standaloneItems.length])
 
   // Total root elements - NEW
   const totalDisplayableItems = useMemo(() => {
@@ -2125,11 +2125,11 @@ export function DeliveryReceivePage() {
   }, [displayableItems, searchFilterDisplayable])
 
   // Pagination - get current page items
-  const paginatedItems = useMemo(() => {
-    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE
-    const endIndex = startIndex + ITEMS_PER_PAGE
-    return allFilteredItems.slice(startIndex, endIndex)
-  }, [allFilteredItems, currentPage])
+  // const paginatedItems = useMemo(() => {
+  //   const startIndex = (currentPage - 1) * ITEMS_PER_PAGE
+  //   const endIndex = startIndex + ITEMS_PER_PAGE
+  //   return allFilteredItems.slice(startIndex, endIndex)
+  // }, [allFilteredItems, currentPage])
 
   // NEW: Pagination for displayable items
   const paginatedDisplayableItems = useMemo(() => {
@@ -2138,7 +2138,7 @@ export function DeliveryReceivePage() {
     return filteredDisplayableItems.slice(startIndex, endIndex)
   }, [filteredDisplayableItems, currentPage])
 
-  const totalPages = Math.ceil(allFilteredItems.length / ITEMS_PER_PAGE)
+  // const totalPages = Math.ceil(allFilteredItems.length / ITEMS_PER_PAGE)
 
   // NEW: Total pages for displayable items
   const totalDisplayablePages = Math.ceil(filteredDisplayableItems.length / ITEMS_PER_PAGE)
@@ -2320,17 +2320,17 @@ export function DeliveryReceivePage() {
   }, [])
 
   // Toggle ItemGroup expansion
-  const toggleGroupExpansion = useCallback((groupId: string) => {
-    setExpandedGroups(prev => {
-      const newSet = new Set(prev)
-      if (newSet.has(groupId)) {
-        newSet.delete(groupId)
-      } else {
-        newSet.add(groupId)
-      }
-      return newSet
-    })
-  }, [])
+  // const toggleGroupExpansion = useCallback((groupId: string) => {
+  //   setExpandedGroups(prev => {
+  //     const newSet = new Set(prev)
+  //     if (newSet.has(groupId)) {
+  //       newSet.delete(groupId)
+  //     } else {
+  //       newSet.add(groupId)
+  //     }
+  //     return newSet
+  //   })
+  // }, [])
 
   const handleReceiveAllClean = useCallback((skipGuardrail = false) => {
     if (!delivery) return

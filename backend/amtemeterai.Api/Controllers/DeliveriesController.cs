@@ -309,7 +309,7 @@ public class DeliveriesController : ControllerBase
                 BatchNumber = l.BatchNumber,
                 OrderNumber = l.OrderNumber,
                 BuyerPONumber = l.BuyerPONumber,
-                ParentLineNumber = l.ParentLineNumber ?? "0",
+                ParentLineNumber = l.ParentLineNumber.Trim() ?? "0",
                 SalesQuantity = l.SalesQuantity,
                 SalesUOM = l.SalesUOM,
                 PackQuantity = l.PackQuantity,
