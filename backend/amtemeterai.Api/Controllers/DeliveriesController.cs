@@ -1131,4 +1131,152 @@ public class DeliveriesController : ControllerBase
             return StatusCode(500, $"Failed to upload file: {ex.Message}");
         }
     }
+
+    /// <summary>
+    /// Trigger actual SAP Invoice creation for a delivery number
+    /// This endpoint calls the real SAP billing endpoint to create an invoice
+    /// </summary>
+    [HttpPost("{deliveryNumber}/invoice")]
+    [Authorize]
+    public async Task<ActionResult<DeliverySettlementResponseDto>> CreateSapInvoice(string deliveryNumber)
+    {
+        if (string.IsNullOrWhiteSpace(deliveryNumber))
+        {
+            return BadRequest("Delivery number is required.");
+        }
+
+        _logger.LogInformation(
+            "Starting SAP invoice creation for delivery {DeliveryNumber}",
+            deliveryNumber);
+
+        try
+        {
+            // === Step 1: Validation - Check if delivery exists ===
+            var delivery = await _db.DeliveryHeaders
+                .Include(d => d.Customer)
+                .Include(d => d.Lines)
+                .FirstOrDefaultAsync(d => d.DeliveryNumber == deliveryNumber);
+
+            if (delivery == null)
+            {
+                return NotFound($"Delivery {deliveryNumber} not found.");
+            }
+
+            // === Step 2: Locking - Check if already invoiced ===
+            if (delivery.Invoiced)
+            {
+                return BadRequest($"Delivery {deliveryNumber} is already invoiced.");
+            }
+
+            // === Step 3: Outbound Request - Call SAP billing endpoint ===
+            _logger.LogInformation(
+                "Calling SAP billing endpoint for delivery {DeliveryNumber}",
+                deliveryNumber);
+
+            var sapRequest = new SapBillingRequestDto
+            {
+                DeliveryNumber = deliveryNumber
+            };
+
+            // Use a clean client instance to avoid base address issues
+            var sapClient = _httpClientFactory.CreateClient("SapClient");
+            var sapUrl = "http://10.2.38.138:8000/sap/bc/zr_createinv?sap-client=250";
+
+            var sapResponse = await sapClient.PostAsJsonAsync(sapUrl, sapRequest);
+
+            // === Step 4: Error Handling - Check SAP response ===
+            if (!sapResponse.IsSuccessStatusCode)
+            {
+                var errorContent = await sapResponse.Content.ReadAsStringAsync();
+                _logger.LogError(
+                    "SAP billing request failed with status {StatusCode}: {ErrorContent}",
+                    sapResponse.StatusCode,
+                    errorContent);
+
+                return StatusCode(
+                    (int)sapResponse.StatusCode,
+                    $"SAP server returned error: {sapResponse.StatusCode} - {errorContent}");
+            }
+
+            var sapBillingData = await sapResponse.Content.ReadFromJsonAsync<SapBillingResponseDto>();
+            if (sapBillingData == null)
+            {
+                return StatusCode(500, "Failed to deserialize SAP billing response.");
+            }
+
+            _logger.LogInformation(
+                "Received SAP invoice {SapInvoiceNumber} with amount {Amount}",
+                sapBillingData.SapInvoiceNumber,
+                sapBillingData.Amount);
+
+            // === Step 5: Database Updates (Transactional) ===
+            using var transaction = await _db.Database.BeginTransactionAsync();
+            try
+            {
+                // Mark delivery as invoiced
+                delivery.Invoiced = true;
+
+                // Create invoice record
+                var invoice = new Invoice
+                {
+                    InvoiceNumber = sapBillingData.SapInvoiceNumber,
+                    CustomerNumber = sapBillingData.CustomerNumber,
+                    InvoiceAmount = sapBillingData.Amount,
+                    InvoicedDate = sapBillingData.BillingDate,
+                    Status = Invoice.InvoiceStatus.Draft,
+                    DeliveryHeaderId = delivery.DeliveryID,
+                    StampingStatus = Invoice.InvoiceStampingStatus.NotStamped
+                };
+
+                _db.Invoices.Add(invoice);
+                await _db.SaveChangesAsync();
+
+                // Log the activity
+                await LogActivity(
+                    "SapInvoiceCreated",
+                    deliveryNumber,
+                    $"SAP Invoice {sapBillingData.SapInvoiceNumber} created for delivery {deliveryNumber} with amount {sapBillingData.Amount:C}",
+                    "Success");
+
+                // Commit transaction
+                await transaction.CommitAsync();
+
+                _logger.LogInformation(
+                    "SAP invoice creation completed successfully for delivery {DeliveryNumber}",
+                    deliveryNumber);
+
+                // === Step 6: Return Values ===
+                var baseApiUrl = _configuration["App:ApiBaseUrl"] ?? "http://localhost:8080";
+
+                return Ok(new DeliverySettlementResponseDto
+                {
+                    Success = true,
+                    Message = $"SAP Invoice {sapBillingData.SapInvoiceNumber} created successfully.",
+                    InvoiceNumber = sapBillingData.SapInvoiceNumber,
+                    InvoiceAmount = sapBillingData.Amount,
+                    BillingDate = sapBillingData.BillingDate,
+                    DeliveryNumber = deliveryNumber
+                });
+            }
+            catch (Exception ex)
+            {
+                await transaction.RollbackAsync();
+                _logger.LogError(ex, "Transaction rolled back during SAP invoice creation");
+
+                // Log the failure
+                await LogActivity(
+                    "SapInvoiceCreationFailed",
+                    deliveryNumber,
+                    $"SAP invoice creation failed: {ex.Message}",
+                    "Error");
+
+                throw;
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "SAP invoice creation failed for delivery {DeliveryNumber}", deliveryNumber);
+            return StatusCode(500, $"SAP invoice creation failed: {ex.Message}");
+        }
+    }
 }

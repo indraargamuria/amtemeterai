@@ -1048,6 +1048,52 @@ Authorization: Bearer {token}
 }
 ```
 
+### Create SAP Invoice (Production)
+**Endpoint:** `POST /api/deliveries/{deliveryNumber}/invoice`
+
+**Authorization:** Required
+
+**Request Parameters:**
+- `deliveryNumber` (route parameter): The delivery number to create invoice for
+
+**Process Flow:**
+1. Validates delivery exists in the database
+2. Checks if delivery is already invoiced (returns BadRequest if true)
+3. Sends POST request to SAP billing endpoint: `http://10.2.38.138:8000/sap/bc/zr_createinv?sap-client=250`
+4. Returns error if SAP server responds with non-success status
+5. Creates invoice record and marks delivery as invoiced in a transaction
+6. Logs activity for audit trail
+
+**Request Body:**
+```json
+{
+  "deliveryNumber": "DLV1001"
+}
+```
+
+**Response Body:**
+```json
+{
+  "success": true,
+  "message": "SAP Invoice SAP-INV-20250520123456 created successfully.",
+  "invoiceNumber": "SAP-INV-20250520123456",
+  "invoiceAmount": 1500000,
+  "billingDate": "2025-05-20T10:30:00Z",
+  "deliveryNumber": "DLV1001"
+}
+```
+
+**Error Responses:**
+- `404 Not Found` - Delivery not found
+- `400 Bad Request` - Delivery already invoiced
+- `502 Bad Gateway` - SAP server error with details
+
+**Business Rules:**
+- Can only invoice deliveries that are not yet invoiced
+- Uses clean HTTP client instance (not named client) to avoid base address issues
+- All database operations wrapped in transaction for atomicity
+- Returns same data structure as settlement simulation for consistency
+
 ---
 
 ## SAP Simulation API
@@ -1445,6 +1491,41 @@ decimal rawVariance = totalActual - PackQuantity;
 decimal percentCalc = PackQuantity > 0 ? (rawVariance / PackQuantity) * 100 : 0;
 // Returns numeric value only (e.g., 200 for 200%, 12.5 for 12.5%)
 ```
+
+### SAP Invoice Creation
+- Endpoint: `POST /api/deliveries/{deliveryNumber}/invoice`
+- SAP Billing URL: `http://10.2.38.138:8000/sap/bc/zr_createinv?sap-client=250`
+- Method: POST
+- Authentication: None specified (uses clean HTTP client)
+- Triggered manually to create SAP invoice for a delivery
+
+**Request Payload:**
+```json
+{
+  "deliveryNumber": "DLV1001"
+}
+```
+
+**Response from SAP:**
+```json
+{
+  "sapInvoiceNumber": "SAP-INV-20250520123456",
+  "billingDate": "2025-05-20T10:30:00Z",
+  "amount": 1500000,
+  "currency": "IDR",
+  "customerNumber": "CUST001",
+  "customerName": "PT Maju Jaya Logistics",
+  "poNumber": "PO67890",
+  "deliveryNumber": "DLV1001"
+}
+```
+
+**Business Rules:**
+- Can only invoice deliveries that are not yet invoiced
+- Uses transaction to ensure atomic database updates
+- Marks delivery as `Invoiced = true`
+- Creates `Invoice` record with `Draft` status
+- Logs activity as `SapInvoiceCreated` on success
 
 ## Google Maps Geocoding
 
