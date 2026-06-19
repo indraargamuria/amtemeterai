@@ -21,6 +21,7 @@ public class DeliveryResponseDto
     public bool Received { get; set; }
     public DateTime? ReceiveDate { get; set; }
     public bool Invoiced { get; set; }
+    public string? InvoiceNumber { get; set; }  // 🆕 Added: SAP invoice number from Invoices table
 
     public string PublicUrl { get; set; } = null!;
 

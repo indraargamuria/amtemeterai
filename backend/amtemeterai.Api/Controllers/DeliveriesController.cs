@@ -198,6 +198,12 @@ public class DeliveriesController : ControllerBase
 
         var baseApiUrl = _configuration["App:ApiBaseUrl"] ?? "http://localhost:8080";
 
+        // 🆕 Lookup associated invoice number if it exists
+        var associatedInvoiceNumber = await _db.Invoices
+            .Where(i => i.DeliveryHeaderId == delivery.DeliveryID)
+            .Select(i => i.InvoiceNumber)
+            .FirstOrDefaultAsync();
+
         var photos = await _db.Documents
             .Where(doc => doc.DeliveryID == deliveryId && doc.Type == DocumentType.DeliveryPhoto)
             .Select(doc => new DeliveryPhotoResponseDto
@@ -226,6 +232,7 @@ public class DeliveriesController : ControllerBase
             Received = delivery.Received,
             ReceiveDate = delivery.ReceiveDate,
             Invoiced = delivery.Invoiced,
+            InvoiceNumber = associatedInvoiceNumber, // 🆕 Bind database invoice value here
             PublicUrl = GetPublicUrl(delivery.ReceiverToken, _configuration["App:PublicBaseUrl"]),
 
             Plant = delivery.Plant,
@@ -283,6 +290,12 @@ public class DeliveriesController : ControllerBase
 
         if (data == null) return NotFound();
 
+        // 🆕 Lookup associated invoice number if it exists
+        var associatedInvoiceNumber = await _db.Invoices
+            .Where(i => i.DeliveryHeaderId == data.DeliveryID)
+            .Select(i => i.InvoiceNumber)
+            .FirstOrDefaultAsync();
+
         // 🚀 FIX FOR CS9035: Map required customer strings for anonymous access link
         var result = new DeliveryResponseDto
         {
@@ -300,6 +313,7 @@ public class DeliveriesController : ControllerBase
             Received = data.Received,
             ReceiveDate = data.ReceiveDate,
             Invoiced = data.Invoiced,
+            InvoiceNumber = associatedInvoiceNumber, // 🆕 Bind database invoice value here
             PublicUrl = GetPublicUrl(data.ReceiverToken, _configuration["App:PublicBaseUrl"]),
             Lines = (data.Lines ?? new List<DeliveryLine>()).Select(l => new DeliveryLineResponseDto
             {
