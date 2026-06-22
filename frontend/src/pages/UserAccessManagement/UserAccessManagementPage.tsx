@@ -62,9 +62,14 @@ const roleDescriptions: Record<string, { title: string; description: string; col
     description: "Access to invoice processing and financial reporting",
     color: "text-emerald-600"
   },
+  warehouse: {
+    title: "Warehouse User",
+    description: "Access to delivery receiving and warehouse operations",
+    color: "text-amber-600"
+  },
 }
 
-type MainTabValue = "user-mapping" | "role-menu-matrix"
+type MainTabValue = "user-mapping" | "user-registration" | "role-menu-matrix"
 type UserTabValue = "plants" | "roles"
 
 export function UserAccessManagementPage() {
@@ -81,6 +86,18 @@ export function UserAccessManagementPage() {
   const [selectedRoleMenus, setSelectedRoleMenus] = useState<Set<string>>(new Set())
   const [roleMenuLoading, setRoleMenuLoading] = useState(false)
   const [savingRoleMenus, setSavingRoleMenus] = useState(false)
+
+  // State for user registration
+  const [registerForm, setRegisterForm] = useState({
+    username: "",
+    email: "",
+    password: "",
+    fullName: "",
+    targetRole: ""
+  })
+  const [registerErrors, setRegisterErrors] = useState<Record<string, string>>({})
+  const [registerSuccess, setRegisterSuccess] = useState<string | null>(null)
+  const [registering, setRegistering] = useState(false)
 
   // Common state
   const [loading, setLoading] = useState(true)
@@ -338,6 +355,16 @@ export function UserAccessManagementPage() {
               }`}
             >
               User Mapping
+            </button>
+            <button
+              onClick={() => setActiveMainTab("user-registration")}
+              className={`px-6 py-3 text-sm font-medium transition-colors border-b-2 ${
+                activeMainTab === "user-registration"
+                  ? "border-brand-blue text-brand-blue"
+                  : "border-transparent text-brand-blue/50 hover:text-brand-blue/70"
+              }`}
+            >
+              User Registration
             </button>
             <button
               onClick={() => setActiveMainTab("role-menu-matrix")}
@@ -653,6 +680,239 @@ export function UserAccessManagementPage() {
                   </Card>
                 )}
               </div>
+            </div>
+          )}
+
+          {/* User Registration Tab */}
+          {activeMainTab === "user-registration" && (
+            <div className="max-w-2xl mx-auto">
+              <Card>
+                <div className="p-6 border-b border-slate-100">
+                  <h2 className="text-lg font-semibold text-brand-blue">
+                    Register New User
+                  </h2>
+                  <p className="text-sm text-brand-blue/50 mt-1">
+                    Create a new user account and assign a system role
+                  </p>
+                </div>
+
+                <div className="p-6 space-y-6">
+                  {/* Success Message */}
+                  {registerSuccess && (
+                    <div className="p-4 rounded-lg bg-emerald-500/5 border border-emerald-500/20">
+                      <p className="text-sm text-emerald-700 font-medium">{registerSuccess}</p>
+                    </div>
+                  )}
+
+                  {/* Form Fields */}
+                  <div className="space-y-4">
+                    {/* Username */}
+                    <div className="space-y-2">
+                      <Label htmlFor="reg-username" className="text-sm font-medium text-brand-blue">
+                        Username <span className="text-brand-red">*</span>
+                      </Label>
+                      <Input
+                        id="reg-username"
+                        placeholder="Enter username (e.g., john.doe)"
+                        value={registerForm.username}
+                        onChange={(e) => {
+                          setRegisterForm({ ...registerForm, username: e.target.value })
+                          setRegisterErrors({ ...registerErrors, username: "" })
+                        }}
+                        className={registerErrors.username ? "border-red-300" : ""}
+                      />
+                      {registerErrors.username && (
+                        <p className="text-xs text-red-600">{registerErrors.username}</p>
+                      )}
+                    </div>
+
+                    {/* Email */}
+                    <div className="space-y-2">
+                      <Label htmlFor="reg-email" className="text-sm font-medium text-brand-blue">
+                        Email Address <span className="text-brand-red">*</span>
+                      </Label>
+                      <Input
+                        id="reg-email"
+                        type="email"
+                        placeholder="user@example.com"
+                        value={registerForm.email}
+                        onChange={(e) => {
+                          setRegisterForm({ ...registerForm, email: e.target.value })
+                          setRegisterErrors({ ...registerErrors, email: "" })
+                        }}
+                        className={registerErrors.email ? "border-red-300" : ""}
+                      />
+                      {registerErrors.email && (
+                        <p className="text-xs text-red-600">{registerErrors.email}</p>
+                      )}
+                    </div>
+
+                    {/* Full Name */}
+                    <div className="space-y-2">
+                      <Label htmlFor="reg-fullname" className="text-sm font-medium text-brand-blue">
+                        Full Name
+                      </Label>
+                      <Input
+                        id="reg-fullname"
+                        placeholder="John Doe"
+                        value={registerForm.fullName}
+                        onChange={(e) => {
+                          setRegisterForm({ ...registerForm, fullName: e.target.value })
+                          setRegisterErrors({ ...registerErrors, fullName: "" })
+                        }}
+                        className={registerErrors.fullName ? "border-red-300" : ""}
+                      />
+                      {registerErrors.fullName && (
+                        <p className="text-xs text-red-600">{registerErrors.fullName}</p>
+                      )}
+                    </div>
+
+                    {/* Password */}
+                    <div className="space-y-2">
+                      <Label htmlFor="reg-password" className="text-sm font-medium text-brand-blue">
+                        Password <span className="text-brand-red">*</span>
+                      </Label>
+                      <Input
+                        id="reg-password"
+                        type="password"
+                        placeholder="Min. 6 characters"
+                        value={registerForm.password}
+                        onChange={(e) => {
+                          setRegisterForm({ ...registerForm, password: e.target.value })
+                          setRegisterErrors({ ...registerErrors, password: "" })
+                        }}
+                        className={registerErrors.password ? "border-red-300" : ""}
+                      />
+                      {registerErrors.password && (
+                        <p className="text-xs text-red-600">{registerErrors.password}</p>
+                      )}
+                    </div>
+
+                    {/* Role Selection */}
+                    <div className="space-y-2">
+                      <Label htmlFor="reg-role" className="text-sm font-medium text-brand-blue">
+                        Assign Role <span className="text-brand-red">*</span>
+                      </Label>
+                      <select
+                        id="reg-role"
+                        value={registerForm.targetRole}
+                        onChange={(e) => {
+                          setRegisterForm({ ...registerForm, targetRole: e.target.value })
+                          setRegisterErrors({ ...registerErrors, targetRole: "" })
+                        }}
+                        className={`w-full px-3 py-2 rounded-md border bg-white text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-brand-blue/20 ${
+                          registerErrors.targetRole ? "border-red-300" : "border-slate-200 focus:border-brand-blue"
+                        }`}
+                      >
+                        <option value="">Select a role...</option>
+                        {Object.keys(roleDescriptions).map((roleKey) => (
+                          <option key={roleKey} value={roleKey}>
+                            {roleDescriptions[roleKey].title} (@{roleKey})
+                          </option>
+                        ))}
+                      </select>
+                      {registerErrors.targetRole && (
+                        <p className="text-xs text-red-600">{registerErrors.targetRole}</p>
+                      )}
+                      {registerForm.targetRole && (
+                        <p className="text-xs text-brand-blue/50 mt-1">
+                          {roleDescriptions[registerForm.targetRole]?.description}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Actions */}
+                  <div className="flex justify-between items-center pt-4 border-t border-slate-100">
+                    <p className="text-xs text-brand-blue/40">
+                      All fields marked with * are required
+                    </p>
+                    <Button
+                      onClick={async () => {
+                        // Reset errors
+                        setRegisterErrors({})
+                        setRegisterSuccess(null)
+
+                        // Basic validation
+                        const errors: Record<string, string> = {}
+                        if (!registerForm.username.trim()) {
+                          errors.username = "Username is required"
+                        }
+                        if (!registerForm.email.trim()) {
+                          errors.email = "Email is required"
+                        } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(registerForm.email)) {
+                          errors.email = "Invalid email format"
+                        }
+                        if (!registerForm.password.trim()) {
+                          errors.password = "Password is required"
+                        } else if (registerForm.password.length < 6) {
+                          errors.password = "Password must be at least 6 characters"
+                        }
+                        if (!registerForm.targetRole) {
+                          errors.targetRole = "Role selection is required"
+                        }
+
+                        if (Object.keys(errors).length > 0) {
+                          setRegisterErrors(errors)
+                          return
+                        }
+
+                        setRegistering(true)
+                        try {
+                          const res = await api.post("/api/admin/uam/users/register", {
+                            username: registerForm.username.trim(),
+                            email: registerForm.email.trim().toLowerCase(),
+                            password: registerForm.password,
+                            fullName: registerForm.fullName.trim() || null,
+                            targetRole: registerForm.targetRole
+                          })
+
+                          if (!res.ok) {
+                            const error = await res.json()
+                            throw new Error(error.message || "Registration failed")
+                          }
+
+                          const data = await res.json()
+                          setRegisterSuccess(`User "${data.username}" has been successfully created with role "${data.role}".`)
+
+                          // Reset form
+                          setRegisterForm({
+                            username: "",
+                            email: "",
+                            password: "",
+                            fullName: "",
+                            targetRole: ""
+                          })
+
+                          // Refresh users list
+                          const usersRes = await api.get("/api/admin/uam/users")
+                          if (usersRes.ok) {
+                            const data: User[] = await usersRes.json()
+                            setUsers(data)
+                          }
+                        } catch (err: any) {
+                          setRegisterErrors({
+                            form: err.message || "Failed to register user. Please try again."
+                          })
+                        } finally {
+                          setRegistering(false)
+                        }
+                      }}
+                      disabled={registering}
+                      className="min-w-[140px]"
+                    >
+                      {registering ? "Registering..." : "Register User"}
+                    </Button>
+                  </div>
+
+                  {/* Form-level error */}
+                  {registerErrors.form && (
+                    <div className="p-4 rounded-lg bg-brand-red/5 border border-brand-red/20">
+                      <p className="text-sm text-brand-red font-medium">{registerErrors.form}</p>
+                    </div>
+                  )}
+                </div>
+              </Card>
             </div>
           )}
 

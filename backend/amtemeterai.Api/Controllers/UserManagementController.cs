@@ -381,6 +381,100 @@ public class UserManagementController : ControllerBase
     }
 
     #endregion
+
+    #region User Registration
+
+    /// <summary>
+    /// Register a new user with a specific role (Admin Only)
+    /// </summary>
+    [HttpPost("users/register")]
+    public async Task<ActionResult> RegisterUser([FromBody] RegisterUserDto dto)
+    {
+        // Validate required fields
+        if (string.IsNullOrWhiteSpace(dto.Username))
+        {
+            return BadRequest(new { message = "Username is required" });
+        }
+
+        if (string.IsNullOrWhiteSpace(dto.Email))
+        {
+            return BadRequest(new { message = "Email is required" });
+        }
+
+        if (string.IsNullOrWhiteSpace(dto.Password))
+        {
+            return BadRequest(new { message = "Password is required" });
+        }
+
+        if (string.IsNullOrWhiteSpace(dto.TargetRole))
+        {
+            return BadRequest(new { message = "Target role is required" });
+        }
+
+        // Check if user already exists by email
+        var existingUser = await _userManager.FindByEmailAsync(dto.Email);
+        if (existingUser != null)
+        {
+            return BadRequest(new { message = "A user with this email already exists" });
+        }
+
+        // Check if username already exists
+        var existingByUsername = await _userManager.FindByNameAsync(dto.Username);
+        if (existingByUsername != null)
+        {
+            return BadRequest(new { message = "A user with this username already exists" });
+        }
+
+        // Verify the role exists in the identity database
+        if (!await _roleManager.RoleExistsAsync(dto.TargetRole))
+        {
+            return BadRequest(new { message = $"Role '{dto.TargetRole}' does not exist in the system" });
+        }
+
+        // Create the new user
+        var newUser = new ApplicationUser
+        {
+            UserName = dto.Username,
+            Email = dto.Email,
+            FullName = dto.FullName ?? dto.Username,
+            CreatedAt = DateTime.UtcNow
+        };
+
+        var createResult = await _userManager.CreateAsync(newUser, dto.Password);
+        if (!createResult.Succeeded)
+        {
+            // Return detailed error messages from Identity
+            var errors = createResult.Errors.Select(e => e.Description).ToList();
+            return BadRequest(new
+            {
+                message = "Failed to create user",
+                errors
+            });
+        }
+
+        // Assign the specified role to the user
+        var roleResult = await _userManager.AddToRoleAsync(newUser, dto.TargetRole);
+        if (!roleResult.Succeeded)
+        {
+            // If role assignment fails, clean up the user
+            await _userManager.DeleteAsync(newUser);
+            return BadRequest(new { message = "User created but failed to assign role. Please try again." });
+        }
+
+        // Return the created user information
+        return Ok(new
+        {
+            message = "User registered successfully",
+            userId = newUser.Id,
+            username = newUser.UserName,
+            email = newUser.Email,
+            fullName = newUser.FullName,
+            role = dto.TargetRole,
+            createdAt = newUser.CreatedAt
+        });
+    }
+
+    #endregion
 }
 
 /// <summary>
@@ -398,4 +492,16 @@ public class UpdateUserMatrixDto
 public class UpdateRoleMenusDto
 {
     public List<string> SelectedMenus { get; set; } = new();
+}
+
+/// <summary>
+/// DTO for registering a new user with role assignment
+/// </summary>
+public class RegisterUserDto
+{
+    public string Username { get; set; } = string.Empty;
+    public string Email { get; set; } = string.Empty;
+    public string Password { get; set; } = string.Empty;
+    public string? FullName { get; set; }
+    public string TargetRole { get; set; } = string.Empty;
 }
