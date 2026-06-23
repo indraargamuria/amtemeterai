@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, memo } from "react"
 import { useParams, useNavigate } from "react-router-dom"
 import QRCode from "qrcode"
-import { CheckCircle, AlertTriangle } from "lucide-react"
+import { CheckCircle, AlertTriangle, Package, ChevronDown, ChevronUp } from "lucide-react"
 import { Button } from "../../shared/components/ui/Button"
 import { Badge } from "../../shared/components/ui/Badge"
 import { Card, CardContent, CardHeader, CardTitle } from "../../shared/components/ui/Card"
@@ -19,9 +19,12 @@ import { useApi } from "../../shared/utils/api"
 
 interface DeliveryLine {
   deliveryLineNumber: string
+  parentLineNumber?: string | null
   deliveryItemCode: string
   deliveryItemDescription: string
   batchNumber?: string | null
+  orderNumber?: string | null
+  buyerPONumber?: string | null
   salesQuantity: number
   salesUOM: string
   packQuantity: number
@@ -82,7 +85,387 @@ interface ToastNotificationProps {
   onClose: () => void
 }
 
+// ============================================================================
+// LINE ITEM GROUPING TYPES
+// ============================================================================
+
+// Type for single-batch line items
+interface SingleBatchLineItem {
+  type: 'single-batch'
+  line: DeliveryLine
+}
+
+// Type for split-batch line items with children
+interface SplitBatchLineItem {
+  type: 'split-batch'
+  parentLine: DeliveryLine
+  children: DeliveryLine[]
+  aggregatedTotals: {
+    scheduled: number
+    delivered: number
+    returned: number
+    rejected: number
+  }
+}
+
+// Union type for displayable line items
+type DisplayableLineItem = SingleBatchLineItem | SplitBatchLineItem
+
 const LINES_PER_PAGE = 10
+
+// ============================================================================
+// HELPER FUNCTIONS
+// ============================================================================
+
+const transformUOM = (uom: string | null | undefined): string => {
+  if (!uom) return ''
+  const uomMap: Record<string, string> = {
+    'ROL': 'Roll',
+    'PCS': 'Pcs',
+    'KG': 'kg',
+    'M': 'm',
+    'MTR': 'mtr',
+    'EA': 'ea',
+  }
+  return uomMap[uom.toUpperCase()] || uom
+}
+
+/**
+ * Transforms flat delivery lines into the new 3-condition architecture:
+ *
+ * Condition 1: Parent Single Batch
+ *   - Has batchNumber (regardless of children existence), OR
+ *   - No batchNumber AND no children (standalone item without batch info)
+ *   - Displays as standalone row with unified visual style
+ *
+ * Condition 2: Parent with Split Batch
+ *   - No batchNumber AND has children (actual split scenario)
+ *   - Displays as read-only summary with expandable children
+ *
+ * Condition 3: Child Lines (parentLineNumber matches parent's deliveryLineNumber)
+ *   - Nested under their parent
+ */
+const buildLineItemTree = (lines: DeliveryLine[]): DisplayableLineItem[] => {
+  const result: DisplayableLineItem[] = []
+
+  // Separate parent lines from child lines
+  const parentLines = lines.filter(
+    line => !line.parentLineNumber || line.parentLineNumber === "0"
+  )
+  const childLines = lines.filter(
+    line => line.parentLineNumber && line.parentLineNumber !== "0"
+  )
+
+  // Create a map for quick child lookup
+  const childrenMap = new Map<string, DeliveryLine[]>()
+  childLines.forEach(child => {
+    const parentLineNumber = child.parentLineNumber!
+    if (!childrenMap.has(parentLineNumber)) {
+      childrenMap.set(parentLineNumber, [])
+    }
+    childrenMap.get(parentLineNumber)!.push(child)
+  })
+
+  // Process each parent line
+  parentLines.forEach(parentLine => {
+    const hasBatchNumber = parentLine.batchNumber && parentLine.batchNumber.trim() !== ""
+    const children = childrenMap.get(parentLine.deliveryLineNumber) || []
+
+    // Unified single-batch condition:
+    // - Has batch number (regardless of children), OR
+    // - No batch number AND no children (standalone item without batch info)
+    if (hasBatchNumber || children.length === 0) {
+      // Condition 1: Parent Single Batch - standalone row
+      result.push({
+        type: 'single-batch',
+        line: parentLine
+      })
+    } else {
+      // Condition 2: Parent with Split Batch - read-only summary with children
+      result.push({
+        type: 'split-batch',
+        parentLine: parentLine,
+        children: children,
+        aggregatedTotals: {
+          scheduled: children.reduce((sum, child) => sum + child.packQuantity, 0) + parentLine.packQuantity,
+          delivered: children.reduce((sum, child) => sum + child.packQuantityDelivered, 0) + parentLine.packQuantityDelivered,
+          returned: children.reduce((sum, child) => sum + child.packQuantityReturned, 0) + parentLine.packQuantityReturned,
+          rejected: children.reduce((sum, child) => sum + child.packQuantityRejected, 0) + parentLine.packQuantityRejected,
+        }
+      })
+    }
+  })
+
+  // Sort by deliveryLineNumber for consistent display
+  result.sort((a, b) => {
+    const lineNumA = a.type === 'single-batch' ? a.line.deliveryLineNumber : a.parentLine.deliveryLineNumber
+    const lineNumB = b.type === 'single-batch' ? b.line.deliveryLineNumber : b.parentLine.deliveryLineNumber
+    return parseInt(lineNumA) - parseInt(lineNumB)
+  })
+
+  return result
+}
+
+// ============================================================================
+// GROUPED LINE ITEM ROW COMPONENTS
+// ============================================================================
+
+// Props for single-batch row component
+interface SingleBatchRowProps {
+  line: DeliveryLine
+  received: boolean
+  canceled: boolean
+}
+
+const SingleBatchDetailRow = memo(({ line, received, canceled }: SingleBatchRowProps) => {
+  const totalReceived = line.packQuantityDelivered + line.packQuantityReturned + line.packQuantityRejected
+  const rawVariance = totalReceived - line.packQuantity
+  const variancePercent = line.packQuantity > 0 ? ((rawVariance / line.packQuantity) * 100).toFixed(2) : "0.00"
+  const isOver = parseFloat(variancePercent) > 0
+  const isShort = parseFloat(variancePercent) < 0
+  const displayVariance = isOver ? `+${variancePercent}%` : `${variancePercent}%`
+
+  const getVarianceBadge = () => {
+    if (!received || canceled) {
+      return <span className="text-brand-blue/40">—</span>
+    }
+    if (isShort) {
+      return <span className="text-rose-600 font-bold bg-rose-50 px-2 py-0.5 rounded text-xs">{displayVariance}</span>
+    }
+    if (isOver) {
+      return <span className="text-emerald-600 font-bold bg-emerald-50 px-2 py-0.5 rounded text-xs">{displayVariance}</span>
+    }
+    return <span className="text-brand-blue/40">0%</span>
+  }
+
+  return (
+    <TableRow className="hover:bg-brand-blue/[0.01] transition-colors">
+      <TableCell className="py-3.5">
+        <div className="flex items-center gap-2">
+          <div className="w-6 h-6 rounded bg-blue-50 flex items-center justify-center shrink-0">
+            <Package className="w-3 h-3 text-[#1d2351]" />
+          </div>
+          <span className="font-semibold text-sm text-brand-blue">{line.deliveryItemCode}</span>
+        </div>
+      </TableCell>
+      <TableCell className="py-3.5 text-sm text-brand-blue/70">
+        {line.batchNumber ? (
+          <span className="font-mono">{line.batchNumber}</span>
+        ) : (
+          <span className="text-brand-blue/30 italic">-</span>
+        )}
+      </TableCell>
+      <TableCell className="py-3.5 text-sm text-brand-blue/80">
+        {line.deliveryItemDescription || <span className="text-brand-blue/30 italic">No description</span>}
+      </TableCell>
+      <TableCell className="py-3.5 text-sm text-right font-medium text-brand-blue/70">
+        {line.packQuantity} {line.packUOM}
+      </TableCell>
+      <TableCell className="py-3.5 text-sm text-right font-semibold text-emerald-600">
+        {canceled ? `0 ${line.packUOM}` : `${line.packQuantityDelivered} ${line.packUOM}`}
+      </TableCell>
+      <TableCell className="py-3.5 text-sm text-right font-semibold">
+        <span className={line.packQuantityRejected > 0 && !canceled ? "text-amber-600 font-bold bg-amber-50 px-2 py-0.5 rounded" : "text-brand-blue/30"}>
+          {canceled ? 0 : line.packQuantityRejected} {line.packUOM}
+        </span>
+      </TableCell>
+      <TableCell className="py-3.5 text-sm text-right font-semibold">
+        <span className={line.packQuantityReturned > 0 && !canceled ? "text-amber-600 font-bold bg-amber-50 px-2 py-0.5 rounded" : "text-brand-blue/30"}>
+          {canceled ? 0 : line.packQuantityReturned} {line.packUOM}
+        </span>
+      </TableCell>
+      {received && (
+        <TableCell className="py-3.5 text-sm text-right font-semibold">
+          {getVarianceBadge()}
+        </TableCell>
+      )}
+      <TableCell className="py-3.5 text-xs text-brand-blue/60 font-medium">
+        {canceled ? (
+          <span className="text-rose-500/80 font-medium">Link Revoked</span>
+        ) : (
+          line.lineComment || <span className="text-brand-blue/20">-</span>
+        )}
+      </TableCell>
+    </TableRow>
+  )
+})
+
+SingleBatchDetailRow.displayName = "SingleBatchDetailRow"
+
+// Props for split-batch parent row component
+interface SplitBatchParentRowProps {
+  parentLine: DeliveryLine
+  children: DeliveryLine[]
+  aggregatedTotals: {
+    scheduled: number
+    delivered: number
+    returned: number
+    rejected: number
+  }
+  received: boolean
+  canceled: boolean
+}
+
+const SplitBatchParentDetailRow = memo(({
+  parentLine,
+  children,
+  aggregatedTotals,
+  received,
+  canceled
+}: SplitBatchParentRowProps) => {
+  const [isExpanded, setIsExpanded] = useState(false)
+
+  const totalReceived = aggregatedTotals.delivered + aggregatedTotals.returned + aggregatedTotals.rejected
+  const rawVariance = totalReceived - aggregatedTotals.scheduled
+  const variancePercent = aggregatedTotals.scheduled > 0 ? ((rawVariance / aggregatedTotals.scheduled) * 100).toFixed(2) : "0.00"
+  const isOver = parseFloat(variancePercent) > 0
+  const isShort = parseFloat(variancePercent) < 0
+  const displayVariance = isOver ? `+${variancePercent}%` : `${variancePercent}%`
+
+  const getVarianceBadge = () => {
+    if (!received || canceled) {
+      return <span className="text-brand-blue/40">—</span>
+    }
+    if (isShort) {
+      return <span className="text-rose-600 font-bold bg-rose-50 px-2 py-0.5 rounded text-xs">{displayVariance}</span>
+    }
+    if (isOver) {
+      return <span className="text-emerald-600 font-bold bg-emerald-50 px-2 py-0.5 rounded text-xs">{displayVariance}</span>
+    }
+    return <span className="text-brand-blue/40">0%</span>
+  }
+
+  return (
+    <>
+      {/* Parent Summary Row */}
+      <TableRow
+        className="hover:bg-brand-blue/[0.01] transition-colors cursor-pointer bg-brand-blue/[0.02]"
+        onClick={() => setIsExpanded(!isExpanded)}
+      >
+        <TableCell className="py-3.5" colSpan={received ? 9 : 8}>
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-lg bg-blue-5 flex items-center justify-center shrink-0">
+              {isExpanded ? (
+                <ChevronUp className="w-4 h-4 text-[#1d2351]" />
+              ) : (
+                <ChevronDown className="w-4 h-4 text-[#1d2351]" />
+              )}
+            </div>
+            <div className="flex-1">
+              <div className="flex items-center gap-2 mb-1">
+                <span className="text-xs font-bold text-[#1d2351] bg-blue-5 px-2 py-1 rounded-md">
+                  Line #{parentLine.deliveryLineNumber}
+                </span>
+                <span className="text-sm font-semibold text-slate-900">{parentLine.deliveryItemDescription}</span>
+                <span className="text-xs text-slate-500">({children.length + 1} batches)</span>
+              </div>
+              <div className="flex items-center gap-4 text-xs text-slate-500">
+                <span>Order: <strong className="text-slate-700">{parentLine.orderNumber || '-'}</strong></span>
+                <span>PO: <strong className="text-slate-700">{parentLine.buyerPONumber || '-'}</strong></span>
+              </div>
+            </div>
+            <div className="flex items-center gap-4 text-right">
+              <div>
+                <div className="text-[10px] text-slate-500 uppercase font-medium">Total Qty</div>
+                <div className="text-sm font-bold text-slate-900">{aggregatedTotals.scheduled.toFixed(2)}</div>
+              </div>
+              <div>
+                <div className="text-[10px] text-slate-500 uppercase font-medium">Received</div>
+                <div className="text-sm font-bold text-emerald-600">{canceled ? 0 : aggregatedTotals.delivered.toFixed(2)}</div>
+              </div>
+              <div>
+                <div className="text-[10px] text-slate-500 uppercase font-medium">Rejected</div>
+                <div className="text-sm font-bold text-amber-600">{canceled ? 0 : aggregatedTotals.rejected.toFixed(2)}</div>
+              </div>
+              <div>
+                <div className="text-[10px] text-slate-500 uppercase font-medium">Returned</div>
+                <div className="text-sm font-bold text-red-600">{canceled ? 0 : aggregatedTotals.returned.toFixed(2)}</div>
+              </div>
+              {received && (
+                <div>
+                  <div className="text-[10px] text-slate-500 uppercase font-medium">Variance</div>
+                  <div className="text-sm font-semibold">{getVarianceBadge()}</div>
+                </div>
+              )}
+            </div>
+          </div>
+        </TableCell>
+      </TableRow>
+
+      {/* Child Rows - Expanded */}
+      {isExpanded && children.map((child) => {
+        const childTotal = child.packQuantityDelivered + child.packQuantityReturned + child.packQuantityRejected
+        const childRawVariance = childTotal - child.packQuantity
+        const childVariancePercent = child.packQuantity > 0 ? ((childRawVariance / child.packQuantity) * 100).toFixed(2) : "0.00"
+        const childIsOver = parseFloat(childVariancePercent) > 0
+        const childIsShort = parseFloat(childVariancePercent) < 0
+        const childDisplayVariance = childIsOver ? `+${childVariancePercent}%` : `${childVariancePercent}%`
+
+        const getChildVarianceBadge = () => {
+          if (!received || canceled) {
+            return <span className="text-brand-blue/40">—</span>
+          }
+          if (childIsShort) {
+            return <span className="text-rose-600 font-bold bg-rose-50 px-2 py-0.5 rounded text-xs">{childDisplayVariance}</span>
+          }
+          if (childIsOver) {
+            return <span className="text-emerald-600 font-bold bg-emerald-50 px-2 py-0.5 rounded text-xs">{childDisplayVariance}</span>
+          }
+          return <span className="text-brand-blue/40">0%</span>
+        }
+
+        return (
+          <TableRow key={child.deliveryLineNumber} className="bg-brand-blue/[0.01]">
+            <TableCell className="py-3 pl-12">
+              <div className="flex items-center gap-2">
+                <div className="w-5 h-5 rounded bg-blue-50 flex items-center justify-center shrink-0">
+                  <Package className="w-2.5 h-2.5 text-[#1d2351]" />
+                </div>
+                <span className="font-semibold text-sm text-brand-blue/80">{child.deliveryItemCode}</span>
+              </div>
+            </TableCell>
+            <TableCell className="py-3 text-sm text-brand-blue/70">
+              <span className="font-mono">{child.batchNumber}</span>
+            </TableCell>
+            <TableCell className="py-3 text-sm text-brand-blue/80">
+              {child.deliveryItemDescription || <span className="text-brand-blue/30 italic">No description</span>}
+            </TableCell>
+            <TableCell className="py-3 text-sm text-right font-medium text-brand-blue/70">
+              {child.packQuantity} {child.packUOM}
+            </TableCell>
+            <TableCell className="py-3 text-sm text-right font-semibold text-emerald-600">
+              {canceled ? `0 ${child.packUOM}` : `${child.packQuantityDelivered} ${child.packUOM}`}
+            </TableCell>
+            <TableCell className="py-3 text-sm text-right font-semibold">
+              <span className={child.packQuantityRejected > 0 && !canceled ? "text-amber-600 font-bold bg-amber-50 px-2 py-0.5 rounded" : "text-brand-blue/30"}>
+                {canceled ? 0 : child.packQuantityRejected} {child.packUOM}
+              </span>
+            </TableCell>
+            <TableCell className="py-3 text-sm text-right font-semibold">
+              <span className={child.packQuantityReturned > 0 && !canceled ? "text-amber-600 font-bold bg-amber-50 px-2 py-0.5 rounded" : "text-brand-blue/30"}>
+                {canceled ? 0 : child.packQuantityReturned} {child.packUOM}
+              </span>
+            </TableCell>
+            {received && (
+              <TableCell className="py-3 text-sm text-right font-semibold">
+                {getChildVarianceBadge()}
+              </TableCell>
+            )}
+            <TableCell className="py-3 text-xs text-brand-blue/60 font-medium">
+              {canceled ? (
+                <span className="text-rose-500/80 font-medium">Link Revoked</span>
+              ) : (
+                child.lineComment || <span className="text-brand-blue/20">-</span>
+              )}
+            </TableCell>
+          </TableRow>
+        )
+      })}
+    </>
+  )
+})
+
+SplitBatchParentDetailRow.displayName = "SplitBatchParentDetailRow"
 
 // 🆕 Toast notification component (memoized)
 const ToastNotification = memo(({ show, type, onClose, title, message }: ToastNotificationProps) => {
@@ -166,15 +549,37 @@ export function DeliveryDetailPage() {
 
   const api = useApi()
 
-  // Calculate pagination for delivery lines
-  const totalLines = delivery?.lines?.length || 0
-  const totalLinePages = Math.ceil(totalLines / LINES_PER_PAGE)
-
-  const paginatedLines = useMemo(() => {
+  // Build grouped line items tree
+  const groupedLineItems = useMemo(() => {
     if (!delivery?.lines) return []
+    return buildLineItemTree(delivery.lines)
+  }, [delivery?.lines])
+
+  // Calculate pagination for grouped line items
+  const totalGroupedItems = groupedLineItems.length
+  const totalLinePages = Math.ceil(totalGroupedItems / LINES_PER_PAGE)
+
+  const paginatedGroupedItems = useMemo(() => {
     const startIndex = (linePage - 1) * LINES_PER_PAGE
-    return delivery.lines.slice(startIndex, startIndex + LINES_PER_PAGE)
-  }, [delivery?.lines, linePage])
+    return groupedLineItems.slice(startIndex, startIndex + LINES_PER_PAGE)
+  }, [groupedLineItems, linePage])
+
+  // Count total physical batches for display
+  const totalPhysicalBatches = useMemo(() => {
+    if (!delivery?.lines) return 0
+    let count = 0
+    delivery.lines.forEach((line) => {
+      const isParent = !line.parentLineNumber || line.parentLineNumber === "0"
+      const hasBatchNumber = line.batchNumber && line.batchNumber.trim() !== ""
+
+      // Count if: child line OR (parent with batch number) OR (parent without batch but no children)
+      // Parent without batch but with children = don't count (it's a summary header)
+      if (!isParent || hasBatchNumber) {
+        count++
+      }
+    })
+    return count
+  }, [delivery?.lines])
 
   // Reset line page when delivery changes
   useEffect(() => {
@@ -743,8 +1148,8 @@ export function DeliveryDetailPage() {
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-base font-bold text-brand-blue tracking-tight">Fulfillment Line Items</h3>
           <span className="text-xs text-brand-blue/50 font-medium">
-            {totalLines > 0
-              ? `Showing ${paginatedLines.length} of ${totalLines} items (Page ${linePage} of ${totalLinePages})`
+            {totalPhysicalBatches > 0
+              ? `Showing ${paginatedGroupedItems.length} of ${totalGroupedItems} item groups (${totalPhysicalBatches} total batches) - Page ${linePage} of ${totalLinePages}`
               : "No items"}
           </span>
         </div>
@@ -786,7 +1191,7 @@ export function DeliveryDetailPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {totalLines === 0 ? (
+              {totalGroupedItems === 0 ? (
                 <TableRow>
                   <TableCell
                     colSpan={delivery.received ? 9 : 8}
@@ -796,87 +1201,28 @@ export function DeliveryDetailPage() {
                   </TableCell>
                 </TableRow>
               ) : (
-                paginatedLines.map((line) => {
-                  const totalReceived = line.packQuantityDelivered + line.packQuantityReturned + line.packQuantityRejected
-                  const rawVariance = totalReceived - line.packQuantity
-                  const variancePercent = line.packQuantity > 0 ? ((rawVariance / line.packQuantity) * 100).toFixed(2) : "0.00"
-                  const isOver = parseFloat(variancePercent) > 0
-                  const isShort = parseFloat(variancePercent) < 0
-                  const displayVariance = isOver ? `+${variancePercent}%` : `${variancePercent}%`
-
-                  return (
-                    <TableRow
-                      key={line.deliveryLineNumber}
-                      className="hover:bg-brand-blue/[0.01] transition-colors"
-                    >
-                      <TableCell className="py-3.5 font-semibold text-sm text-brand-blue">
-                        {line.deliveryItemCode}
-                      </TableCell>
-                      <TableCell className="py-3.5 text-sm text-brand-blue/70">
-                        {line.batchNumber || <span className="text-brand-blue/30 italic">-</span>}
-                      </TableCell>
-                      <TableCell className="py-3.5 text-sm text-brand-blue/80">
-                        {line.deliveryItemDescription || (
-                          <span className="text-brand-blue/30 italic">No description</span>
-                        )}
-                      </TableCell>
-                      <TableCell className="py-3.5 text-sm text-right font-medium text-brand-blue/70">
-                        {line.packQuantity} {line.packUOM}
-                      </TableCell>
-                      <TableCell className="py-3.5 text-sm text-right font-semibold text-emerald-600">
-                        {delivery.status === 3 ? `0 ${line.packUOM}` : `${line.packQuantityDelivered} ${line.packUOM}`}
-                      </TableCell>
-                      <TableCell className="py-3.5 text-sm text-right font-semibold">
-                        <span
-                          className={
-                            line.packQuantityRejected > 0 && delivery.status !== 3
-                              ? "text-amber-600 font-bold bg-amber-50 px-2 py-0.5 rounded"
-                              : "text-brand-blue/30"
-                          }
-                        >
-                          {delivery.status === 3 ? 0 : line.packQuantityRejected} {line.packUOM}
-                        </span>
-                      </TableCell>
-                      <TableCell className="py-3.5 text-sm text-right font-semibold">
-                        <span
-                          className={
-                            line.packQuantityReturned > 0 && delivery.status !== 3
-                              ? "text-amber-600 font-bold bg-amber-50 px-2 py-0.5 rounded"
-                              : "text-brand-blue/30"
-                          }
-                        >
-                          {delivery.status === 3 ? 0 : line.packQuantityReturned} {line.packUOM}
-                        </span>
-                      </TableCell>
-                      {/* Variance cell - only shown when delivery is received */}
-                      {delivery.received && (
-                        <TableCell className="py-3.5 text-sm text-right font-semibold">
-                          {delivery.status === 3 ? (
-                            <span className="text-rose-500/80 font-medium">—</span>
-                          ) : (
-                            <span
-                              className={
-                                isShort
-                                  ? "text-rose-600 font-bold bg-rose-50 px-2 py-0.5 rounded"
-                                  : isOver
-                                  ? "text-emerald-600 font-bold bg-emerald-50 px-2 py-0.5 rounded"
-                                  : "text-brand-blue/40"
-                              }
-                            >
-                              {displayVariance}
-                            </span>
-                          )}
-                        </TableCell>
-                      )}
-                      <TableCell className="py-3.5 text-xs text-brand-blue/60 font-medium">
-                        {delivery.status === 3 ? (
-                          <span className="text-rose-500/80 font-medium">Link Revoked</span>
-                        ) : (
-                          line.lineComment || <span className="text-brand-blue/20">-</span>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  )
+                paginatedGroupedItems.map((item) => {
+                  if (item.type === 'single-batch') {
+                    return (
+                      <SingleBatchDetailRow
+                        key={item.line.deliveryLineNumber}
+                        line={item.line}
+                        received={delivery.received}
+                        canceled={delivery.status === 3}
+                      />
+                    )
+                  } else {
+                    return (
+                      <SplitBatchParentDetailRow
+                        key={item.parentLine.deliveryLineNumber}
+                        parentLine={item.parentLine}
+                        children={item.children}
+                        aggregatedTotals={item.aggregatedTotals}
+                        received={delivery.received}
+                        canceled={delivery.status === 3}
+                      />
+                    )
+                  }
                 })
               )}
             </TableBody>
