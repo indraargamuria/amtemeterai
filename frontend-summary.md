@@ -1,4 +1,4 @@
-# AmtemeterAI Frontend Documentation
+# OpexNOW Frontend Documentation
 
 ## Overview
 

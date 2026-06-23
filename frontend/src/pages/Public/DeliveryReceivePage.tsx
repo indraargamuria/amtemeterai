@@ -288,10 +288,13 @@ const getStandaloneItems = (lines: DeliveryLine[]): DeliveryLine[] => {
 /**
  * Transforms flat delivery lines into the new 3-condition architecture:
  *
- * Condition 1: Parent Single Batch (parentLineNumber="0" AND has batchNumber)
- *   - Displays as standalone editable row
+ * Condition 1: Parent Single Batch
+ *   - Has batchNumber (regardless of children existence), OR
+ *   - No batchNumber AND no children (standalone item without batch info)
+ *   - Displays as standalone editable row with unified visual style
  *
- * Condition 2: Parent with Split Batch (parentLineNumber="0" AND no batchNumber)
+ * Condition 2: Parent with Split Batch
+ *   - No batchNumber AND has children (actual split scenario)
  *   - Displays as read-only summary with expandable children
  *
  * Condition 3: Child Lines (parentLineNumber matches parent's deliveryLineNumber)
@@ -323,7 +326,10 @@ const buildLineItemTree = (lines: DeliveryLine[]): DisplayableLineItem[] => {
     const hasBatchNumber = parentLine.batchNumber && parentLine.batchNumber.trim() !== ""
     const children = childrenMap.get(parentLine.deliveryLineNumber) || []
 
-    if (hasBatchNumber) {
+    // Unified single-batch condition:
+    // - Has batch number (regardless of children), OR
+    // - No batch number AND no children (standalone item without batch info)
+    if (hasBatchNumber || children.length === 0) {
       // Condition 1: Parent Single Batch - standalone editable row
       result.push({
         type: 'single-batch',
@@ -331,6 +337,7 @@ const buildLineItemTree = (lines: DeliveryLine[]): DisplayableLineItem[] => {
       })
     } else {
       // Condition 2: Parent with Split Batch - read-only summary with children
+      // Only when no batch number AND has children (actual split scenario)
       result.push({
         type: 'split-batch',
         parentLine: parentLine,
