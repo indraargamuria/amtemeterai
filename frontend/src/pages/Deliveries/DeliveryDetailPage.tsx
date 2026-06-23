@@ -240,51 +240,75 @@ const SingleBatchDetailRow = memo(({ line, received, canceled }: SingleBatchRowP
 
   return (
     <TableRow className="hover:bg-brand-blue/[0.01] transition-colors">
-      <TableCell className="py-3.5">
-        <div className="flex items-center gap-2">
-          <div className="w-6 h-6 rounded bg-blue-50 flex items-center justify-center shrink-0">
-            <Package className="w-3 h-3 text-[#1d2351]" />
+      <TableCell className="py-3.5" colSpan={received ? 9 : 8}>
+        <div className="flex items-center gap-3">
+          {/* Icon Container - Same styling as split-batch parent */}
+          <div className="w-8 h-8 rounded-lg bg-blue-5 flex items-center justify-center shrink-0">
+            <Package className="w-4 h-4 text-[#1d2351]" />
           </div>
-          <span className="font-semibold text-sm text-brand-blue">{line.deliveryItemCode}</span>
+
+          {/* Main Content - Unified structure */}
+          <div className="flex-1">
+            {/* First Row: Line Number + Item Description */}
+            <div className="flex items-center gap-2 mb-1">
+              <span className="text-xs font-bold text-[#1d2351] bg-blue-5 px-2 py-1 rounded-md">
+                Line #{line.deliveryLineNumber}
+              </span>
+              <span className="text-sm font-semibold text-slate-900">{line.deliveryItemDescription}</span>
+              <span className="text-xs text-slate-500">(1 batch)</span>
+            </div>
+
+            {/* Second Row: Order/PO Info + Batch */}
+            <div className="flex items-center gap-4 text-xs text-slate-500">
+              <span>Order: <strong className="text-slate-700">{line.orderNumber || '-'}</strong></span>
+              <span>PO: <strong className="text-slate-700">{line.buyerPONumber || '-'}</strong></span>
+              {line.batchNumber && (
+                <span>Batch: <strong className="text-slate-700">{line.batchNumber}</strong></span>
+              )}
+            </div>
+          </div>
+
+          {/* Right Side: Metrics Display - Same layout as split-batch */}
+          <div className="flex items-center gap-4 text-right">
+            <div>
+              <div className="text-[10px] text-slate-500 uppercase font-medium">Quantity</div>
+              <div className="text-sm font-bold text-slate-900">{line.packQuantity}</div>
+            </div>
+            <div>
+              <div className="text-[10px] text-slate-500 uppercase font-medium">Received</div>
+              <div className="text-sm font-bold text-emerald-600">{canceled ? 0 : line.packQuantityDelivered}</div>
+            </div>
+            <div>
+              <div className="text-[10px] text-slate-500 uppercase font-medium">Rejected</div>
+              <div className="text-sm font-bold text-amber-600">{canceled ? 0 : line.packQuantityRejected}</div>
+            </div>
+            <div>
+              <div className="text-[10px] text-slate-500 uppercase font-medium">Returned</div>
+              <div className="text-sm font-bold text-red-600">{canceled ? 0 : line.packQuantityReturned}</div>
+            </div>
+            {received && (
+              <div>
+                <div className="text-[10px] text-slate-500 uppercase font-medium">Variance</div>
+                <div className="text-sm font-semibold">{getVarianceBadge()}</div>
+              </div>
+            )}
+            {/* Remarks indicator */}
+            <div className="text-xs text-brand-blue/60 font-medium">
+              {canceled ? (
+                <span className="text-rose-500/80">Link Revoked</span>
+              ) : line.lineComment ? (
+                <span className="text-brand-blue/60 max-w-[150px] truncate">{line.lineComment}</span>
+              ) : null}
+            </div>
+          </div>
+
+          {/* Static indicator (no toggle for single-batch) */}
+          <div className="shrink-0 ml-2">
+            <div className="w-5 h-5 rounded-full bg-slate-100 flex items-center justify-center">
+              <div className="w-2 h-2 rounded-full bg-[#1d2351]" />
+            </div>
+          </div>
         </div>
-      </TableCell>
-      <TableCell className="py-3.5 text-sm text-brand-blue/70">
-        {line.batchNumber ? (
-          <span className="font-mono">{line.batchNumber}</span>
-        ) : (
-          <span className="text-brand-blue/30 italic">-</span>
-        )}
-      </TableCell>
-      <TableCell className="py-3.5 text-sm text-brand-blue/80">
-        {line.deliveryItemDescription || <span className="text-brand-blue/30 italic">No description</span>}
-      </TableCell>
-      <TableCell className="py-3.5 text-sm text-right font-medium text-brand-blue/70">
-        {line.packQuantity} {line.packUOM}
-      </TableCell>
-      <TableCell className="py-3.5 text-sm text-right font-semibold text-emerald-600">
-        {canceled ? `0 ${line.packUOM}` : `${line.packQuantityDelivered} ${line.packUOM}`}
-      </TableCell>
-      <TableCell className="py-3.5 text-sm text-right font-semibold">
-        <span className={line.packQuantityRejected > 0 && !canceled ? "text-amber-600 font-bold bg-amber-50 px-2 py-0.5 rounded" : "text-brand-blue/30"}>
-          {canceled ? 0 : line.packQuantityRejected} {line.packUOM}
-        </span>
-      </TableCell>
-      <TableCell className="py-3.5 text-sm text-right font-semibold">
-        <span className={line.packQuantityReturned > 0 && !canceled ? "text-amber-600 font-bold bg-amber-50 px-2 py-0.5 rounded" : "text-brand-blue/30"}>
-          {canceled ? 0 : line.packQuantityReturned} {line.packUOM}
-        </span>
-      </TableCell>
-      {received && (
-        <TableCell className="py-3.5 text-sm text-right font-semibold">
-          {getVarianceBadge()}
-        </TableCell>
-      )}
-      <TableCell className="py-3.5 text-xs text-brand-blue/60 font-medium">
-        {canceled ? (
-          <span className="text-rose-500/80 font-medium">Link Revoked</span>
-        ) : (
-          line.lineComment || <span className="text-brand-blue/20">-</span>
-        )}
       </TableCell>
     </TableRow>
   )
@@ -416,47 +440,67 @@ const SplitBatchParentDetailRow = memo(({
 
         return (
           <TableRow key={child.deliveryLineNumber} className="bg-brand-blue/[0.01]">
-            <TableCell className="py-3 pl-12">
-              <div className="flex items-center gap-2">
-                <div className="w-5 h-5 rounded bg-blue-50 flex items-center justify-center shrink-0">
-                  <Package className="w-2.5 h-2.5 text-[#1d2351]" />
+            <TableCell className="py-3" colSpan={received ? 9 : 8}>
+              <div className="flex items-center gap-3 pl-4">
+                {/* Icon Container - Same styling, slightly smaller for child */}
+                <div className="w-7 h-7 rounded-lg bg-blue-5 flex items-center justify-center shrink-0">
+                  <Package className="w-3.5 h-3.5 text-[#1d2351]" />
                 </div>
-                <span className="font-semibold text-sm text-brand-blue/80">{child.deliveryItemCode}</span>
+
+                {/* Main Content - Unified structure */}
+                <div className="flex-1">
+                  {/* First Row: Item Code + Description */}
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="text-xs font-bold text-slate-600 px-2 py-0.5 rounded-md bg-slate-100">
+                      {child.deliveryItemCode}
+                    </span>
+                    <span className="text-sm font-medium text-slate-800">{child.deliveryItemDescription}</span>
+                  </div>
+
+                  {/* Second Row: Batch Number */}
+                  <div className="flex items-center gap-4 text-xs text-slate-500">
+                    <span>Batch: <strong className="text-slate-700 font-mono">{child.batchNumber}</strong></span>
+                    <span>Qty: <strong className="text-slate-700">{child.packQuantity} {child.packUOM}</strong></span>
+                  </div>
+                </div>
+
+                {/* Right Side: Metrics Display - Same layout */}
+                <div className="flex items-center gap-4 text-right">
+                  <div>
+                    <div className="text-[10px] text-slate-500 uppercase font-medium">Received</div>
+                    <div className="text-sm font-bold text-emerald-600">{canceled ? 0 : child.packQuantityDelivered}</div>
+                  </div>
+                  <div>
+                    <div className="text-[10px] text-slate-500 uppercase font-medium">Rejected</div>
+                    <div className="text-sm font-bold text-amber-600">{canceled ? 0 : child.packQuantityRejected}</div>
+                  </div>
+                  <div>
+                    <div className="text-[10px] text-slate-500 uppercase font-medium">Returned</div>
+                    <div className="text-sm font-bold text-red-600">{canceled ? 0 : child.packQuantityReturned}</div>
+                  </div>
+                  {received && (
+                    <div>
+                      <div className="text-[10px] text-slate-500 uppercase font-medium">Variance</div>
+                      <div className="text-sm font-semibold">{getChildVarianceBadge()}</div>
+                    </div>
+                  )}
+                  {/* Remarks */}
+                  <div className="text-xs text-brand-blue/60 font-medium">
+                    {canceled ? (
+                      <span className="text-rose-500/80">Link Revoked</span>
+                    ) : child.lineComment ? (
+                      <span className="text-brand-blue/60 max-w-[150px] truncate">{child.lineComment}</span>
+                    ) : null}
+                  </div>
+                </div>
+
+                {/* Static indicator */}
+                <div className="shrink-0 ml-1">
+                  <div className="w-4 h-4 rounded-full bg-slate-100 flex items-center justify-center">
+                    <div className="w-1.5 h-1.5 rounded-full bg-slate-400" />
+                  </div>
+                </div>
               </div>
-            </TableCell>
-            <TableCell className="py-3 text-sm text-brand-blue/70">
-              <span className="font-mono">{child.batchNumber}</span>
-            </TableCell>
-            <TableCell className="py-3 text-sm text-brand-blue/80">
-              {child.deliveryItemDescription || <span className="text-brand-blue/30 italic">No description</span>}
-            </TableCell>
-            <TableCell className="py-3 text-sm text-right font-medium text-brand-blue/70">
-              {child.packQuantity} {child.packUOM}
-            </TableCell>
-            <TableCell className="py-3 text-sm text-right font-semibold text-emerald-600">
-              {canceled ? `0 ${child.packUOM}` : `${child.packQuantityDelivered} ${child.packUOM}`}
-            </TableCell>
-            <TableCell className="py-3 text-sm text-right font-semibold">
-              <span className={child.packQuantityRejected > 0 && !canceled ? "text-amber-600 font-bold bg-amber-50 px-2 py-0.5 rounded" : "text-brand-blue/30"}>
-                {canceled ? 0 : child.packQuantityRejected} {child.packUOM}
-              </span>
-            </TableCell>
-            <TableCell className="py-3 text-sm text-right font-semibold">
-              <span className={child.packQuantityReturned > 0 && !canceled ? "text-amber-600 font-bold bg-amber-50 px-2 py-0.5 rounded" : "text-brand-blue/30"}>
-                {canceled ? 0 : child.packQuantityReturned} {child.packUOM}
-              </span>
-            </TableCell>
-            {received && (
-              <TableCell className="py-3 text-sm text-right font-semibold">
-                {getChildVarianceBadge()}
-              </TableCell>
-            )}
-            <TableCell className="py-3 text-xs text-brand-blue/60 font-medium">
-              {canceled ? (
-                <span className="text-rose-500/80 font-medium">Link Revoked</span>
-              ) : (
-                child.lineComment || <span className="text-brand-blue/20">-</span>
-              )}
             </TableCell>
           </TableRow>
         )
