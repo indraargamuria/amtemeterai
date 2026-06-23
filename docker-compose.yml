@@ -1,0 +1,111 @@
+version: "3.9"
+
+services:
+
+  reverse-proxy:
+    image: nginx:alpine
+    container_name: amtemeterai-reverse-proxy
+    restart: always
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - frontend
+      - api
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        # 🚀 Pass the root .env variable value down into the Docker build scope
+        - VITE_APP_TITLE=${VITE_APP_TITLE}
+    image: amtemeterai-frontend:v5
+    container_name: amtemeterai-frontend
+    restart: always
+
+  api:
+    build:
+      context: ./backend/amtemeterai.Api
+      dockerfile: Dockerfile
+    image: amtemeterai-api:v5
+    container_name: amtemeterai-api
+    restart: always
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      # Injected from .env
+      ConnectionStrings__DefaultConnection: Host=postgres;Port=${DB_PORT};Database=${DB_NAME};Username=${DB_USER};Password=${DB_PASSWORD}
+      Jwt__Key: ${JWT_SECRET}
+      Jwt__Issuer: ${JWT_ISSUER}
+      Jwt__Audience: ${JWT_AUDIENCE}
+      App__PublicBaseUrl: ${PUBLIC_BASE_URL}
+      App__ApiBaseUrl: ${API_BASE_URL}
+      # Peruri on-premise stamping configuration
+      Peruri__KeyStamp: http://signadapter:7777
+      Peruri__SharedFolder: /app/sharefolder
+      # Update these environment variables inside your api service block:
+      App__MinioEndpoint: minio:9000
+      # Or if your configuration uses standard AWS/S3 variable keys:
+      AWS__ServiceURL: minio:9000
+      Minio__Endpoint: minio:9000
+    volumes:
+      - stamping-share:/app/sharefolder
+    depends_on:
+      - postgres
+
+  postgres:
+    image: postgres:16
+    container_name: amtemeterai-postgres
+    restart: always
+    environment:
+      # Injected from .env
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
+    ports:
+      - "${DB_PORT}:5432"  # <-- ADD THIS LINE (Usually maps 5432:5432)
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+  minio:
+    image: minio/minio:RELEASE.2024-02-17T01-15-57Z
+    container_name: amtemeterai-minio
+    ports:
+      - "9000:9000"       # API Port
+      - "9001:9001"       # Web Console Port
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadminpassword}
+    volumes:
+      - minio_data:/data
+    command: server /data --console-address ":9001"
+
+  # Fix: Switched to stable latest tag for the configuration tool
+  createbuckets:
+    image: minio/mc:latest
+    container_name: amtemeterai-minio-init
+    depends_on:
+      - minio
+    entrypoint: >
+      /bin/sh -c "
+      until (/usr/bin/mc alias set myminio http://minio:9000 argo_storageadmin argo_zP7-8WoQGnIecic96iAW); do echo 'Waiting for MinIO...'; sleep 1; done;
+      /usr/bin/mc mb --ignore-existing myminio/amtemeterai-documents;
+      /usr/bin/mc policy set download myminio/amtemeterai-documents;
+      exit 0;
+      "
+  signadapter:
+    image: registry.perurica.co.id/e-meterai/signadapter:2.0
+    container_name: signadapter
+    restart: always
+    ports:
+      - "9999:7777"
+    environment:
+      ENV: STAGING
+      TZ: Asia/Jakarta
+    volumes:
+      - ./logs:/app/logs
+      - stamping-share:/app/sharefolder
+volumes:
+  postgres_data:
+  minio_data:
+  stamping-share:

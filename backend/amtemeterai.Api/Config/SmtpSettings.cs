@@ -2,7 +2,9 @@ namespace amtemeterai.Api.Config
 {
     public class SmtpSettings
     {
-        public string Server { get; set; } = string.Empty;
+        public const string SectionName = "Smtp";
+
+        public string Host { get; set; } = string.Empty;
         public int Port { get; set; }
         public string SenderName { get; set; } = string.Empty;
         public string SenderEmail { get; set; } = string.Empty;

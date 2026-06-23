@@ -354,10 +354,12 @@ public class PeruriOnPremiseStampService : IPeruriOnPremiseStampService
                 refToken = sn,
                 jwToken = jwtToken,
                 visSignaturePage = 1,
-                visLLX = 459,   
-                visLLY = 36,    
-                visURX = 559,   
-                visURY = 136,   
+                // --- UPDATED COORDINATES FOR METADATA ALIGNMENT ---
+                visLLX = 428,
+                visLLY = 215,
+                visURX = 482,
+                visURY = 269, 
+                // --------------------------------------------------
                 profileName = "default",
                 docpass = "",
                 location = "Jakarta",

@@ -27,14 +27,22 @@
 - **MenuPermission** - Maps permissions to application menus
 - **ApplicationMenu** - Application menu structure
 
-### Configuration (appsettings.json)
+### Configuration (appsettings.json & Environment Variables)
 - **Jwt** - JWT token configuration (Issuer, Audience, Key)
 - **ConnectionStrings** - Database connection
-- **SapOptions** - SAP integration settings (BaseUrl, Username, Password)
+- **SapOptions** - SAP integration settings (BaseUrl, Client, Username, Password)
 - **PeruriOptions** - e-Meterai stamping service configuration
-- **SmtpSettings** - Email service configuration
+- **Smtp** (formerly SmtpSettings) - Email service configuration (Host, Port, Username, Password, etc.)
 - **Cors** - Allowed origins for CORS policy
 - **CustomerSource** - Toggle between Dummy and ERP customer source
+
+#### Environment Variable Mapping (Production Docker)
+All configuration sections now support environment variable override using double-underscore notation:
+- `SapOptions__BaseUrl`, `SapOptions__Client`, `SapOptions__Username`, `SapOptions__Password`
+- `Smtp__Host`, `Smtp__Port`, `Smtp__Username`, `Smtp__Password`
+- `Peruri__BackendStg`, `Peruri__Stampv2Stg`, `Peruri__User`, `Peruri__Password`
+- `Jwt__Key`, `Jwt__Issuer`, `Jwt__Audience`
+- `ConnectionStrings__DefaultConnection`
 
 ### Services
 - **IEmailService** / **EmailService** - SMTP email sending
@@ -95,10 +103,10 @@
 - `POST /api/invoices/{id}/stamp` - Trigger e-Meterai stamping
 - `POST /api/invoices/{id}/upload-printout` - Upload invoice printout
 
-### Recent Changes (Task 1 - GoLive Prep)
-**Implemented: Admin-Only User Registration Panel**
+### Recent Changes (GoLive Prep)
 
-#### Backend Changes
+#### Task 1: Admin-Only User Registration Panel ✅
+**Backend Changes:**
 1. Added `POST /api/admin/uam/users/register` endpoint to `UserManagementController`
 2. Endpoint secured with `[Authorize(Roles = "sysadmin")]` attribute
 3. Request payload accepts:
@@ -114,7 +122,21 @@
    - Identity password validation
 5. Uses `UserManager<ApplicationUser>` and `RoleManager<IdentityRole>` for secure user creation and role assignment
 
+#### Task 2: Environment Variable Configuration Provider Mapping ✅
+**Backend Changes:**
+1. Added explicit call to `builder.Configuration.AddEnvironmentVariables()` in `Program.cs`
+2. Renamed configuration section names for consistency:
+   - `SapConfig` → `SapOptions` (using `SapOptions.Position` constant)
+   - `SmtpSettings` → `Smtp` (using `SmtpSettings.SectionName` constant)
+   - `Periuri` → `Peruri` (matching `PeruriOptions.SectionName`)
+3. Renamed SmtpSettings property:
+   - `Server` → `Host` (to match standard SMTP terminology)
+4. Updated `EmailService.cs` to use `_settings.Host` instead of `_settings.Server`
+5. Updated `appsettings.json` to reflect new section names and property names
+6. All configuration now supports environment variable override using double-underscore notation:
+   - `SapOptions__BaseUrl`, `SapOptions__Username`, `SapOptions__Password`
+   - `Smtp__Host`, `Smtp__Port`, `Smtp__Username`, `Smtp__Password`
+
 ### Pending Go-Live Tasks
-- Task 2: Environment Variable Configuration Provider Mapping
 - Task 3: Resilient Fallback for Missing Google Maps API Key
 - Task 4: Daily Midnight Customer Sync Background Job

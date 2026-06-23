@@ -101,7 +101,7 @@ namespace amtemeterai.Api.Services
             try
             {
                 // Connect using explicitly typed STARTTLS configurations required by Google
-                await client.ConnectAsync(_settings.Server, _settings.Port, SecureSocketOptions.StartTls);
+                await client.ConnectAsync(_settings.Host, _settings.Port, SecureSocketOptions.StartTls);
                 await client.AuthenticateAsync(_settings.Username, _settings.Password);
                 await client.SendAsync(message);
                 
@@ -225,7 +225,7 @@ namespace amtemeterai.Api.Services
             using var client = new SmtpClient();
             try
             {
-                await client.ConnectAsync(_settings.Server, _settings.Port, SecureSocketOptions.StartTls);
+                await client.ConnectAsync(_settings.Host, _settings.Port, SecureSocketOptions.StartTls);
                 await client.AuthenticateAsync(_settings.Username, _settings.Password);
                 await client.SendAsync(message);
 

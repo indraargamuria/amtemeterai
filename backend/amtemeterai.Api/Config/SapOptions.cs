@@ -5,7 +5,7 @@ namespace amtemeterai.Api.Config;
 
 public class SapOptions
 {
-    public const string Position = "SapConfig";
+    public const string Position = "SapOptions";
 
     public string BaseUrl { get; set; } = null!;
     public string Client { get; set; } = null!;

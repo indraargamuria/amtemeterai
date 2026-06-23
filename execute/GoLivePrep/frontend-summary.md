@@ -77,10 +77,10 @@ The admin panel (`UserAccessManagementPage`) provides three main tabs:
 2. **User Registration** - **[NEW]** Create new users with role assignment
 3. **Role Menu Matrix** - Configure menu permissions per role
 
-### Recent Changes (Task 1 - GoLive Prep)
-**Implemented: Admin-Only User Registration Panel**
+### Recent Changes (GoLive Prep)
 
-#### Frontend Changes
+#### Task 1: Admin-Only User Registration Panel ✅
+**Frontend Changes:**
 1. Added "User Registration" tab to UserAccessManagementPage
 2. Registration form includes:
    - Username input (required)
@@ -101,6 +101,10 @@ The admin panel (`UserAccessManagementPage`) provides three main tabs:
    - Finance User (@finance)
    - Warehouse User (@warehouse)
 
+#### Task 2: Environment Variable Configuration Provider Mapping ✅
+**Note:** This task is backend-only. No frontend changes were required.
+The backend now supports environment variable configuration for production Docker deployments using double-underscore notation (e.g., `SapOptions__BaseUrl`, `Smtp__Host`).
+
 ### API Integration
 All API calls use authenticated fetch with JWT tokens:
 - Automatic token injection
@@ -108,6 +112,5 @@ All API calls use authenticated fetch with JWT tokens:
 - Consistent error handling
 
 ### Pending Go-Live Tasks
-- Task 2: Environment Variable Configuration Provider Mapping
 - Task 3: Resilient Fallback for Missing Google Maps API Key
 - Task 4: Daily Midnight Customer Sync Background Job

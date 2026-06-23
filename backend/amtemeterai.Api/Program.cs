@@ -12,6 +12,11 @@ using Microsoft.AspNetCore.Http.Features;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Add Environment Variables configuration provider for production Docker deployments
+// This allows overriding configuration via environment variables using double-underscore notation
+// Example: SapOptions__BaseUrl, Smtp__Host, Smtp__Port, etc.
+builder.Configuration.AddEnvironmentVariables();
+
 // Add services to the container.
 
 // 2026-04-30 - Add Db Context
@@ -62,7 +67,7 @@ else
 builder.Services.AddScoped<CustomerService>();
 
 // Bind the Smtp Settings Payload Block
-builder.Services.Configure<SmtpSettings>(builder.Configuration.GetSection("SmtpSettings"));
+builder.Services.Configure<SmtpSettings>(builder.Configuration.GetSection(SmtpSettings.SectionName));
 
 // Register Email Infrastructure Service
 builder.Services.AddTransient<IEmailService, EmailService>();
