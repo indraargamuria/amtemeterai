@@ -1980,12 +1980,40 @@ export function DeliveryReceivePage() {
     return displayableItems.length
   }, [displayableItems.length])
 
-  // Total concrete batches (all delivery lines)
+  // Total concrete batches - counts only actual physical batches
+  // Excludes parent headers of split-batch items (parentLineNumber="0" with no batchNumber AND has children)
   const totalBatches = useMemo(() => {
-    return delivery?.lines.length || 0
-  }, [delivery?.lines.length])
+    if (!delivery?.lines || delivery.lines.length === 0) return 0
 
-  // Dashboard status summaries with live calculation - evaluated at granular batch level
+    // Build a set of parent line numbers that have children (split-batch parents)
+    const parentLinesWithChildren = new Set<string>()
+    delivery.lines.forEach((line) => {
+      if (line.parentLineNumber && line.parentLineNumber !== "0") {
+        // This is a child line - mark its parent as having children
+        parentLinesWithChildren.add(line.parentLineNumber!)
+      }
+    })
+
+    // Count only actual physical batches:
+    // 1. Single-batch items (parentLineNumber="0" with batchNumber, OR parentLineNumber="0" without batchNumber AND no children)
+    // 2. Child lines (parentLineNumber > 0)
+    // Exclude: Parent lines without batchNumber that have children (split-batch headers)
+    return delivery.lines.filter((line) => {
+      const isParent = !line.parentLineNumber || line.parentLineNumber === "0"
+      const hasBatchNumber = line.batchNumber && line.batchNumber.trim() !== ""
+      const hasChildren = parentLinesWithChildren.has(line.deliveryLineNumber)
+
+      // Count if:
+      // - Child line (not a parent)
+      // - Parent with batch number (single-batch with batch info)
+      // - Parent without batch number AND no children (single-batch without batch info)
+      // Do NOT count: Parent without batch number AND has children (split-batch header)
+      return !isParent || hasBatchNumber || !hasChildren
+    }).length
+  }, [delivery?.lines])
+
+  // Dashboard status summaries - evaluated at granular batch level
+  // Excludes parent headers of split-batch items from statistics
   const dashboardSummaries = useMemo(() => {
     const summaries = {
       accepted: 0,
@@ -1993,8 +2021,31 @@ export function DeliveryReceivePage() {
       pending: 0
     }
 
+    if (!delivery?.lines || delivery.lines.length === 0) {
+      return summaries
+    }
+
+    // Build a set of parent line numbers that have children (split-batch parents)
+    const parentLinesWithChildren = new Set<string>()
+    delivery.lines.forEach((line) => {
+      if (line.parentLineNumber && line.parentLineNumber !== "0") {
+        // This is a child line - mark its parent as having children
+        parentLinesWithChildren.add(line.parentLineNumber!)
+      }
+    })
+
     // Evaluate each individual batch line directly from form state
-    delivery?.lines.forEach((line) => {
+    // Only include actual physical batches (exclude split-batch parent headers)
+    delivery.lines.forEach((line) => {
+      const isParent = !line.parentLineNumber || line.parentLineNumber === "0"
+      const hasBatchNumber = line.batchNumber && line.batchNumber.trim() !== ""
+      const hasChildren = parentLinesWithChildren.has(line.deliveryLineNumber)
+
+      // Skip parent lines without batchNumber that have children (split-batch headers)
+      if (isParent && !hasBatchNumber && hasChildren) {
+        return
+      }
+
       const lineState = linesMap.get(line.deliveryLineNumber)
       if (!lineState) {
         // No form state = pending
