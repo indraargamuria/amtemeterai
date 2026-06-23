@@ -263,7 +263,9 @@ public class InvoicesController : ControllerBase
             // Upload the stamped PDF to MinIO only if not already uploaded by on-premise service
             if (string.IsNullOrEmpty(stampedStorageKey))
             {
-                stampedStorageKey = $"invoices/{invoice.InvoiceID}/stamped/{Guid.NewGuid()}_stamped.pdf";
+                // Use descriptive prefix with invoice number: invoices/{invoiceNumber}/stamped/STPINV_{invoiceNumber}_{guid}.pdf
+                string stampedGuid = Guid.NewGuid().ToString();
+                stampedStorageKey = $"invoices/{invoiceNumber}/stamped/STPINV_{invoiceNumber}_{stampedGuid}.pdf";
                 using var stampedStream = new MemoryStream(stampedPdf);
                 await _storageService.UploadFileAsync(stampedStorageKey, stampedStream, "application/pdf");
             }

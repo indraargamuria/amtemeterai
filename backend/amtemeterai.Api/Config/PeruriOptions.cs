@@ -55,7 +55,7 @@ public class PeruriOptions
     /// Corrected (Local): http://localhost:9999
     /// Signing path: /adapter/pdfsigning/rest/docSigningZ
     /// </summary>
-    public string KeyStamp { get; set; } = "http://signadapter:7777";
+    public string KeyStamp { get; set; } = "http://localhost:9999";
 
     /// <summary>
     /// Shared folder path for Docker volume

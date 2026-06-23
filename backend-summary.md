@@ -1580,7 +1580,8 @@ decimal percentCalc = PackQuantity > 0 ? (rawVariance / PackQuantity) * 100 : 0;
 - Delivery Photos: `deliveries/{deliveryId}/photos/{guid}.{ext}`
 - Delivery Printouts: `deliveries/{deliveryNumber}/printouts/DO_{deliveryNumber}_{guid}.{ext}` (descriptive prefix with delivery number and unique GUID)
 - Invoice Printouts: `invoices/{invoiceNumber}/printouts/INV_{invoiceNumber}_{guid}.{ext}` (descriptive prefix with invoice number and unique GUID)
-- Stamped Invoices: `invoices/{invoiceId}/stamped/{guid}_stamped.pdf`
+- e-Meterai QR Code Images: `invoices/{invoiceNumber}/qr/QRINV_{invoiceNumber}_{guid}.png` (descriptive prefix for QR stamp assets)
+- Stamped Invoices: `invoices/{invoiceNumber}/stamped/STPINV_{invoiceNumber}_{guid}.pdf` (descriptive prefix for stamped PDF assets)
 
 ### File Naming Conventions (Upload Documents)
 - **Delivery Printout Files:** `DO_{deliveryNumber}_{Guid.NewGuid()}.{ext}`
@@ -1591,6 +1592,16 @@ decimal percentCalc = PackQuantity > 0 ? (rawVariance / PackQuantity) * 100 : 0;
 - **Invoice Printout Files:** `INV_{invoiceNumber}_{Guid.NewGuid()}.{ext}`
   - Example: `INV_INV2025001_1a2b3c4d-5e6f-7890-abcd-ef1234567890.pdf`
   - Prefix `INV_` indicates Invoice document
+  - Contains invoice number for identification
+  - GUID ensures uniqueness and prevents file collisions
+- **e-Meterai QR Code Files:** `QRINV_{invoiceNumber}_{Guid.NewGuid()}.png`
+  - Example: `QRINV_INV2025001_1a2b3c4d-5e6f-7890-abcd-ef1234567890.png`
+  - Prefix `QRINV_` indicates e-Meterai QR code image
+  - Contains invoice number for identification
+  - GUID ensures uniqueness and prevents file collisions
+- **Stamped Invoice Files:** `STPINV_{invoiceNumber}_{Guid.NewGuid()}.pdf`
+  - Example: `STPINV_INV2025001_1a2b3c4d-5e6f-7890-abcd-ef1234567890.pdf`
+  - Prefix `STPINV_` indicates Stamped Invoice document
   - Contains invoice number for identification
   - GUID ensures uniqueness and prevents file collisions
 
