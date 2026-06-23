@@ -528,7 +528,8 @@ public class InvoicesController : ControllerBase
         try
         {
             string fileExtension = Path.GetExtension(file.FileName);
-            string storageKey = $"invoices/{invoice.InvoiceID}/printouts/{Guid.NewGuid()}{fileExtension}";
+            // Use descriptive invoice number instead of internal ID for clarity
+            string storageKey = $"invoices/{invoice.InvoiceNumber}/printouts/{Guid.NewGuid()}{fileExtension}";
 
             // Upload to MinIO
             using (var stream = file.OpenReadStream())

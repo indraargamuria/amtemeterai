@@ -1578,8 +1578,8 @@ decimal percentCalc = PackQuantity > 0 ? (rawVariance / PackQuantity) * 100 : 0;
 
 ### Storage Key Patterns
 - Delivery Photos: `deliveries/{deliveryId}/photos/{guid}.{ext}`
-- Delivery Printouts: `deliveries/{deliveryId}/printouts/{guid}.{ext}`
-- Invoice Printouts: `invoices/{invoiceId}/printouts/{guid}.{ext}`
+- Delivery Printouts: `deliveries/{deliveryNumber}/printouts/{guid}.{ext}` (uses descriptive delivery number)
+- Invoice Printouts: `invoices/{invoiceNumber}/printouts/{guid}.{ext}` (uses descriptive invoice number)
 - Stamped Invoices: `invoices/{invoiceId}/stamped/{guid}_stamped.pdf`
 
 ## Email Service
