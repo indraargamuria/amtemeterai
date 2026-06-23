@@ -1578,9 +1578,21 @@ decimal percentCalc = PackQuantity > 0 ? (rawVariance / PackQuantity) * 100 : 0;
 
 ### Storage Key Patterns
 - Delivery Photos: `deliveries/{deliveryId}/photos/{guid}.{ext}`
-- Delivery Printouts: `deliveries/{deliveryNumber}/printouts/{guid}.{ext}` (uses descriptive delivery number)
-- Invoice Printouts: `invoices/{invoiceNumber}/printouts/{guid}.{ext}` (uses descriptive invoice number)
+- Delivery Printouts: `deliveries/{deliveryNumber}/printouts/DO_{deliveryNumber}_{guid}.{ext}` (descriptive prefix with delivery number and unique GUID)
+- Invoice Printouts: `invoices/{invoiceNumber}/printouts/INV_{invoiceNumber}_{guid}.{ext}` (descriptive prefix with invoice number and unique GUID)
 - Stamped Invoices: `invoices/{invoiceId}/stamped/{guid}_stamped.pdf`
+
+### File Naming Conventions (Upload Documents)
+- **Delivery Printout Files:** `DO_{deliveryNumber}_{Guid.NewGuid()}.{ext}`
+  - Example: `DO_DLVR1001_a1b2c3d4-e5f6-7890-abcd-ef1234567890.pdf`
+  - Prefix `DO_` indicates Delivery Order document
+  - Contains delivery number for identification
+  - GUID ensures uniqueness and prevents file collisions
+- **Invoice Printout Files:** `INV_{invoiceNumber}_{Guid.NewGuid()}.{ext}`
+  - Example: `INV_INV2025001_1a2b3c4d-5e6f-7890-abcd-ef1234567890.pdf`
+  - Prefix `INV_` indicates Invoice document
+  - Contains invoice number for identification
+  - GUID ensures uniqueness and prevents file collisions
 
 ## Email Service
 

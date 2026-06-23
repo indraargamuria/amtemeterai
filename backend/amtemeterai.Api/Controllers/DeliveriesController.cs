@@ -1093,8 +1093,10 @@ public class DeliveriesController : ControllerBase
         try
         {
             string fileExtension = Path.GetExtension(file.FileName);
-            // Use descriptive delivery number instead of internal ID for clarity
-            string storageKey = $"deliveries/{delivery.DeliveryNumber}/printouts/{Guid.NewGuid()}{fileExtension}";
+            // Use descriptive delivery number and prefix for clarity
+            // Format: DO_{deliveryNumber}_{guid}.{ext}
+            string uniqueFileName = $"DO_{delivery.DeliveryNumber}_{Guid.NewGuid()}{fileExtension}";
+            string storageKey = $"deliveries/{delivery.DeliveryNumber}/printouts/{uniqueFileName}";
 
             using (var stream = file.OpenReadStream())
             {
