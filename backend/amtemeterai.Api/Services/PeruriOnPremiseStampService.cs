@@ -91,24 +91,44 @@ public class PeruriOnPremiseStampService : IPeruriOnPremiseStampService
         };
 
         // =================================================================
-        // PHASE 1: RELATIVE FOLDER TRAVERSAL PATH RESOLUTION
+        // PHASE 1: TRANSIENT WORKSPACE PATH RESOLUTION (Docker Named Volume)
         // =================================================================
-        // Navigates securely out from 'backend/amtemeterai.Api/bin/Debug/...' to the shared project root path
-        string baseShareFolder = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "sharefolder"));
+        // Standardize base root directory tracks from injected configuration paths
+        string sharedRoot = _options.SharedFolder.Replace(Path.DirectorySeparatorChar, '/').TrimEnd('/');
 
-        string unsignedDir = Path.Combine(baseShareFolder, "UNSIGNED");
-        string stampDir = Path.Combine(baseShareFolder, "STAMP");
-        string signedDir = Path.Combine(baseShareFolder, "SIGNED");
+        // Separate processing contexts cleanly by using the absolute file tracking name
+        string unsignedDirPath = $"{sharedRoot}/UNSIGNED";
+        string stampDirPath = $"{sharedRoot}/STAMP";
+        string signedDirPath = $"{sharedRoot}/SIGNED";
 
-        // Guarantee directory tree initialization exists for Docker portability
-        Directory.CreateDirectory(unsignedDir);
-        Directory.CreateDirectory(stampDir);
-        Directory.CreateDirectory(signedDir);
+        // Guarantee system directories exist in the shared volumes architecture
+        Directory.CreateDirectory(unsignedDirPath);
+        Directory.CreateDirectory(stampDirPath);
+        Directory.CreateDirectory(signedDirPath);
 
-        string localPdfPath = Path.Combine(unsignedDir, $"{invoiceNumber}.pdf");
-        string localQrPath = Path.Combine(stampDir, $"{invoiceNumber}_qr.png");
-        string localSignedPath = Path.Combine(signedDir, $"stamped_{invoiceNumber}.pdf");
+        // Determine if container execution rules apply
+        bool isRunningInDocker = Directory.Exists("/app") || Environment.GetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER") == "true";
 
+        // Fix Linux Permissions: Grant full 777 access to the subdirectories so the non-root signadapter user can read/write files safely
+        try
+        {
+            if (isRunningInDocker)
+            {
+                System.Diagnostics.Process.Start("chmod", $"-R 777 {unsignedDirPath} {stampDirPath} {signedDirPath}")?.WaitForExit();
+                _logger.LogInformation("Successfully adjusted Linux volume folder permissions to 777.");
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Could not adjust permissions via chmod. Proceeding anyway.");
+        }
+
+        _logger.LogInformation("Using root shared storage paths for processing instance: {Workspace}", sharedRoot);
+
+        // Generate flat paths for files inside the shared root directories
+        string localPdfPath = $"{unsignedDirPath}/{invoiceNumber}.pdf";
+        string localQrPath = $"{stampDirPath}/{invoiceNumber}_qr.png";
+        string localSignedPath = $"{signedDirPath}/stamped_{invoiceNumber}.pdf";
         // Local files for cleanup tracking
         List<string> transientFiles = new List<string>();
 
@@ -118,7 +138,6 @@ public class PeruriOnPremiseStampService : IPeruriOnPremiseStampService
             // PHASE 2: WRITE UNSIGNED PDF TO SHARED FOLDER (EXPLICIT FLUSH)
             // =================================================================
             _logger.LogInformation("PHASE 1: Writing unsigned PDF to {LocalPdfPath} with explicit stream flush", localPdfPath);
-            // Use explicit FileStream with FlushAsync to guarantee full OS release of file handle
             using (var fs = new FileStream(localPdfPath, FileMode.Create, FileAccess.Write, FileShare.None, 4096, useAsync: true))
             {
                 await fs.WriteAsync(request.PdfContent, 0, request.PdfContent.Length);
@@ -151,7 +170,6 @@ public class PeruriOnPremiseStampService : IPeruriOnPremiseStampService
                 result.SerialNumber = sn;
                 result.QrImageStorageKey = qrImageStorageKey;
 
-                // If database contains cached metadata but local folder image got cleared out, pull from MinIO
                 if (!File.Exists(localQrPath))
                 {
                     _logger.LogInformation("Restoring missing physical QR PNG file from MinIO storage.");
@@ -160,7 +178,7 @@ public class PeruriOnPremiseStampService : IPeruriOnPremiseStampService
                         using var qrStream = await _storageService.GetFileStreamAsync(qrImageStorageKey);
                         using var fileStream = new FileStream(localQrPath, FileMode.Create, FileAccess.Write, FileShare.None, 4096, useAsync: true);
                         await qrStream.CopyToAsync(fileStream);
-                        await fileStream.FlushAsync(); // Force physical sector commitment
+                        await fileStream.FlushAsync(); 
                         transientFiles.Add(localQrPath);
                         _logger.LogInformation("QR code restored from MinIO to local workspace.");
                     }
@@ -183,74 +201,22 @@ public class PeruriOnPremiseStampService : IPeruriOnPremiseStampService
                 var stampClient = _httpClientFactory.CreateClient();
                 var stampUrl = $"{_options.Stampv2Stg.TrimEnd('/')}/chanel/stampv2";
 
-                // =================================================================
-                // BUSINESS RULE MAPPING: Dynamic values with safe fallbacks
-                // =================================================================
-                // nodoc: Use internal database Primary Key (InvoiceID) with fallback
-                string nodoc = invoice.InvoiceID > 0 ? invoice.InvoiceID.ToString() : "0";
-
-                // namedipungut: Use customer name as-is (current working behavior)
-                // Future enhancement: Could apply Title Case + space removal when validated
-                string namedipungut = !string.IsNullOrEmpty(request.CustomerName)
-                    ? request.CustomerName
-                    : "Customer";
-
-                // namejidentitas: NPWP for business invoices (current working value)
-                string namejidentitas = "NPWP";
-
-                // noidentitas: Use CustomerNumber with safe fallback
-                string noidentitas = !string.IsNullOrEmpty(request.CustomerNumber)
-                    ? request.CustomerNumber
-                    : "-"; // Fallback placeholder for staging
-
-                // namafile: Sanitize invoice number with fallback
-                string namafile = !string.IsNullOrEmpty(invoiceNumber)
-                    ? SanitizeFileName(invoiceNumber)
-                    : "Invoice.pdf"; // Fallback to working default
-
-                // nilaidoc: Use amount with safe fallback
-                string nilaidoc = request.Amount > 0
-                    ? request.Amount.ToString("F0")
-                    : "0"; // Fallback to working default
-
-                // tgldoc: Use invoice date or today
-                string tgldoc = invoice.InvoicedDate > DateTime.MinValue
-                    ? invoice.InvoicedDate.ToString("yyyy-MM-dd")
-                    : DateTime.Today.ToString("yyyy-MM-dd");
-
-                // // Map business fields to Peruri API contract structure
-                // var stampRequest = new PeruriStampRequestDto
-                // {
-                //     isUpload = false,
-                //     namadoc = "4b",  // Document type code for Invoice/Faktur
-                //     namafile = namafile,
-                //     nilaidoc = nilaidoc,  // e-Meterai nominal price tier from amount
-                //     namejidentitas = namejidentitas,  // NPWP for business invoices
-                //     noidentitas = noidentitas,  // Customer's tax identification number
-                //     namedipungut = namedipungut,  // Taxpayer name
-                //     snOnly = false,
-                //     nodoc = nodoc,  // Internal database ID as document bridge
-                //     tgldoc = tgldoc  // Invoice date in YYYY-MM-DD format
-                // };
-
-                // Map business fields to Peruri API contract structure
                 var stampRequest = new PeruriStampRequestDto
                 {
                     isUpload = false,
-                    namadoc = "4b",  // Document type code for Invoice/Faktur
+                    namadoc = "4b", 
                     namafile = "Invoice.pdf",
-                    nilaidoc = "0",  // e-Meterai nominal price tier
-                    namejidentitas = "NPWP",  // ID type
-                    noidentitas = "3372015407840001",  // Fallback placeholder for staging
+                    nilaidoc = "0", 
+                    namejidentitas = "NPWP", 
+                    noidentitas = "3372015407840001", 
                     namedipungut = "William",
                     snOnly = false,
                     nodoc = "0",
-                    tgldoc = DateTime.Today.ToString("yyyy-MM-dd")  // Format: YYYY-MM-DD
+                    tgldoc = DateTime.Today.ToString("yyyy-MM-dd") 
                 };
+                
                 var debugJson = JsonSerializer.Serialize(stampRequest, new JsonSerializerOptions { WriteIndented = true });
                 _logger.LogInformation("Peruri Payload Data:\n{Json}", debugJson);
-                _logger.LogDebug("Peruri Stamp Request: isUpload={IsUpload}, nodoc={NoDoc}, tgldoc={TglDoc}, noidentitas={NoIdentitas}, namedipungut={NameDipungut}",
-                    stampRequest.isUpload, stampRequest.nodoc, stampRequest.tgldoc, stampRequest.noidentitas, stampRequest.namedipungut);
 
                 stampClient.DefaultRequestHeaders.Add("Authorization", $"Bearer {jwtToken}");
                 var stampResponse = await stampClient.PostAsJsonAsync(stampUrl, stampRequest);
@@ -258,14 +224,12 @@ public class PeruriOnPremiseStampService : IPeruriOnPremiseStampService
 
                 if (!stampResponse.IsSuccessStatusCode)
                 {
-                    _logger.LogError("Peruri Stamp API failed with HTTP status {StatusCode}: {Error}",
-                        stampResponse.StatusCode, responseString);
+                    _logger.LogError("Peruri Stamp API failed with HTTP status {StatusCode}: {Error}", stampResponse.StatusCode, responseString);
                     result.Success = false;
                     result.ErrorMessage = $"Peruri remote gateway connection error: {stampResponse.StatusCode}";
                     return result;
                 }
 
-                // Parse response using JsonDocument for better error handling
                 JsonDocument jsonDoc;
                 try
                 {
@@ -279,7 +243,6 @@ public class PeruriOnPremiseStampService : IPeruriOnPremiseStampService
                     return result;
                 }
 
-                // Debug: Show parsed JSON payload formatted cleanly in the terminal
                 var parsedJsonString = JsonSerializer.Serialize(jsonDoc.RootElement, new JsonSerializerOptions { WriteIndented = true });
                 _logger.LogInformation("=== RECEIVED PERURI API RESPONSE PAYLOAD ===\n{Json}\n============================================", parsedJsonString);
 
@@ -295,7 +258,6 @@ public class PeruriOnPremiseStampService : IPeruriOnPremiseStampService
                     return result;
                 }
 
-                // Parse out returned data parameters
                 var resultData = root.GetProperty("result");
                 sn = resultData.GetProperty("sn").GetString() ?? string.Empty;
                 var qrBase64 = resultData.GetProperty("image").GetString() ?? string.Empty;
@@ -311,30 +273,23 @@ public class PeruriOnPremiseStampService : IPeruriOnPremiseStampService
                 _logger.LogInformation("PHASE 2 Complete: Received SN {SerialNumber} from Peruri API", sn);
 
                 // =================================================================
-                // PHASE 5: UPLOAD QR CODE TO MINIO (Eliminate Database Bloat)
+                // PHASE 5: UPLOAD QR CODE TO MINIO
                 // =================================================================
                 _logger.LogInformation("PHASE 3: Uploading e-Meterai QR code to MinIO storage");
-
-                // Declare qrBytes outside try block so it can be used for both MinIO upload and local file write
                 byte[] qrBytes;
 
                 try
                 {
-                    // Decode Base64 to bytes
                     qrBytes = Convert.FromBase64String(qrBase64);
-
-                    // Remove data URL prefix if present
                     if (qrBase64.Contains(","))
                     {
                         qrBase64 = qrBase64.Split(',')[1];
                         qrBytes = Convert.FromBase64String(qrBase64);
                     }
 
-                    // Create storage key with descriptive prefix: invoices/{invoiceNumber}/qr/QRINV_{invoiceNumber}_{guid}.png
                     string qrGuid = Guid.NewGuid().ToString();
                     string qrStorageKey = $"invoices/{invoiceNumber}/qr/QRINV_{invoiceNumber}_{qrGuid}.png";
 
-                    // Upload to MinIO
                     using (var qrStream = new MemoryStream(qrBytes))
                     {
                         await _storageService.UploadFileAsync(qrStorageKey, qrStream, "image/png");
@@ -342,11 +297,9 @@ public class PeruriOnPremiseStampService : IPeruriOnPremiseStampService
 
                     _logger.LogInformation("PHASE 3 Complete: QR code uploaded to MinIO at {StorageKey}", qrStorageKey);
 
-                    // Save storage reference to database (not the actual Base64)
                     invoice.SerialNumber = sn;
                     invoice.QrImageStorageKey = qrStorageKey;
                     await _dbContext.SaveChangesAsync();
-                    _logger.LogInformation("PHASE 3 Complete: SerialNumber and QR storage key saved to database (no Base64 bloat)");
 
                     result.QrImageStorageKey = qrStorageKey;
                 }
@@ -358,69 +311,68 @@ public class PeruriOnPremiseStampService : IPeruriOnPremiseStampService
                     return result;
                 }
 
-                // Write QR locally for KeyStamp with explicit flush (will be cleaned up in finally block)
-                // qrBytes is already decoded from the MinIO upload block above
                 using (var fs = new FileStream(localQrPath, FileMode.Create, FileAccess.Write, FileShare.None, 4096, useAsync: true))
                 {
                     await fs.WriteAsync(qrBytes, 0, qrBytes.Length);
-                    await fs.FlushAsync(); // Force physical sector commitment
+                    await fs.FlushAsync(); 
                 }
                 transientFiles.Add(localQrPath);
             }
 
             // =================================================================
-            // I/O SYNCHRONIZATION BUFFER (PHASE 3 → PHASE 4)
+            // I/O SYNCHRONIZATION BUFFER
             // =================================================================
-            _logger.LogInformation("PHASE 3 Complete: Workspace files written to disk. Introducing synchronization buffer.");
-            await Task.Delay(350); // Gives Docker volume mounting a clear frame to register the files safely
+            await Task.Delay(350); 
 
             // =================================================================
             // PHASE 6: EXECUTE LOCAL KEYSTAMP CONTAINER SIGNING
             // =================================================================
-            _logger.LogInformation("PHASE 4: Invoking KeyStamp Docker adapter at port 9999");
+            _logger.LogInformation("PHASE 4: Invoking KeyStamp Docker adapter");
 
             var signingClient = _httpClientFactory.CreateClient();
-
-            // A cryptographic PDF signing call over localhost should never exceed 15 seconds
-            // Fail-fast timeout prevents infinite hangs from volume locks or network issues
             signingClient.Timeout = TimeSpan.FromSeconds(15);
-            var signingUrl = $"{_options.KeyStamp.TrimEnd('/')}/adapter/pdfsigning/rest/docSigningZ";
 
+            string targetUrl = _options.KeyStamp;
+
+            if (!isRunningInDocker)
+            {
+                targetUrl = targetUrl.Replace("signadapter:7777", "localhost:9999");
+                _logger.LogInformation("Running in local development mode. Routing KeyStamp endpoint to localhost:9999");
+            }
+
+            var signingUrl = $"{targetUrl.TrimEnd('/')}/adapter/pdfsigning/rest/docSigningZ";
+
+            // Strip the leading "/app/" path prefix so the Peruri adapter does not double-prefix it to "/app/app/sharefolder"
             var signingRequest = new KeyStampSigningRequestDto
             {
                 certificatelevel = "NOT_CERTIFIED",
 
-                // Use relative paths for Docker volume mapping
-                src = $"/sharefolder/UNSIGNED/{invoiceNumber}.pdf",
-                dest = $"/sharefolder/SIGNED/stamped_{invoiceNumber}.pdf",
-                spesimenPath = $"/sharefolder/STAMP/{invoiceNumber}_qr.png",
+                src = localPdfPath.StartsWith("/app/") ? localPdfPath.Substring(5) : localPdfPath,
+                dest = localSignedPath.StartsWith("/app/") ? localSignedPath.Substring(5) : localSignedPath,
+                spesimenPath = localQrPath.StartsWith("/app/") ? localQrPath.Substring(5) : localQrPath,
 
                 refToken = sn,
                 jwToken = jwtToken,
                 visSignaturePage = 1,
-                // POSITIONING: Bottom-Right Corner with a 36pt Margin
-                visLLX = 459,   // Lower-Left X: 595 (total width) - 100 (specimen width) - 36 (margin)
-                visLLY = 36,    // Lower-Left Y: 36 (margin from the bottom edge)
-                visURX = 559,   // Upper-Right X: 459 (LLX) + 100 (specimen width)
-                visURY = 136,   // Upper-Right Y: 36 (LLY) + 100 (specimen height)
+                visLLX = 459,   
+                visLLY = 36,    
+                visURX = 559,   
+                visURY = 136,   
                 profileName = "default",
                 docpass = "",
                 location = "Jakarta",
                 reason = "Meterai Electronic Integration"
             };
 
-            _logger.LogDebug("KeyStamp Request: src={Src}, dest={Dest}, spesimenPath={SpesimenPath}, refToken={RefToken}",
-                signingRequest.src, signingRequest.dest, signingRequest.spesimenPath, signingRequest.refToken);
-
-            _logger.LogInformation("PHASE 4: Calling KeyStamp Docker adapter at {Url} with a 15s timeout limit.", signingUrl);
+            _logger.LogDebug("KeyStamp Request (Clean Paths): src={Src}, dest={Dest}, spesimenPath={SpesimenPath}",
+                signingRequest.src, signingRequest.dest, signingRequest.spesimenPath);
 
             var signingResponse = await signingClient.PostAsJsonAsync(signingUrl, signingRequest);
             var signingResponseString = await signingResponse.Content.ReadAsStringAsync();
 
             if (!signingResponse.IsSuccessStatusCode)
             {
-                _logger.LogError("KeyStamp signing failed with status {StatusCode}: {Error}",
-                    signingResponse.StatusCode, signingResponseString);
+                _logger.LogError("KeyStamp signing failed with status {StatusCode}: {Error}", signingResponse.StatusCode, signingResponseString);
                 result.Success = false;
                 result.ErrorMessage = $"KeyStamp signing failed: {signingResponse.StatusCode}";
                 return result;
@@ -434,7 +386,6 @@ public class PeruriOnPremiseStampService : IPeruriOnPremiseStampService
             _logger.LogInformation("PHASE 5: Reading signed PDF from {LocalSignedPath}", localSignedPath);
             transientFiles.Add(localSignedPath);
 
-            // Wait a moment for file write to complete
             await Task.Delay(500);
 
             var maxRetries = 10;
@@ -453,12 +404,10 @@ public class PeruriOnPremiseStampService : IPeruriOnPremiseStampService
                     retryCount++;
                     if (retryCount >= maxRetries)
                     {
-                        _logger.LogError("Signed PDF not found after {MaxRetries} retries at {Path}", maxRetries, localSignedPath);
                         result.Success = false;
                         result.ErrorMessage = $"Signed PDF not found after {maxRetries} retries at {localSignedPath}";
                         return result;
                     }
-                    _logger.LogWarning("Signed PDF not found, retrying ({Retry}/{MaxRetries})...", retryCount, maxRetries);
                     await Task.Delay(1000);
                 }
             }
@@ -473,11 +422,8 @@ public class PeruriOnPremiseStampService : IPeruriOnPremiseStampService
             // =================================================================
             // PHASE 8: UPLOAD SIGNED PDF TO MINIO
             // =================================================================
-            _logger.LogInformation("PHASE 6: Uploading signed PDF to MinIO storage");
-
             try
             {
-                // Create storage key with descriptive prefix: invoices/{invoiceNumber}/stamped/STPINV_{invoiceNumber}_{guid}.pdf
                 string stampedGuid = Guid.NewGuid().ToString();
                 string stampedStorageKey = $"invoices/{invoiceNumber}/stamped/STPINV_{invoiceNumber}_{stampedGuid}.pdf";
 
@@ -492,18 +438,11 @@ public class PeruriOnPremiseStampService : IPeruriOnPremiseStampService
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Failed to upload signed PDF to MinIO: {Message}", ex.Message);
-                // Continue execution even if MinIO upload fails - we have the signed PDF locally
-                _logger.LogWarning("Continuing with local signed PDF despite MinIO upload failure");
             }
 
-            // Success
             result.Success = true;
             result.SerialNumber = sn;
             result.StampedPdf = signedPdf;
-
-            _logger.LogInformation(
-                "Stamping workflow completed successfully for Invoice {InvoiceNumber}! SN: {SerialNumber}, UsedCache: {UsedCache}",
-                invoiceNumber, sn, result.UsedCache);
 
             return result;
         }
@@ -519,8 +458,9 @@ public class PeruriOnPremiseStampService : IPeruriOnPremiseStampService
             // =================================================================
             // ZERO-FOOTPRINT TRANSIENT WORKSPACE CLEANUP
             // =================================================================
-            _logger.LogInformation("PHASE 7: Zero-footprint cleanup - Removing all transient workspace files");
+            _logger.LogInformation("PHASE 7: Zero-footprint cleanup - Clearing temporary workspace contents");
 
+            // Clean individual generated files first
             foreach (var file in transientFiles)
             {
                 try
@@ -528,7 +468,6 @@ public class PeruriOnPremiseStampService : IPeruriOnPremiseStampService
                     if (File.Exists(file))
                     {
                         File.Delete(file);
-                        _logger.LogDebug("Deleted transient file: {File}", file);
                     }
                 }
                 catch (Exception ex)
@@ -537,71 +476,46 @@ public class PeruriOnPremiseStampService : IPeruriOnPremiseStampService
                 }
             }
 
-            // Also ensure directories are clean (remove any lingering files)
+            // Safely delete contents of the subdirectories. DO NOT delete 'sharedRoot' directly because Docker locks it!
             try
             {
-                if (Directory.Exists(unsignedDir))
+                if (Directory.Exists(unsignedDirPath))
                 {
-                    var files = Directory.GetFiles(unsignedDir);
-                    foreach (var file in files)
-                    {
-                        try { File.Delete(file); }
-                        catch { }
-                    }
+                    Directory.Delete(unsignedDirPath, true);
                 }
-                if (Directory.Exists(stampDir))
+                if (Directory.Exists(stampDirPath))
                 {
-                    var files = Directory.GetFiles(stampDir);
-                    foreach (var file in files)
-                    {
-                        try { File.Delete(file); }
-                        catch { }
-                    }
+                    Directory.Delete(stampDirPath, true);
                 }
-                if (Directory.Exists(signedDir))
+                if (Directory.Exists(signedDirPath))
                 {
-                    var files = Directory.GetFiles(signedDir);
-                    foreach (var file in files)
-                    {
-                        try { File.Delete(file); }
-                        catch { }
-                    }
+                    Directory.Delete(signedDirPath, true);
                 }
-                _logger.LogInformation("PHASE 7 Complete: Transient workspace cleaned (zero-footprint achieved)");
+                _logger.LogInformation("PHASE 7 Complete: Subdirectories cleanly flushed.");
             }
             catch (Exception ex)
             {
-                _logger.LogWarning(ex, "Some directories could not be cleaned");
+                _logger.LogError(ex, "Fallback directory clearing failed.");
             }
         }
     }
 
-    /// <summary>
-    /// Sanitizes invoice number for filename use with safe fallback
-    /// Removes whitespace, slashes, and special symbols, then appends .pdf
-    /// Example: "INV/2026-009" -> "INV2026009.pdf"
-    /// Falls back to "Invoice.pdf" if input is empty or invalid
-    /// </summary>
     private static string SanitizeFileName(string invoiceNumber)
     {
         if (string.IsNullOrWhiteSpace(invoiceNumber))
-            return "Invoice.pdf"; // Safe fallback to working default
+            return "Invoice.pdf";
 
         try
         {
-            // Remove all special characters, keeping only alphanumeric
             var sanitized = System.Text.RegularExpressions.Regex.Replace(invoiceNumber, @"[^a-zA-Z0-9]", "");
-
-            // Ensure we have something left after sanitization
             if (string.IsNullOrWhiteSpace(sanitized))
                 return "Invoice.pdf";
 
-            // Append .pdf extension
             return $"{sanitized}.pdf";
         }
         catch
         {
-            return "Invoice.pdf"; // Safe fallback on any error
+            return "Invoice.pdf";
         }
     }
 }

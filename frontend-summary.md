@@ -387,6 +387,51 @@ Pending Delivery → Fully Received → Invoiced
 - Neutral (0%): Perfect match
 - Formula: `((delivered + returned + rejected - packQuantity) / packQuantity) * 100`
 
+### Line Item Grouping Architecture
+The delivery lines are organized into a 3-condition architecture for optimal display:
+
+**Condition 1: Parent Single Batch**
+- Has batchNumber (regardless of children existence), OR
+- No batchNumber AND no children (standalone item without batch info)
+- Displays as standalone row with unified visual style
+- Shows all metrics inline (scheduled, delivered, rejected, returned, variance)
+
+**Condition 2: Parent with Split Batch**
+- No batchNumber AND has children (actual split scenario)
+- Displays as read-only summary with expandable children
+- Shows aggregated totals for all child lines
+- Click to expand/collapse child rows
+
+**Condition 3: Child Lines**
+- Nested under their parent (parentLineNumber matches parent's deliveryLineNumber)
+- Displayed with smaller visual hierarchy
+- Show individual batch numbers and quantities
+- Included in parent's aggregated totals
+
+**Display Features:**
+- Pagination support (10 items per page)
+- Memoized row components for performance
+- Consistent styling across all line types
+- Badge indicators for line numbers
+- Truncated remarks with max-width
+
+### Cancellation Status Display
+- Canceled deliveries display with special styling (strikethrough, reduced opacity)
+- Cancellation reason shown in dedicated block with rose styling
+- Public delivery link shows "Access Token Revoked" message
+- "Link Revoked" indicator in line item remarks
+
+### Toast Notification System
+- **Success Toast:** Green styling with checkmark icon
+  - Shows on successful invoice creation/sync
+  - Auto-dismisses after 5 seconds
+- **Error Toast:** Red styling with warning icon
+  - Shows on invoice generation failure
+  - Displays error message from server
+- **Info Toast:** Blue styling with info icon
+  - Used for informational messages
+- Fixed positioning at top-right with slide-in animation
+
 ## Invoices (`/invoices`)
 
 ### Features
@@ -1194,6 +1239,43 @@ The frontend is built into the Docker image and served by Nginx.
 
 ---
 
+# Infrastructure & Deployment
+
+## Docker Stack Integration
+
+The frontend is deployed as part of a unified Docker Compose stack that includes:
+
+### Container Services
+| Service | Container Name | Purpose |
+|---------|---------------|---------|
+| frontend | amtemeterai-frontend | React UI application |
+| api | amtemeterai-api | ASP.NET Core backend API |
+| postgres | amtemeterai-postgres | PostgreSQL database |
+| minio | amtemeterai-minio | Object storage for documents |
+| signadapter | signadapter | Peruri e-Meterai signing adapter |
+| reverse-proxy | amtemeterai-reverse-proxy | Nginx reverse proxy |
+
+### Internal Network Communication
+- All containers communicate via Docker's internal DNS
+- Frontend → API: `http://api:8080`
+- API → signadapter: `http://signadapter:7777`
+- API → postgres: `host=postgres:5432`
+- API → minio: `endpoint=minio:9000`
+
+### Shared Named Volumes
+- **stamping-share**: Shared between api and signadapter for PDF exchange
+  - Mounted at: `/app/sharefolder` in both containers
+  - Used for: e-Meterai stamping workflow
+
+### External Access Points
+- **Frontend**: Port 80 (via Nginx reverse proxy)
+- **API**: Internal only (accessed via reverse proxy)
+- **MinIO Console**: Port 9001 (for debugging)
+- **PostgreSQL**: Configurable port (default 5432)
+- **signadapter**: Port 9999 (optional external access for debugging)
+
+---
+
 # Summary
 
 The AmtemeterAI frontend is a modern, enterprise-grade React application with:
@@ -1205,3 +1287,4 @@ The AmtemeterAI frontend is a modern, enterprise-grade React application with:
 - **Clean architecture** with separation of concerns
 - **Type-safe** development with TypeScript
 - **Production-ready** build and deployment pipeline
+- **Unified Docker stack** with container-to-container networking

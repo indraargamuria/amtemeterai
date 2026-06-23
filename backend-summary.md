@@ -24,6 +24,85 @@ The backend is built with **ASP.NET Core 8.0** using **Entity Framework Core** w
 
 ---
 
+# Docker Stack Architecture
+
+## Unified Container Topology
+
+The backend is deployed as part of a unified Docker Compose stack with internal DNS resolution and shared named volumes for container-to-container communication.
+
+### Container Services
+
+| Service | Container Name | Image | Internal Ports | Purpose |
+|---------|---------------|-------|---------------|---------|
+| api | amtemeterai-api | amtemeterai-api:v5 | 8080 | ASP.NET Core Web API |
+| frontend | amtemeterai-frontend | amtemeterai-frontend:v5 | 5173 | React UI application |
+| postgres | amtemeterai-postgres | postgres:16 | 5432 | PostgreSQL database |
+| minio | amtemeterai-minio | minio/minio:RELEASE.2024-02-17T01-15-57Z | 9000, 9001 | Object storage |
+| signadapter | signadapter | registry.perurica.co.id/e-meterai/signadapter:2.0 | 7777 | Peruri e-Meterai signing |
+| reverse-proxy | amtemeterai-reverse-proxy | nginx:alpine | 80 | Nginx reverse proxy |
+| createbuckets | amtemeterai-minio-init | minio/mc:latest | - | MinIO initialization |
+
+### Internal Network Resolution
+
+All containers communicate via Docker's internal DNS using container names as hostnames:
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                    Docker Network (amtemeterai_default)             │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                     │
+│  ┌──────────────┐         ┌──────────────┐                         │
+│  │   frontend   │────────▶│ reverse-proxy│───[Port 80]───▶ External │
+│  └──────────────┘         └──────┬───────┘                         │
+│                                   │                                 │
+│                          ┌────────▼────────┐                        │
+│                          │       api        │                        │
+│                          └────────┬────────┘                        │
+│                                   │                                 │
+│           ┌────────────────────────┼────────────────────────┐      │
+│           ▼            ▼            ▼            ▼             ▼      │
+│  ┌─────────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌────────┐ │
+│  │  postgres   │ │  minio   │ │signadapter│ │  Peruri  │ │  ...   │ │
+│  └─────────────┘ └──────────┘ └──────────┘ └──────────┘ └────────┘ │
+│                                                                     │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+### Shared Named Volumes
+
+| Volume | Purpose | Mount Paths |
+|--------|---------|-------------|
+| `postgres_data` | PostgreSQL data persistence | `postgres:/var/lib/postgresql/data` |
+| `minio_data` | MinIO object storage | `minio:/data` |
+| `stamping-share` | PDF exchange for e-Meterai stamping | `api:/app/sharefolder`<br>`signadapter:/app/sharefolder` |
+
+### Environment-Aware Routing
+
+The API automatically detects its runtime environment and routes e-Meterai stamping requests accordingly:
+
+**Detection Method:**
+```csharp
+bool isRunningInDocker = Directory.Exists("/app") ||
+    Environment.GetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER") == "true";
+```
+
+**Routing Behavior:**
+- **Docker Mode:** Uses `http://signadapter:7777` (container-to-container via internal DNS)
+- **Local Development:** Uses `http://localhost:9999` (exposed host port)
+
+### Platform-Agnostic Path Construction
+
+All file paths are normalized to use forward slashes for cross-platform compatibility:
+
+```csharp
+string rawWorkspace = Path.Combine(_options.SharedFolder, "session" + stampingSessionId);
+string containerWorkspace = rawWorkspace.Replace(Path.DirectorySeparatorChar, '/');
+```
+
+This ensures consistent path handling across Windows development and Linux container environments.
+
+---
+
 # Authentication & Authorization
 
 ## Authentication System
@@ -1391,8 +1470,8 @@ Authorization: Bearer {token}
   "InventoryStg": "https://inventory.peruri.co.id",
   "User": "${PERIURI_USER}",
   "Password": "${PERIURI_PASSWORD}",
-  "KeyStamp": "http://localhost:9999",
-  "SharedFolder": "/sharefolder",
+  "KeyStamp": "http://signadapter:7777",
+  "SharedFolder": "/app/sharefolder",
   "TokenExpiryBufferMinutes": 5
 }
 ```
@@ -1405,10 +1484,29 @@ Authorization: Bearer {token}
 - `InventoryStg`: Peruri inventory staging URL for inventory management
 - `User`: Peruri service account username
 - `Password`: Peruri service account password
-- `KeyStamp`: KeyStamp Docker adapter URL for on-premise PDF signing
-  - Full endpoint: `POST http://localhost:9999/adapter/pdfsigning/rest/docSigningZ`
-- `SharedFolder`: Shared folder path for Docker volume
+- `KeyStamp`: KeyStamp Docker adapter URL for on-premise PDF signing (container-to-container)
+  - Full endpoint: `POST http://signadapter:7777/adapter/pdfsigning/rest/docSigningZ`
+  - Uses internal Docker DNS for container-to-container communication
+- `SharedFolder`: Shared folder path for Docker named volume (stamping-share)
+  - Container mount path: `/app/sharefolder`
+  - Both api and signadapter containers mount this named volume
 - `TokenExpiryBufferMinutes`: Token expiry buffer in minutes
+
+### Docker Container Network Architecture
+
+**Shared Named Volume (stamping-share):**
+- Named volume `stamping-share` is mounted to both containers at `/app/sharefolder`
+- API container writes unsigned PDFs and QR codes to the shared volume
+- signadapter container reads from and writes signed PDFs to the shared volume
+- File exchange workflow:
+  - `/app/sharefolder/session{guid}/UNSIGNED/` - Unsigned PDFs placed here
+  - `/app/sharefolder/session{guid}/STAMP/` - QR code images placed here
+  - `/app/sharefolder/session{guid}/SIGNED/` - Signed PDFs appear here
+
+**Container-to-Container Communication:**
+- API container calls `http://signadapter:7777` using Docker's internal DNS
+- No localhost binding required - services communicate within Docker network
+- Port mapping `9999:7777` allows optional external access for debugging
 
 ### Cloud Stamping Flow (Legacy)
 1. Upload invoice printout via `/api/invoices/{id}/upload-printout`
@@ -1417,23 +1515,32 @@ Authorization: Bearer {token}
 4. Peruri returns serial number and stamp coordinates
 5. Stamped PDF is stored and linked to invoice
 
-### On-Premise Stamping Flow (New - WP2 - Corrected)
+### On-Premise Stamping Flow (New - WP2 - Docker Named Volume)
 1. Upload invoice printout via `/api/invoices/{id}/upload-printout`
 2. Call `/api/invoices/by-sap-number/{invoiceNumber}/stamp` to initiate stamping
 3. System authenticates with Peruri backend to get JWT token (cached)
    - Endpoint: `POST https://backendservicestg.e-meterai.co.id/api/users/login`
-4. System writes PDF to shared folder: `/sharefolder/UNSIGNED/{invoiceNumber}.pdf`
-5. System calls Peruri Stamp v2 API with JWT token to get:
+4. System creates flat directory structure in shared named volume:
+   - `/app/sharefolder/UNSIGNED/` - For unsigned PDFs
+   - `/app/sharefolder/STAMP/` - For QR code images
+   - `/app/sharefolder/SIGNED/` - For signed PDFs
+5. System applies Linux permissions (chmod 777) to shared directories in Docker environment
+6. System writes PDF to: `/app/sharefolder/UNSIGNED/{invoiceNumber}.pdf`
+7. System checks database for cached stamp data (serial number + QR storage key)
+8. If no cache, system calls Peruri Stamp v2 API with JWT token:
    - Serial Number (`result.sn`)
    - QR Code image (Base64 `result.filenameQR`)
    - Endpoint: `POST https://stampv2stg.e-meterai.co.id/chanel/stampv2`
-6. System decodes QR code and saves to: `/sharefolder/STAMP/{invoiceNumber}_qr.png`
-7. System calls KeyStamp Docker adapter with signing coordinates
-   - Endpoint: `POST http://localhost:9999/adapter/pdfsigning/rest/docSigningZ`
-8. Docker adapter stamps the PDF and saves to: `/sharefolder/SIGNED/stamped_{invoiceNumber}.pdf`
-9. System reads signed PDF and uploads to MinIO
-10. System cleans up transient files
-11. Stamped PDF is stored and linked to invoice with serial number
+9. System uploads QR code to MinIO and stores reference in database
+10. System decodes QR code and saves to: `/app/sharefolder/STAMP/{invoiceNumber}_qr.png`
+11. System calls KeyStamp Docker adapter with signing coordinates (container-to-container)
+    - Endpoint: `POST http://signadapter:7777/adapter/pdfsigning/rest/docSigningZ`
+    - Paths are stripped of `/app/` prefix for KeyStamp adapter compatibility
+    - Example: `/app/sharefolder/UNSIGNED/file.pdf` → `/sharefolder/UNSIGNED/file.pdf`
+12. Docker adapter stamps the PDF and saves to: `/app/sharefolder/SIGNED/stamped_{invoiceNumber}.pdf`
+13. System reads signed PDF and uploads to MinIO
+14. System cleans up individual files (subdirectories retained for reuse)
+15. Stamped PDF is stored and linked to invoice with serial number
 
 ### Peruri API Request Business Rules (WP2 - Dynamic Mappings with Safe Fallbacks)
 
@@ -1787,9 +1894,32 @@ api:
     Minio__AccessKey: ${MINIO_ACCESS_KEY}
     Minio__SecretKey: ${MINIO_SECRET_KEY}
     Minio__BucketName: amtemeterai-documents
+    # Peruri on-premise stamping configuration (container-to-container)
+    Peruri__KeyStamp: http://signadapter:7777
+    Peruri__SharedFolder: /app/sharefolder
+  volumes:
+    - stamping-share:/app/sharefolder
   depends_on:
     - postgres
     - minio
+
+signadapter:
+  image: registry.perurica.co.id/e-meterai/signadapter:2.0
+  container_name: signadapter
+  restart: always
+  ports:
+    - "9999:7777"
+  environment:
+    ENV: STAGING
+    TZ: Asia/Jakarta
+  volumes:
+    - ./logs:/app/logs
+    - stamping-share:/app/sharefolder
+
+volumes:
+  postgres_data:
+  minio_data:
+  stamping-share:
 ```
 
 ---
@@ -1924,6 +2054,35 @@ Task<string> RefreshTokenAsync();     // Forces token refresh
 ```csharp
 Task<PeruriStampResult> StampInvoiceAsync(PeruriStampRequest request);
 // Handles complete on-premise flow: PDF prep, Peruri API, Docker signing, cleanup
+
+// Workspace Path Configuration (Docker Named Volume):
+// Uses peruriOptions.SharedFolder (default: /app/sharefolder) for workspace
+// Creates flat directory structure for file exchange:
+//   - /app/sharefolder/UNSIGNED/ - Unsigned PDFs
+//   - /app/sharefolder/STAMP/ - QR code images
+//   - /app/sharefolder/SIGNED/ - Signed PDFs
+// Cleanup removes individual files (subdirectories retained for reuse)
+
+// Platform-Agnostic Path Construction:
+// All paths are normalized to use forward slashes universally
+// Prevents malformed paths on Windows machines while maintaining container compatibility
+// Example: Path.Combine() result .Replace(Path.DirectorySeparatorChar, '/')
+
+// Linux Permissions Fix:
+// In Docker environment, applies chmod 777 to shared directories
+// Ensures non-root signadapter container user can read/write files
+// Command: chmod -R 777 {unsignedDirPath} {stampDirPath} {signedDirPath}
+
+// Path Prefix Stripping for KeyStamp Adapter:
+// Paths sent to KeyStamp adapter have /app/ prefix stripped
+// This prevents double-prefixing to /app/app/sharefolder
+// Example: /app/sharefolder/UNSIGNED/file.pdf → /sharefolder/UNSIGNED/file.pdf
+
+// Environment-Aware Endpoint Routing:
+// Automatic fallback to localhost:9999 when running in local development
+// Detection: Directory.Exists("/app") || DOTNET_RUNNING_IN_CONTAINER == "true"
+// Docker mode: Uses http://signadapter:7777 (container-to-container)
+// Local mode: Uses http://localhost:9999 (exposed host port)
 
 // Business Rule Helper Method:
 string SanitizeFileName(string invoiceNumber);

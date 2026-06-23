@@ -117,18 +117,18 @@ const LINES_PER_PAGE = 10
 // HELPER FUNCTIONS
 // ============================================================================
 
-const transformUOM = (uom: string | null | undefined): string => {
-  if (!uom) return ''
-  const uomMap: Record<string, string> = {
-    'ROL': 'Roll',
-    'PCS': 'Pcs',
-    'KG': 'kg',
-    'M': 'm',
-    'MTR': 'mtr',
-    'EA': 'ea',
-  }
-  return uomMap[uom.toUpperCase()] || uom
-}
+// const transformUOM = (uom: string | null | undefined): string => {
+//   if (!uom) return ''
+//   const uomMap: Record<string, string> = {
+//     'ROL': 'Roll',
+//     'PCS': 'Pcs',
+//     'KG': 'kg',
+//     'M': 'm',
+//     'MTR': 'mtr',
+//     'EA': 'ea',
+//   }
+//   return uomMap[uom.toUpperCase()] || uom
+// }
 
 /**
  * Transforms flat delivery lines into the new 3-condition architecture:

@@ -41,7 +41,16 @@ services:
       Jwt__Audience: ${JWT_AUDIENCE}
       App__PublicBaseUrl: ${PUBLIC_BASE_URL}
       App__ApiBaseUrl: ${API_BASE_URL}
-
+      # Peruri on-premise stamping configuration
+      Peruri__KeyStamp: http://signadapter:7777
+      Peruri__SharedFolder: /app/sharefolder
+      # Update these environment variables inside your api service block:
+      App__MinioEndpoint: minio:9000
+      # Or if your configuration uses standard AWS/S3 variable keys:
+      AWS__ServiceURL: minio:9000
+      Minio__Endpoint: minio:9000
+    volumes:
+      - stamping-share:/app/sharefolder
     depends_on:
       - postgres
 
@@ -95,7 +104,8 @@ services:
       TZ: Asia/Jakarta
     volumes:
       - ./logs:/app/logs
-      - ./sharefolder:/app/sharefolder
+      - stamping-share:/app/sharefolder
 volumes:
   postgres_data:
   minio_data:
+  stamping-share:

@@ -52,17 +52,30 @@ public class PeruriOptions
     /// <summary>
     /// KeyStamp (Docker adapter) URL base address
     /// Used for on-premise PDF signing operations
-    /// Corrected (Local): http://localhost:9999
+    /// Corrected (Container-to-Container): http://signadapter:7777
     /// Signing path: /adapter/pdfsigning/rest/docSigningZ
+    /// Uses internal Docker DNS for container-to-container communication
     /// </summary>
-    public string KeyStamp { get; set; } = "http://localhost:9999";
+    public string KeyStamp { get; set; } = "http://signadapter:7777";
 
     /// <summary>
-    /// Shared folder path for Docker volume
-    /// Used for PDF file exchange between API and signing adapter
-    /// Example: /sharefolder or C:\sharefolder
+    /// Shared folder path for Docker named volume (relative to container filesystem)
+    /// Used for PDF file exchange between API and signing adapter via shared named volume (stamping-share)
+    ///
+    /// IMPORTANT: The API and signadapter containers both mount the same Docker named volume
+    /// to this path. Example docker-compose configuration:
+    ///   volumes:
+    ///     stamping-share:/app/sharefolder
+    ///
+    /// The API creates transient session workspaces in the shared volume:
+    ///   - /app/sharefolder/session{guid}/UNSIGNED/ - Unsigned PDFs
+    ///   - /app/sharefolder/session{guid}/STAMP/ - QR code images
+    ///   - /app/sharefolder/session{guid}/SIGNED/ - Signed PDFs
+    ///
+    /// These paths are accessible to both containers, allowing the KeyStamp adapter
+    /// to read from and write to the shared volume using absolute paths.
     /// </summary>
-    public string SharedFolder { get; set; } = "/sharefolder";
+    public string SharedFolder { get; set; } = "/app/sharefolder";
 
     /// <summary>
     /// Token expiry buffer in minutes
