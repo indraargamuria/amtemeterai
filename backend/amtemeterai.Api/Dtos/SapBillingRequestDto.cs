@@ -57,4 +57,6 @@ public class SapBillingResponseDto
     /// Delivery number reference
     /// </summary>
     public string DeliveryNumber { get; set; } = string.Empty;
+    
+    public string Message { get; set; } = string.Empty;
 }

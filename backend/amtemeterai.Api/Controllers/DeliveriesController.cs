@@ -10,6 +10,7 @@ using amtemeterai.Api.Config;
 using System; 
 using System.Text.Json; 
 using Microsoft.AspNetCore.Http.Features;
+using Microsoft.Extensions.Options;
 
 namespace amtemeterai.Api.Controllers;
 
@@ -47,10 +48,9 @@ public class DeliveriesController : ControllerBase
         IConfiguration configuration,
         IWebHostEnvironment env,
         IStorageService storageService,
-        IConfiguration config,
-        IHttpClientFactory httpClientFactory,              
-        Microsoft.Extensions.Options.IOptions<SapOptions> sapOptions, 
-        IServiceProvider serviceProvider, 
+        IHttpClientFactory httpClientFactory,
+        IOptions<SapOptions> sapOptions,
+        IServiceProvider serviceProvider,
         ILogger<DeliveriesController> logger)
     {
         _db = db;
@@ -59,7 +59,7 @@ public class DeliveriesController : ControllerBase
         _storageService = storageService;
         _httpClientFactory = httpClientFactory;
         _sapOptions = sapOptions.Value;
-        _googleApiKey = config["GoogleMaps:ApiKey"] ?? string.Empty;
+        _googleApiKey = configuration["GoogleMaps:ApiKey"] ?? string.Empty;
         _serviceProvider = serviceProvider;
         _logger = logger;
     }
@@ -570,6 +570,8 @@ public class DeliveriesController : ControllerBase
             }
         }
 
+        Console.WriteLine(data.Lines);
+
         data.Status = hasDiscrepancy 
             ? DeliveryHeader.ReceiverStatus.PartialReceived 
             : DeliveryHeader.ReceiverStatus.FullyReceived;
@@ -612,12 +614,9 @@ public class DeliveriesController : ControllerBase
                 ReceiverName = data.ReceiverName ?? string.Empty,
                 ReceiverStatus = hasDiscrepancy ? "2" : "1",
                 ReceiverNotes = data.ReceiverNotes ?? string.Empty,
-                // 🚀 FIX FOR CS8604: Wrap the collection inside a null-coalescing guard fallback
+                
                 Lines = (data.Lines ?? Enumerable.Empty<DeliveryLine>()).Select(l =>
                 {
-                    // Calculate variance percent based on DeliveryReceivePage formula
-                    // variancePercent = ((delivered + returned + rejected - packQuantity) / packQuantity) * 100
-                    // Returns numeric value only (e.g., 200 for 200%, 12.5 for 12.5%)
                     decimal totalActual = l.PackQuantityDelivered + l.PackQuantityReturned + l.PackQuantityRejected;
                     decimal rawVariance = totalActual - l.PackQuantity;
                     decimal percentCalc = l.PackQuantity > 0 ? (rawVariance / l.PackQuantity) * 100 : 0;
@@ -633,6 +632,7 @@ public class DeliveriesController : ControllerBase
                     };
                 }).ToList()
             };
+
             var jsonOptions = new JsonSerializerOptions { WriteIndented = true };
             string jsonString = JsonSerializer.Serialize(sapPayload, jsonOptions);
 
@@ -640,10 +640,23 @@ public class DeliveriesController : ControllerBase
             Console.WriteLine(jsonString);
             Console.WriteLine("=========================================================");
             
+            // Create a clean client instance from the factory
             var client = _httpClientFactory.CreateClient("SapClient");
-            string endpointPath = $"/sap/bc/zrest_doconfirm?sap-client={_sapOptions.Client}";
+            
+            // 🎯 Use dynamic absolute URL matching the CreateSapInvoice connection strategy
+            // Falling back to your explicit dev IP string if configuration properties evaluate to empty
+            string baseSapUrl = !string.IsNullOrEmpty(_sapOptions.BaseUrl) 
+                ? _sapOptions.BaseUrl.TrimEnd('/') 
+                : "http://10.2.38.138:8000";
 
-            var response = await client.PostAsJsonAsync(endpointPath, sapPayload);
+            string sapClientParam = !string.IsNullOrEmpty(_sapOptions.Client) 
+                ? _sapOptions.Client 
+                : "250";
+
+            string absoluteSapUrl = $"{baseSapUrl}/sap/bc/zrest_doconfirm?sap-client={sapClientParam}";
+
+            // Execute post operation targeting the absolute URL pathway directly
+            var response = await client.PostAsJsonAsync(absoluteSapUrl, sapPayload);
 
             if (!response.IsSuccessStatusCode)
             {
@@ -654,6 +667,7 @@ public class DeliveriesController : ControllerBase
         }
         catch (Exception ex)
         {
+            Console.WriteLine("AU AMAT DAH");
             Console.WriteLine($"Critical network exception thrown during SAP post sequence: {ex.Message}");
             return StatusCode(500, $"Internal server error routing data to ERP infrastructure: {ex.Message}");
         }
@@ -1289,7 +1303,7 @@ public class DeliveriesController : ControllerBase
                 return Ok(new DeliverySettlementResponseDto
                 {
                     Success = true,
-                    Message = $"SAP Invoice {sapBillingData.SapInvoiceNumber} created successfully.",
+                    Message = sapBillingData.Message,
                     InvoiceNumber = sapBillingData.SapInvoiceNumber,
                     InvoiceAmount = sapBillingData.Amount,
                     BillingDate = sapBillingData.BillingDate,

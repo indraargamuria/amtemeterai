@@ -2439,14 +2439,52 @@ export function DeliveryReceivePage() {
       photoFiles.forEach((file) => formData.append("NewPhotoFiles", file))
       keysToDelete.forEach((key, idx) => formData.append(`KeysToDelete[${idx}]`, key))
 
-      // OPTIMIZATION: Use Map for O(1) lookups instead of find
-      delivery.lines.forEach((line, idx) => {
-        const lineState = linesMap.get(line.deliveryLineNumber)
-        formData.append(`Lines[${idx}].DeliveryLineNumber`, line.deliveryLineNumber)
-        formData.append(`Lines[${idx}].PackQuantityDelivered`, parseFloat(lineState?.delivered || "0").toString())
-        formData.append(`Lines[${idx}].PackQuantityReturned`, parseFloat(lineState?.returned || "0").toString())
-        formData.append(`Lines[${idx}].PackQuantityRejected`, parseFloat(lineState?.rejected || "0").toString())
-        if (lineState?.lineComment) formData.append(`Lines[${idx}].LineComment`, lineState.lineComment)
+      // Generate the full structural item tree directly from the delivery lines collection
+      const lineTree = buildLineItemTree(delivery.lines)
+
+      // Build lines payload with split-batch aggregation support
+      const linesPayload = delivery.lines.map((line) => {
+        // Check if this line is acting as a parent to split batch entries in the layout tree
+        const splitBatchMatch = lineTree.find(
+          (item) => item.type === "split-batch" && item.parentLine.deliveryLineNumber === line.deliveryLineNumber
+        )
+
+        // CONDITION A: The item is a split-batch parent -> aggregate from its dynamic tree children
+        if (splitBatchMatch && splitBatchMatch.type === "split-batch") {
+          const associatedChildren = splitBatchMatch.children
+
+          const totalDelivered = associatedChildren.reduce((sum, child) => sum + (parseFloat(linesMap.get(child.deliveryLineNumber)?.delivered) || 0), 0)
+          const totalRejected = associatedChildren.reduce((sum, child) => sum + (parseFloat(linesMap.get(child.deliveryLineNumber)?.rejected) || 0), 0)
+          const totalReturned = associatedChildren.reduce((sum, child) => sum + (parseFloat(linesMap.get(child.deliveryLineNumber)?.returned) || 0), 0)
+
+          return {
+            deliveryLineNumber: line.deliveryLineNumber,
+            packQuantityDelivered: totalDelivered,
+            packQuantityRejected: totalRejected,
+            packQuantityReturned: totalReturned,
+            lineComment: linesMap.get(line.deliveryLineNumber)?.lineComment || ""
+          }
+        }
+
+        // CONDITION B: Standalone item (either a single-batch 3-digit line with no children, or an active child batch row)
+        const currentDelivered = parseFloat(linesMap.get(line.deliveryLineNumber)?.delivered) || 0
+
+        return {
+          deliveryLineNumber: line.deliveryLineNumber,
+          packQuantityDelivered: currentDelivered,
+          packQuantityRejected: parseFloat(linesMap.get(line.deliveryLineNumber)?.rejected) || 0,
+          packQuantityReturned: parseFloat(linesMap.get(line.deliveryLineNumber)?.returned) || 0,
+          lineComment: linesMap.get(line.deliveryLineNumber)?.lineComment || ""
+        }
+      })
+
+      // Append aggregated line data to FormData
+      linesPayload.forEach((lineData, idx) => {
+        formData.append(`Lines[${idx}].DeliveryLineNumber`, lineData.deliveryLineNumber)
+        formData.append(`Lines[${idx}].PackQuantityDelivered`, lineData.packQuantityDelivered.toString())
+        formData.append(`Lines[${idx}].PackQuantityRejected`, lineData.packQuantityRejected.toString())
+        formData.append(`Lines[${idx}].PackQuantityReturned`, lineData.packQuantityReturned.toString())
+        if (lineData.lineComment) formData.append(`Lines[${idx}].LineComment`, lineData.lineComment)
       })
 
       const res = await fetch(`${API_URL}/api/deliveries/${token}`, {
