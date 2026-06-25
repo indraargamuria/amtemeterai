@@ -58,7 +58,7 @@ export function DeliveriesPage() {
   const [sortField, setSortField] = useState<SortField>("deliveryDate")
   const [sortOrder, setSortOrder] = useState<SortOrder>("desc")
   const [complianceFilter, setComplianceFilter] = useState<ComplianceFilter>("all")
-  const [pipelineFilter, setPipelineFilter] = useState<PipelineFilter>("active") // Defaults to hiding noise from cancelled rows
+  const [pipelineFilter, _setPipelineFilter] = useState<PipelineFilter>("active") // Defaults to hiding noise from cancelled rows
   const [showDiscrepancyOnly, setShowDiscrepancyOnly] = useState(false)
   // const [_uploading, setUploading] = useState<number | null>(null)
   // const [fileInput, _setFileInput] = useState<HTMLInputElement | null>(null)
