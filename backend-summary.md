@@ -1298,6 +1298,7 @@ Authorization: Bearer {token}
     "invoiceID": 1,
     "invoiceNumber": "INV001",
     "customerNumber": "CUST001",
+    "customerName": "PT Maju Jaya Logistics",
     "invoiceAmount": 1500000,
     "invoicedDate": "2025-05-20T00:00:00Z",
     "status": 2,
@@ -1307,7 +1308,9 @@ Authorization: Bearer {token}
     "stampingStatus": 3,
     "stampingStatusText": "Stamped",
     "hasPrintoutDocument": true,
-    "stampedDocumentUrl": "http://localhost:8080/api/deliveries/files/download?key=..."
+    "unstampedDocumentUrl": "http://localhost:8080/api/deliveries/files/download?key=...",
+    "stampedDocumentUrl": "http://localhost:8080/api/deliveries/files/download?key=...",
+    "createdAt": "2025-05-20T00:00:00Z"
   }
 ]
 ```

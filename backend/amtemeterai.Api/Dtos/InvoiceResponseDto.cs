@@ -16,6 +16,7 @@ public class InvoiceResponseDto
     public int StampingStatus { get; set; }
     public string StampingStatusText { get; set; } = string.Empty;
     public bool HasPrintoutDocument { get; set; }
+    public string? UnstampedDocumentUrl { get; set; }
     public string? StampedDocumentUrl { get; set; }
     public DateTime CreatedAt { get; set; }
 }

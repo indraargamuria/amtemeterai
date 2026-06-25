@@ -401,43 +401,6 @@ export function DeliveriesPage() {
                 </div>
               </div>
 
-              {/* 🚀 ADDED: Pipeline Exception Filtering Segment */}
-              <div className="flex items-center gap-2 bg-brand-blue/5 rounded-lg px-3 py-2">
-                <span className="text-xs text-brand-blue/60 whitespace-nowrap">Status:</span>
-                <div className="flex gap-1">
-                  <button
-                    onClick={() => setPipelineFilter("active")}
-                    className={`px-2 py-1 text-xs rounded-md transition-colors ${
-                      pipelineFilter === "active"
-                        ? "bg-brand-blue text-white"
-                        : "text-brand-blue/70 hover:bg-brand-blue/10"
-                    }`}
-                  >
-                    Active
-                  </button>
-                  <button
-                    onClick={() => setPipelineFilter("canceled")}
-                    className={`px-2 py-1 text-xs rounded-md transition-colors ${
-                      pipelineFilter === "canceled"
-                        ? "bg-rose-600 text-white"
-                        : "text-brand-blue/70 hover:bg-brand-blue/10"
-                    }`}
-                  >
-                    Canceled
-                  </button>
-                  <button
-                    onClick={() => setPipelineFilter("all")}
-                    className={`px-2 py-1 text-xs rounded-md transition-colors ${
-                      pipelineFilter === "all"
-                        ? "bg-slate-600 text-white"
-                        : "text-brand-blue/70 hover:bg-brand-blue/10"
-                    }`}
-                  >
-                    All
-                  </button>
-                </div>
-              </div>
-
               {/* Discrepancy Filter */}
               <label className="flex items-center gap-2 cursor-pointer bg-brand-blue/5 rounded-lg px-3 py-2">
                 <input

@@ -326,32 +326,81 @@ public class InvoicesController : ControllerBase
     {
         var baseApiUrl = _configuration["App:ApiBaseUrl"] ?? "http://localhost:8080";
 
-        var invoices = await _db.Invoices
+        // Step 1: Query the database and filter by StorageKey path contents
+        var rawInvoices = await _db.Invoices
             .Include(i => i.DeliveryHeader)
             .OrderByDescending(i => i.InvoicedDate)
-            .Select(i => new InvoiceResponseDto
+            .Select(i => new
             {
                 InvoiceID = i.InvoiceID,
                 InvoiceNumber = i.InvoiceNumber,
                 CustomerNumber = i.CustomerNumber,
+                CustomerName = _db.Customers
+                    .Where(c => c.CustomerCode == i.CustomerNumber)
+                    .Select(c => c.CustomerName)
+                    .FirstOrDefault() ?? string.Empty,
                 InvoiceAmount = i.InvoiceAmount,
                 InvoicedDate = i.InvoicedDate,
                 Status = (int)i.Status,
                 StatusText = GetStatusText(i.Status),
                 DeliveryHeaderId = i.DeliveryHeaderId,
-                // 🚀 FIX FOR WARNING LINE 172: Use safe conditional propagation mapping
                 DeliveryNumber = i.DeliveryHeader != null ? i.DeliveryHeader.DeliveryNumber : null,
                 SerialNumber = i.SerialNumber,
                 StampingStatus = (int)i.StampingStatus,
                 StampingStatusText = GetStampingStatusText(i.StampingStatus),
+                
+                // Check if any invoice printout document exists for this invoice
                 HasPrintoutDocument = _db.Documents.Any(d =>
                     d.InvoiceID == i.InvoiceID && d.Type == DocumentType.InvoicePrintOut),
-                StampedDocumentUrl = i.StampedDocumentId.HasValue
-                ? $"{baseApiUrl.TrimEnd('/')}/api/deliveries/files/download?key={Uri.EscapeDataString(i.StampedDocument!.StorageKey)}"
-                : null,
-                CreatedAt = i.InvoicedDate
+
+                // Pull the storage key that belongs to the 'printouts' directory structure
+                UnstampedStorageKey = _db.Documents
+                    .Where(d => d.InvoiceID == i.InvoiceID && 
+                                d.Type == DocumentType.InvoicePrintOut && 
+                                d.StorageKey.Contains("/printouts/"))
+                    .OrderByDescending(d => d.UploadedAt)
+                    .Select(d => d.StorageKey)
+                    .FirstOrDefault(),
+
+                // Pull the storage key that belongs to the 'stamped' directory structure
+                StampedStorageKey = _db.Documents
+                    .Where(d => d.InvoiceID == i.InvoiceID && 
+                                d.Type == DocumentType.InvoicePrintOut && 
+                                d.StorageKey.Contains("/stamped/"))
+                    .OrderByDescending(d => d.UploadedAt)
+                    .Select(d => d.StorageKey)
+                    .FirstOrDefault()
             })
             .ToListAsync();
+
+        // Step 2: Build the download URLs cleanly in-memory using Uri.EscapeDataString
+        var invoices = rawInvoices.Select(i => new InvoiceResponseDto
+        {
+            InvoiceID = i.InvoiceID,
+            InvoiceNumber = i.InvoiceNumber,
+            CustomerNumber = i.CustomerNumber,
+            CustomerName = i.CustomerName,
+            InvoiceAmount = i.InvoiceAmount,
+            InvoicedDate = i.InvoicedDate,
+            Status = i.Status,
+            StatusText = i.StatusText,
+            DeliveryHeaderId = i.DeliveryHeaderId,
+            DeliveryNumber = i.DeliveryNumber,
+            SerialNumber = i.SerialNumber,
+            StampingStatus = i.StampingStatus,
+            StampingStatusText = i.StampingStatusText,
+            HasPrintoutDocument = i.HasPrintoutDocument,
+            
+            UnstampedDocumentUrl = !string.IsNullOrEmpty(i.UnstampedStorageKey)
+                ? $"{baseApiUrl.TrimEnd('/')}/api/deliveries/files/download?key={Uri.EscapeDataString(i.UnstampedStorageKey)}"
+                : null,
+                
+            StampedDocumentUrl = !string.IsNullOrEmpty(i.StampedStorageKey)
+                ? $"{baseApiUrl.TrimEnd('/')}/api/deliveries/files/download?key={Uri.EscapeDataString(i.StampedStorageKey)}"
+                : null,
+                
+            CreatedAt = i.InvoicedDate
+        }).ToList();
 
         return Ok(invoices);
     }
@@ -386,6 +435,11 @@ public class InvoicesController : ControllerBase
             StampingStatusText = GetStampingStatusText(invoice.StampingStatus),
             HasPrintoutDocument = _db.Documents.Any(d =>
                 d.InvoiceID == invoice.InvoiceID && d.Type == DocumentType.InvoicePrintOut),
+            UnstampedDocumentUrl = _db.Documents
+                .Where(d => d.InvoiceID == invoice.InvoiceID && d.Type == DocumentType.InvoicePrintOut)
+                .OrderByDescending(d => d.UploadedAt)
+                .Select(d => (string?)$"{baseApiUrl.TrimEnd('/')}/api/deliveries/files/download?key={Uri.EscapeDataString(d.StorageKey)}")
+                .FirstOrDefault(),
             StampedDocumentUrl = invoice.StampedDocumentId.HasValue
                 ? $"{baseApiUrl.TrimEnd('/')}/api/deliveries/files/download?key={Uri.EscapeDataString(invoice.StampedDocument?.StorageKey ?? string.Empty)}"
                 : null,

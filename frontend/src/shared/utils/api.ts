@@ -134,6 +134,7 @@ export interface Invoice {
   stampingStatus: number
   stampingStatusText: string
   hasPrintoutDocument: boolean
+  unstampedDocumentUrl?: string
   stampedDocumentUrl?: string
   createdAt: string
 }

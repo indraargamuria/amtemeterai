@@ -435,19 +435,35 @@ The delivery lines are organized into a 3-condition architecture for optimal dis
 ## Invoices (`/invoices`)
 
 ### Features
-- **Invoice list** with status indicators
-- **Document upload** for invoice printouts (PDF/image)
-- **e-Meterai stamping** with status tracking
-- **Invoice detail panel** with document links
+- **High-density compact workbench** with action-first design
 - **Summary cards:** Total invoices, Pending stamps, Stamped
+- **Real-time search** by invoice number, customer, or serial number
+- **Inline data columns:** Invoice Number, Customer Name, Invoice Date, Amount, Serial Number, Status, Stamping Status
+- **Direct download actions** (no modal or row expansion required):
+  - Download Unstamped Document (always enabled when document exists)
+  - Download Stamped Document (enabled only when StampingStatus = Stamped)
 - **Status tracking:** Draft, Stamped, Sync Failed, Synced to SAP, Canceled
 - **Stamping status:** Not Stamped, Pending, Stamped, Failed
+- **Pagination** for efficient navigation of large datasets
+- **Professional typography** with monospace font for invoice numbers and serial numbers
+- **Visual indicators:** Pulsing amber dot for pending stamps, alert icon for failed stamps
+
+### Table Layout
+The compact table displays the following columns:
+1. **Invoice** - Monospace font for invoice number
+2. **Customer** - Customer name with customer number (small, muted)
+3. **Invoice Date** - Formatted date (DD MMM YYYY)
+4. **Amount** - Right-aligned, formatted as Indonesian Rupiah
+5. **Serial** - e-Meterai serial number in monospace badge (or "—" if not stamped)
+6. **Status** - Badge showing invoice status
+7. **Stamping** - Badge showing stamping status with visual indicators
+8. **Actions** - Download Unstamped / Download Stamped buttons
 
 ### Required Permission
 - `invoice:read` - To view invoices page
 
 ### API Endpoints Used
-- `GET /api/invoices` - List all invoices
+- `GET /api/invoices` - List all invoices (now includes UnstampedDocumentUrl)
 - `POST /api/invoices/{id}/upload-printout` - Upload invoice document
 - `POST /api/invoices/{id}/stamp` - Trigger e-Meterai stamping
 
