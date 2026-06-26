@@ -339,7 +339,7 @@ public class InvoicesController : ControllerBase
                     .Where(c => c.CustomerCode == i.CustomerNumber)
                     .Select(c => c.CustomerName)
                     .FirstOrDefault() ?? string.Empty,
-                InvoiceAmount = i.InvoiceAmount,
+                InvoiceAmount = i.InvoiceAmount * 100,
                 InvoicedDate = i.InvoicedDate,
                 Status = (int)i.Status,
                 StatusText = GetStatusText(i.Status),

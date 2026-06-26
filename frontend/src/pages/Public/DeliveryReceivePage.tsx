@@ -2453,9 +2453,9 @@ export function DeliveryReceivePage() {
         if (splitBatchMatch && splitBatchMatch.type === "split-batch") {
           const associatedChildren = splitBatchMatch.children
 
-          const totalDelivered = associatedChildren.reduce((sum, child) => sum + (parseFloat(linesMap.get(child.deliveryLineNumber)?.delivered) || 0), 0)
-          const totalRejected = associatedChildren.reduce((sum, child) => sum + (parseFloat(linesMap.get(child.deliveryLineNumber)?.rejected) || 0), 0)
-          const totalReturned = associatedChildren.reduce((sum, child) => sum + (parseFloat(linesMap.get(child.deliveryLineNumber)?.returned) || 0), 0)
+          const totalDelivered = associatedChildren.reduce((sum, child) => sum + (parseFloat(linesMap.get(child.deliveryLineNumber)?.delivered || "") || 0), 0)
+          const totalRejected = associatedChildren.reduce((sum, child) => sum + (parseFloat(linesMap.get(child.deliveryLineNumber)?.rejected || "") || 0), 0)
+          const totalReturned = associatedChildren.reduce((sum, child) => sum + (parseFloat(linesMap.get(child.deliveryLineNumber)?.returned || "") || 0), 0)
 
           return {
             deliveryLineNumber: line.deliveryLineNumber,
@@ -2467,13 +2467,13 @@ export function DeliveryReceivePage() {
         }
 
         // CONDITION B: Standalone item (either a single-batch 3-digit line with no children, or an active child batch row)
-        const currentDelivered = parseFloat(linesMap.get(line.deliveryLineNumber)?.delivered) || 0
+        const currentDelivered = parseFloat(linesMap.get(line.deliveryLineNumber)?.delivered || "") || 0
 
         return {
           deliveryLineNumber: line.deliveryLineNumber,
           packQuantityDelivered: currentDelivered,
-          packQuantityRejected: parseFloat(linesMap.get(line.deliveryLineNumber)?.rejected) || 0,
-          packQuantityReturned: parseFloat(linesMap.get(line.deliveryLineNumber)?.returned) || 0,
+          packQuantityRejected: parseFloat(linesMap.get(line.deliveryLineNumber)?.rejected || "") || 0,
+          packQuantityReturned: parseFloat(linesMap.get(line.deliveryLineNumber)?.returned || "") || 0,
           lineComment: linesMap.get(line.deliveryLineNumber)?.lineComment || ""
         }
       })

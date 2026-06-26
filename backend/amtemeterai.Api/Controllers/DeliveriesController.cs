@@ -296,7 +296,10 @@ public class DeliveriesController : ControllerBase
             .Select(i => i.InvoiceNumber)
             .FirstOrDefaultAsync();
 
-        // 🚀 FIX FOR CS9035: Map required customer strings for anonymous access link
+        // Materialize the list in memory to prevent self-referencing query evaluation issues inside EF LINQ projection
+        var dbLines = data.Lines ?? new List<DeliveryLine>();
+
+        // 🚀 Map required customer strings and roll up child tier metrics dynamically
         var result = new DeliveryResponseDto
         {
             DeliveryID = data.DeliveryID,
@@ -306,32 +309,44 @@ public class DeliveriesController : ControllerBase
             ShipToAddress = data.ShipToAddress,
             CustomerCode = data.Customer?.CustomerCode ?? "UNKNOWN",
             CustomerName = data.Customer?.CustomerName ?? "UNKNOWN",
-            // Note: OrderNumber and BuyerPONumber moved to line level
             ReceiverToken = data.ReceiverToken,
             ReceiverName = data.ReceiverName,
             ReceiverNotes = data.ReceiverNotes,
             Received = data.Received,
             ReceiveDate = data.ReceiveDate,
             Invoiced = data.Invoiced,
-            InvoiceNumber = associatedInvoiceNumber, // 🆕 Bind database invoice value here
+            InvoiceNumber = associatedInvoiceNumber, 
             PublicUrl = GetPublicUrl(data.ReceiverToken, _configuration["App:PublicBaseUrl"]),
-            Lines = (data.Lines ?? new List<DeliveryLine>()).Select(l => new DeliveryLineResponseDto
+            Lines = dbLines.Select(l => 
             {
-                DeliveryLineNumber = l.DeliveryLineNumber,
-                DeliveryItemCode = l.DeliveryItemCode,
-                DeliveryItemDescription = l.DeliveryItemDescription,
-                BatchNumber = l.BatchNumber,
-                OrderNumber = l.OrderNumber,
-                BuyerPONumber = l.BuyerPONumber,
-                ParentLineNumber = l.ParentLineNumber.Trim() ?? "0",
-                SalesQuantity = l.SalesQuantity,
-                SalesUOM = l.SalesUOM,
-                PackQuantity = l.PackQuantity,
-                PackUOM = l.PackUOM,
-                PackQuantityDelivered = l.PackQuantityDelivered,
-                PackQuantityReturned = l.PackQuantityReturned,
-                PackQuantityRejected = l.PackQuantityRejected,
-                LineComment = l.LineComment
+                // 🎯 Identify if this line acts as a structural parent to any split-batch child lines
+                var childrenLines = dbLines.Where(c => !string.IsNullOrEmpty(c.ParentLineNumber) && c.ParentLineNumber.Trim() == l.DeliveryLineNumber).ToList();
+                bool isParentLine = childrenLines.Any();
+
+                // Roll up target quantities and feedback counts from children if this is a split-batch parent line
+                decimal targetPackQty = isParentLine ? childrenLines.Sum(c => c.PackQuantity)          : l.PackQuantity;
+                decimal delivered     = isParentLine ? childrenLines.Sum(c => c.PackQuantityDelivered) : l.PackQuantityDelivered;
+                decimal returned      = isParentLine ? childrenLines.Sum(c => c.PackQuantityReturned)  : l.PackQuantityReturned;
+                decimal rejected      = isParentLine ? childrenLines.Sum(c => c.PackQuantityRejected)  : l.PackQuantityRejected;
+
+                return new DeliveryLineResponseDto
+                {
+                    DeliveryLineNumber = l.DeliveryLineNumber,
+                    DeliveryItemCode = l.DeliveryItemCode,
+                    DeliveryItemDescription = l.DeliveryItemDescription,
+                    BatchNumber = l.BatchNumber,
+                    OrderNumber = l.OrderNumber,
+                    BuyerPONumber = l.BuyerPONumber,
+                    ParentLineNumber = l.ParentLineNumber?.Trim() ?? "0",
+                    SalesQuantity = l.SalesQuantity,
+                    SalesUOM = l.SalesUOM,
+                    PackQuantity = targetPackQty, // 🎯 Non-zero rolled up target base value for parent rows
+                    PackUOM = l.PackUOM,
+                    PackQuantityDelivered = delivered,
+                    PackQuantityReturned = returned,
+                    PackQuantityRejected = rejected,
+                    LineComment = l.LineComment
+                };
             }).ToList()
         };
 
@@ -570,7 +585,7 @@ public class DeliveriesController : ControllerBase
             }
         }
 
-        Console.WriteLine(data.Lines);
+        // Console.WriteLine(data.Lines);
 
         data.Status = hasDiscrepancy 
             ? DeliveryHeader.ReceiverStatus.PartialReceived 
@@ -607,6 +622,8 @@ public class DeliveriesController : ControllerBase
 
         try
         {
+            var dbLines = (data.Lines ?? Enumerable.Empty<DeliveryLine>()).ToList();
+
             var sapPayload = new SapDeliveryConfirmationPayload
             {
                 CustomerCode = data.Customer?.CustomerCode ?? string.Empty,
@@ -615,24 +632,34 @@ public class DeliveriesController : ControllerBase
                 ReceiverStatus = hasDiscrepancy ? "2" : "1",
                 ReceiverNotes = data.ReceiverNotes ?? string.Empty,
                 
-                Lines = (data.Lines ?? Enumerable.Empty<DeliveryLine>()).Select(l =>
+                Lines = dbLines.Select(l =>
                 {
-                    decimal totalActual = l.PackQuantityDelivered + l.PackQuantityReturned + l.PackQuantityRejected;
-                    decimal rawVariance = totalActual - l.PackQuantity;
-                    decimal percentCalc = l.PackQuantity > 0 ? (rawVariance / l.PackQuantity) * 100 : 0;
+                    // 🎯 Identify if this row acts as a parent line for any split-batch child lines
+                    var children = dbLines.Where(c => !string.IsNullOrEmpty(c.ParentLineNumber) && c.ParentLineNumber.Trim() == l.DeliveryLineNumber).ToList();
+                    bool isParentLine = children.Any();
+
+                    // Dynamically roll up all quantities from children if this is a structural parent line
+                    decimal packQty  = isParentLine ? children.Sum(c => c.PackQuantity)          : l.PackQuantity;
+                    decimal delivered = isParentLine ? children.Sum(c => c.PackQuantityDelivered) : l.PackQuantityDelivered;
+                    decimal returned  = isParentLine ? children.Sum(c => c.PackQuantityReturned)  : l.PackQuantityReturned;
+                    decimal rejected  = isParentLine ? children.Sum(c => c.PackQuantityRejected)  : l.PackQuantityRejected;
+
+                    // Compute unified variance using the non-zero target base
+                    decimal totalActual = delivered + returned + rejected;
+                    decimal rawVariance = totalActual - packQty;
+                    decimal percentCalc = packQty > 0 ? (rawVariance / packQty) * 100 : 0;
 
                     return new SapDeliveryLinePayload
                     {
                         DeliveryLineNumber = l.DeliveryLineNumber,
-                        DeliveredQuantity = l.PackQuantityDelivered,
-                        RejectedQuantity = l.PackQuantityRejected,
-                        ReturnedQuantity = l.PackQuantityReturned,
+                        DeliveredQuantity = delivered, // 🎯 Sent as structural aggregate to SAP
+                        RejectedQuantity = rejected,
+                        ReturnedQuantity = returned,
                         LineComment = l.LineComment ?? "",
-                        VariancePercent = percentCalc
+                        VariancePercent = Math.Round(percentCalc, 2, MidpointRounding.AwayFromZero)
                     };
                 }).ToList()
             };
-
             var jsonOptions = new JsonSerializerOptions { WriteIndented = true };
             string jsonString = JsonSerializer.Serialize(sapPayload, jsonOptions);
 
@@ -667,7 +694,7 @@ public class DeliveriesController : ControllerBase
         }
         catch (Exception ex)
         {
-            Console.WriteLine("AU AMAT DAH");
+            // Console.WriteLine("AU AMAT DAH");
             Console.WriteLine($"Critical network exception thrown during SAP post sequence: {ex.Message}");
             return StatusCode(500, $"Internal server error routing data to ERP infrastructure: {ex.Message}");
         }
@@ -945,9 +972,9 @@ public class DeliveriesController : ControllerBase
         string url = $"https://maps.googleapis.com/maps/api/geocode/json?latlng={lat},{lng}&key={_googleApiKey}";
         
         var jsonString = await client.GetStringAsync(url);
-        Console.WriteLine("=== RAW GOOGLE RESPONSE FOR LAPTOP ===");
-        Console.WriteLine(jsonString);
-        Console.WriteLine("======================================");
+        // Console.WriteLine("=== RAW GOOGLE RESPONSE FOR LAPTOP ===");
+        // Console.WriteLine(jsonString);
+        // Console.WriteLine("======================================");
         var response = await client.GetFromJsonAsync<GoogleGeocodeResponse>(url);
         if (response?.Results == null || !response.Results.Any()) return null;
 
