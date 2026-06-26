@@ -171,9 +171,6 @@ const buildLineItemTree = (lines: DeliveryLine[]): DisplayableLineItem[] => {
     const hasBatchNumber = parentLine.batchNumber && parentLine.batchNumber.trim() !== ""
     const children = childrenMap.get(parentLine.deliveryLineNumber) || []
 
-    // Unified single-batch condition:
-    // - Has batch number (regardless of children), OR
-    // - No batch number AND no children (standalone item without batch info)
     if (hasBatchNumber || children.length === 0) {
       // Condition 1: Parent Single Batch - standalone row
       result.push({
@@ -186,11 +183,12 @@ const buildLineItemTree = (lines: DeliveryLine[]): DisplayableLineItem[] => {
         type: 'split-batch',
         parentLine: parentLine,
         children: children,
+        // 🎯 FIX: Direct assignment since the backend already calculated the totals!
         aggregatedTotals: {
-          scheduled: children.reduce((sum, child) => sum + child.packQuantity, 0) + parentLine.packQuantity,
-          delivered: children.reduce((sum, child) => sum + child.packQuantityDelivered, 0) + parentLine.packQuantityDelivered,
-          returned: children.reduce((sum, child) => sum + child.packQuantityReturned, 0) + parentLine.packQuantityReturned,
-          rejected: children.reduce((sum, child) => sum + child.packQuantityRejected, 0) + parentLine.packQuantityRejected,
+          scheduled: parentLine.packQuantity,
+          delivered: parentLine.packQuantityDelivered,
+          returned: parentLine.packQuantityReturned,
+          rejected: parentLine.packQuantityRejected,
         }
       })
     }
@@ -639,38 +637,37 @@ export function DeliveryDetailPage() {
   }, [showToast])
 
   useEffect(() => {
+    let isCurrent = true
+
     const fetchDeliveryDetail = async () => {
       if (!deliveryId) return
-
       try {
         const res = await api.get(`/api/deliveries/${deliveryId}`)
-        if (!res.ok) {
-          throw new Error("Delivery not found")
-        }
+        if (!res.ok) throw new Error("Delivery not found")
         const data: DeliveryDetail = await res.json()
-        setDelivery(data)
-
-        // Generate QR code in frontend if not canceled
-        if (data.publicUrl && data.status !== 3) {
-          const qrDataUrl = await QRCode.toDataURL(data.publicUrl, {
-            width: 200,
-            margin: 1,
-            color: {
-              dark: "#1d2351",
-              light: "#ffffff",
-            },
-          })
-          setQrCode(qrDataUrl)
+        
+        if (isCurrent) {
+          setDelivery(data)
+          if (data.publicUrl && data.status !== 3) {
+            const qrDataUrl = await QRCode.toDataURL(data.publicUrl, {
+              width: 200, margin: 1, color: { dark: "#1d2351", light: "#ffffff" }
+            })
+            setQrCode(qrDataUrl)
+          }
         }
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to fetch delivery")
+        if (isCurrent) setError(err instanceof Error ? err.message : "Failed to fetch")
       } finally {
-        setLoading(false)
+        if (isCurrent) setLoading(false)
       }
     }
 
     fetchDeliveryDetail()
-  }, [deliveryId])
+
+    return () => {
+      isCurrent = false
+    }
+  }, [deliveryId]) // 🎯 CRITICAL: ONLY watch deliveryId
 
   const handleCopyUrl = async () => {
     if (delivery?.publicUrl) {

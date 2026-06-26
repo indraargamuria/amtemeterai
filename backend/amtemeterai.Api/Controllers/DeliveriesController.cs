@@ -215,6 +215,9 @@ public class DeliveriesController : ControllerBase
             })
             .ToListAsync();
 
+        // Materialize line collection to local memory context to handle cross-row child-parent calculations safely
+        var dbLines = delivery.Lines ?? new List<DeliveryLine>();
+
         var response = new DeliveryResponseDto
         {
             DeliveryID = delivery.DeliveryID,
@@ -222,7 +225,7 @@ public class DeliveriesController : ControllerBase
             DeliveryDate = delivery.DeliveryDate,
             DeliveryRemarks = delivery.DeliveryRemarks,
             ShipToAddress = delivery.ShipToAddress,
-            // Note: OrderNumber and BuyerPONumber moved to line level
+            
             // Conditional: Hide CustomerCode and CustomerName for warehouse role
             CustomerCode = isWarehouseRole ? string.Empty : (delivery.Customer?.CustomerCode ?? "UNKNOWN"),
             CustomerName = isWarehouseRole ? string.Empty : (delivery.Customer?.CustomerName ?? "UNKNOWN"),
@@ -232,7 +235,7 @@ public class DeliveriesController : ControllerBase
             Received = delivery.Received,
             ReceiveDate = delivery.ReceiveDate,
             Invoiced = delivery.Invoiced,
-            InvoiceNumber = associatedInvoiceNumber, // 🆕 Bind database invoice value here
+            InvoiceNumber = associatedInvoiceNumber, 
             PublicUrl = GetPublicUrl(delivery.ReceiverToken, _configuration["App:PublicBaseUrl"]),
 
             Plant = delivery.Plant,
@@ -254,25 +257,36 @@ public class DeliveriesController : ControllerBase
 
             Photos = photos,
 
-            Lines = (delivery.Lines ?? new List<DeliveryLine>()).Select(l => new DeliveryLineResponseDto
+            Lines = dbLines.Select(l => 
             {
-                DeliveryLineNumber = l.DeliveryLineNumber,
-                DeliveryItemCode = l.DeliveryItemCode,
-                DeliveryItemDescription = l.DeliveryItemDescription,
-                BatchNumber = l.BatchNumber,
-                OrderNumber = isWarehouseRole ? null : l.OrderNumber,
-                BuyerPONumber = isWarehouseRole ? null : l.BuyerPONumber,
-                ParentLineNumber = l.ParentLineNumber ?? "0",
-                SalesQuantity = l.SalesQuantity,
-                SalesUOM = l.SalesUOM,
-                PackQuantity = l.PackQuantity,
-                PackUOM = l.PackUOM,
+                // 🎯 Identify if this specific line is a structural parent to any split-batch child lines
+                var childrenLines = dbLines.Where(c => !string.IsNullOrEmpty(c.ParentLineNumber) && c.ParentLineNumber.Trim() == l.DeliveryLineNumber).ToList();
+                bool isParentLine = childrenLines.Any();
 
-                PackQuantityDelivered = l.PackQuantityDelivered,
-                PackQuantityReturned = l.PackQuantityReturned,
-                PackQuantityRejected = l.PackQuantityRejected,
+                // Roll up structural targets and receipt quantities from children elements
+                decimal targetPackQty = isParentLine ? childrenLines.Sum(c => c.PackQuantity)          : l.PackQuantity;
+                decimal delivered     = isParentLine ? childrenLines.Sum(c => c.PackQuantityDelivered) : l.PackQuantityDelivered;
+                decimal returned      = isParentLine ? childrenLines.Sum(c => c.PackQuantityReturned)  : l.PackQuantityReturned;
+                decimal rejected      = isParentLine ? childrenLines.Sum(c => c.PackQuantityRejected)  : l.PackQuantityRejected;
 
-                LineComment = l.LineComment
+                return new DeliveryLineResponseDto
+                {
+                    DeliveryLineNumber = l.DeliveryLineNumber,
+                    DeliveryItemCode = l.DeliveryItemCode,
+                    DeliveryItemDescription = l.DeliveryItemDescription,
+                    BatchNumber = l.BatchNumber,
+                    OrderNumber = isWarehouseRole ? null : l.OrderNumber,
+                    BuyerPONumber = isWarehouseRole ? null : l.BuyerPONumber,
+                    ParentLineNumber = l.ParentLineNumber?.Trim() ?? "0",
+                    SalesQuantity = l.SalesQuantity,
+                    SalesUOM = l.SalesUOM,
+                    PackQuantity = targetPackQty, // 🎯 Non-zero rolled up target base value for parent rows
+                    PackUOM = l.PackUOM,
+                    PackQuantityDelivered = delivered,
+                    PackQuantityReturned = returned,
+                    PackQuantityRejected = rejected,
+                    LineComment = l.LineComment
+                };
             }).ToList()
         };
 

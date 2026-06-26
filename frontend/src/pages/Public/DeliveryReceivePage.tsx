@@ -792,12 +792,12 @@ const SingleBatchRow = memo(({
                 <div className="text-sm font-bold text-emerald-600">{delivered}</div>
               </div>
               <div className="text-right">
-                <div className="text-[10px] text-slate-500 uppercase font-medium">Returned</div>
-                <div className="text-sm font-bold text-amber-600">{returned}</div>
-              </div>
-              <div className="text-right">
                 <div className="text-[10px] text-slate-500 uppercase font-medium">Rejected</div>
                 <div className="text-sm font-bold text-red-600">{rejected}</div>
+              </div>
+              <div className="text-right">
+                <div className="text-[10px] text-slate-500 uppercase font-medium">Returned</div>
+                <div className="text-sm font-bold text-amber-600">{returned}</div>
               </div>
             </div>
 
@@ -1213,15 +1213,15 @@ const SplitBatchParentRow = memo(({
               </div>
               <div className="text-right">
                 <div className="text-[10px] text-slate-500 uppercase font-medium">Received</div>
-                <div className="text-sm font-bold text-emerald-600">{currentAggregated.delivered}</div>
-              </div>
-              <div className="text-right">
-                <div className="text-[10px] text-slate-500 uppercase font-medium">Returned</div>
-                <div className="text-sm font-bold text-amber-600">{currentAggregated.returned}</div>
+                <div className="text-sm font-bold text-emerald-600">{currentAggregated.delivered.toFixed(2)}</div>
               </div>
               <div className="text-right">
                 <div className="text-[10px] text-slate-500 uppercase font-medium">Rejected</div>
-                <div className="text-sm font-bold text-red-600">{currentAggregated.rejected}</div>
+                <div className="text-sm font-bold text-red-600">{currentAggregated.rejected.toFixed(2)}</div>
+              </div>
+              <div className="text-right">
+                <div className="text-[10px] text-slate-500 uppercase font-medium">Returned</div>
+                <div className="text-sm font-bold text-amber-600">{currentAggregated.returned.toFixed(2)}</div>
               </div>
             </div>
 
