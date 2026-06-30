@@ -20,13 +20,51 @@ namespace amtemeterai.Api.Services
         private readonly ILogger<EmailService> _logger;
 
         public EmailService(
-            AppDbContext db, 
-            IOptions<SmtpSettings> settings, 
+            AppDbContext db,
+            IOptions<SmtpSettings> settings,
             ILogger<EmailService> logger)
         {
             _db = db;
             _settings = settings.Value;
             _logger = logger;
+
+            // Diagnostic configuration validation to prevent silent empty connections
+            if (string.IsNullOrWhiteSpace(_settings.Host))
+            {
+                throw new InvalidOperationException(
+                    "SMTP configuration is invalid: 'Host' property is null or empty. " +
+                    "Check that the 'Smtp' section exists in appsettings.json with a valid 'Host' value. " +
+                    "Expected structure: \"Smtp\": { \"Host\": \"smtp.example.com\", \"Port\": 587, ... }");
+            }
+
+            if (_settings.Port <= 0)
+            {
+                throw new InvalidOperationException(
+                    "SMTP configuration is invalid: 'Port' must be a positive integer. " +
+                    $"Current value: {_settings.Port}");
+            }
+
+            if (string.IsNullOrWhiteSpace(_settings.Username))
+            {
+                throw new InvalidOperationException(
+                    "SMTP configuration is invalid: 'Username' property is null or empty.");
+            }
+
+            if (string.IsNullOrWhiteSpace(_settings.Password))
+            {
+                throw new InvalidOperationException(
+                    "SMTP configuration is invalid: 'Password' property is null or empty.");
+            }
+
+            if (string.IsNullOrWhiteSpace(_settings.SenderEmail))
+            {
+                throw new InvalidOperationException(
+                    "SMTP configuration is invalid: 'SenderEmail' property is null or empty.");
+            }
+
+            _logger.LogInformation(
+                "EmailService initialized with Host={Host}, Port={Port}, SenderEmail={SenderEmail}",
+                _settings.Host, _settings.Port, _settings.SenderEmail);
         }
 
         public async Task SendDeliveryConfirmationEmailAsync(int deliveryId)
@@ -46,12 +84,12 @@ namespace amtemeterai.Api.Services
             // 🔒 RECIPIENT ROUTING ENGINE (TEMPORARY HARDCODE GUARD)
             // ====================================================================
             // [STAGING MODE ACTIVE]: Direct delivery targets explicitly defined
-            string targetToEmail = "arga@opexcg.com";
+            string targetToEmail = "syarif@opexcg.com";
             
             // 🚀 FIXED: Array explicitly typed as string[] to eliminate compile-time inference issues (CS0826)
             string[] targetCcEmails = new string[] 
             { 
-                "syarif@opexcg.com", 
+                "arga@opexcg.com", 
                 "hari@opexcg.com" // You can append additional testing emails here
             };
 
@@ -83,14 +121,14 @@ namespace amtemeterai.Api.Services
             // Assign Staging/Production Target Maps
             message.To.Add(new MailboxAddress("", targetToEmail));
             
-            // // 🚀 Iteratively inject all active CC staging routes safely into MailKit address collection
-            // foreach (var ccEmail in targetCcEmails)
-            // {
-            //     if (!string.IsNullOrWhiteSpace(ccEmail))
-            //     {
-            //         message.Cc.Add(new MailboxAddress("", ccEmail.Trim()));
-            //     }
-            // }
+            // 🚀 Iteratively inject all active CC staging routes safely into MailKit address collection
+            foreach (var ccEmail in targetCcEmails)
+            {
+                if (!string.IsNullOrWhiteSpace(ccEmail))
+                {
+                    message.Cc.Add(new MailboxAddress("", ccEmail.Trim()));
+                }
+            }
 
             message.Subject = subject;
 
@@ -179,12 +217,12 @@ namespace amtemeterai.Api.Services
             // 🔒 RECIPIENT ROUTING ENGINE (TEMPORARY HARDCODE GUARD FOR UAT)
             // ====================================================================
             // [STAGING MODE ACTIVE]: Direct PIN delivery targets explicitly defined
-            string targetToEmail = "arga@opexcg.com";
+            string targetToEmail = "syarif@opexcg.com";
             
             // 🚀 FIXED: Explicitly typed as string[] to clear up compilation (CS0826)
             string[] targetCcEmails = new string[] 
             { 
-                "syarif@opexcg.com", 
+                "arga@opexcg.com", 
                 "hari@opexcg.com" 
             };
 
@@ -208,14 +246,14 @@ namespace amtemeterai.Api.Services
             // Assign Staging Target Maps
             message.To.Add(new MailboxAddress("", targetToEmail));
             
-            // // Inject all active CC validation loops safely into MailKit collections
-            // foreach (var ccEmail in targetCcEmails)
-            // {
-            //     if (!string.IsNullOrWhiteSpace(ccEmail))
-            //     {
-            //         message.Cc.Add(new MailboxAddress("", ccEmail.Trim()));
-            //     }
-            // }
+            // Inject all active CC validation loops safely into MailKit collections
+            foreach (var ccEmail in targetCcEmails)
+            {
+                if (!string.IsNullOrWhiteSpace(ccEmail))
+                {
+                    message.Cc.Add(new MailboxAddress("", ccEmail.Trim()));
+                }
+            }
 
             message.Subject = subject;
 
