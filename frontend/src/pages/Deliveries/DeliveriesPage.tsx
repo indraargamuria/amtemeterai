@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from "react"
 import { useNavigate } from "react-router-dom"
+import { utils as xlsxUtils, writeFile } from "xlsx"
 import { Badge } from "../../shared/components/ui/Badge"
 import { Card, CardContent } from "../../shared/components/ui/Card"
 import { Input } from "../../shared/components/ui/Input"
@@ -45,6 +46,10 @@ type SortOrder = "asc" | "desc"
 type ComplianceFilter = "all" | "bc" | "nonbc"
 // 🚀 EXTENDED: Filter state to capture delivery pipeline exclusions
 type PipelineFilter = "all" | "active" | "canceled"
+// NEW: Delivery Status Filter
+type DeliveryStatusFilter = "all" | "fullyReceived" | "partialReceived" | "canceled"
+// NEW: Invoice Status Filter
+type InvoiceStatusFilter = "all" | "invoiced" | "pending"
 
 const ITEMS_PER_PAGE = 10
 
@@ -60,6 +65,10 @@ export function DeliveriesPage() {
   const [complianceFilter, setComplianceFilter] = useState<ComplianceFilter>("all")
   const [pipelineFilter, _setPipelineFilter] = useState<PipelineFilter>("active") // Defaults to hiding noise from cancelled rows
   const [showDiscrepancyOnly, setShowDiscrepancyOnly] = useState(false)
+  // NEW: Delivery Status Filter
+  const [deliveryStatusFilter, setDeliveryStatusFilter] = useState<DeliveryStatusFilter>("all")
+  // NEW: Invoice Status Filter
+  const [invoiceStatusFilter, setInvoiceStatusFilter] = useState<InvoiceStatusFilter>("all")
   // const [_uploading, setUploading] = useState<number | null>(null)
   // const [fileInput, _setFileInput] = useState<HTMLInputElement | null>(null)
 
@@ -182,6 +191,25 @@ export function DeliveriesPage() {
       filtered = filtered.filter((d) => d.status === 2 && !d.isCanceled)
     }
 
+    // NEW: Apply Delivery Status Filter
+    if (deliveryStatusFilter !== "all") {
+      filtered = filtered.filter((d) => {
+        if (deliveryStatusFilter === "canceled") return d.isCanceled
+        if (deliveryStatusFilter === "fullyReceived") return d.received && d.status === 1 && !d.isCanceled
+        if (deliveryStatusFilter === "partialReceived") return d.received && d.status === 2 && !d.isCanceled
+        return true
+      })
+    }
+
+    // NEW: Apply Invoice Status Filter
+    if (invoiceStatusFilter !== "all") {
+      filtered = filtered.filter((d) => {
+        if (invoiceStatusFilter === "invoiced") return d.invoiced && !d.isCanceled
+        if (invoiceStatusFilter === "pending") return !d.invoiced && !d.isCanceled
+        return true
+      })
+    }
+
     // Apply sorting
     filtered.sort((a, b) => {
       let comparison = 0
@@ -205,7 +233,7 @@ export function DeliveriesPage() {
     })
 
     return filtered
-  }, [deliveries, searchQuery, sortField, sortOrder, complianceFilter, pipelineFilter, showDiscrepancyOnly, assignedPlants, isSysAdmin, isWarehouse])
+  }, [deliveries, searchQuery, sortField, sortOrder, complianceFilter, pipelineFilter, showDiscrepancyOnly, deliveryStatusFilter, invoiceStatusFilter, assignedPlants, isSysAdmin, isWarehouse])
 
   const totalPages = Math.ceil(filteredAndSortedDeliveries.length / ITEMS_PER_PAGE)
   const startIndex = (currentPage - 1) * ITEMS_PER_PAGE
@@ -216,7 +244,7 @@ export function DeliveriesPage() {
 
   useEffect(() => {
     setCurrentPage(1)
-  }, [searchQuery, sortField, sortOrder, complianceFilter, pipelineFilter, showDiscrepancyOnly])
+  }, [searchQuery, sortField, sortOrder, complianceFilter, pipelineFilter, showDiscrepancyOnly, deliveryStatusFilter, invoiceStatusFilter])
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString)
@@ -321,6 +349,71 @@ export function DeliveriesPage() {
     )
   }
 
+  // NEW: Excel Export Function
+  const handleExportToExcel = () => {
+    // Define export interface with human-readable headers
+    interface ExcelExportRow {
+      "Delivery Number": string
+      "Delivery Date": string
+      "Customer Code": string
+      "Customer Name": string
+      "Plant": string
+      "Compliance Type": string
+      "Status": string
+      "Invoiced": string
+      "Sales Person": string
+      "City/Regency": string
+      "Province": string
+      "Photos Count": number
+    }
+
+    // Map filtered deliveries to export format
+    const exportData: ExcelExportRow[] = filteredAndSortedDeliveries.map((d) => ({
+      "Delivery Number": d.deliveryNumber,
+      "Delivery Date": formatDate(d.deliveryDate),
+      "Customer Code": isWarehouse ? "Confidential" : (d.customerCode || "-"),
+      "Customer Name": isWarehouse ? "Confidential" : (d.customerName || "-"),
+      "Plant": d.plant || "-",
+      "Compliance Type": d.type === 1 ? "BC Compliance" : (d.type === 2 ? "Non-BC" : "-"),
+      "Status": d.isCanceled ? "Canceled" : (!d.received ? "Pending Delivery" : (d.status === 2 ? "Partial / Discrepancy" : "Fully Received")),
+      "Invoiced": d.isCanceled ? "-" : (d.invoiced ? "Yes" : "No"),
+      "Sales Person": d.salesPersonName || "-",
+      "City/Regency": d.cityRegency || "-",
+      "Province": d.province || "-",
+      "Photos Count": d.photosCount || 0,
+    }))
+
+    // Create worksheet
+    const worksheet = xlsxUtils.json_to_sheet(exportData)
+
+    // Set column widths
+    worksheet["!cols"] = [
+      { wch: 20 }, // Delivery Number
+      { wch: 15 }, // Delivery Date
+      { wch: 15 }, // Customer Code
+      { wch: 30 }, // Customer Name
+      { wch: 10 }, // Plant
+      { wch: 15 }, // Compliance Type
+      { wch: 20 }, // Status
+      { wch: 10 }, // Invoiced
+      { wch: 20 }, // Sales Person
+      { wch: 20 }, // City/Regency
+      { wch: 15 }, // Province
+      { wch: 12 }, // Photos Count
+    ]
+
+    // Create workbook
+    const workbook = xlsxUtils.book_new()
+    xlsxUtils.book_append_sheet(workbook, worksheet, "Deliveries")
+
+    // Generate filename with timestamp
+    const timestamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, -5)
+    const filename = `Deliveries_Export_${timestamp}.xlsx`
+
+    // Write file
+    writeFile(workbook, filename)
+  }
+
   return (
     <div className="space-y-6">
       {/* Page Header */}
@@ -336,30 +429,46 @@ export function DeliveriesPage() {
       {/* Filter Toolbar */}
       <Card>
         <CardContent className="py-4">
-          <div className="flex flex-col lg:flex-row gap-4">
-            {/* Search Box */}
-            <div className="flex-1">
-              <div className="relative">
-                <svg
-                  className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-brand-blue/40"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+          <div className="flex flex-col gap-4">
+            {/* Search & Export Row */}
+            <div className="flex flex-col lg:flex-row gap-4">
+              {/* Search Box */}
+              <div className="flex-1">
+                <div className="relative">
+                  <svg
+                    className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-brand-blue/40"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                    />
+                  </svg>
+                  <Input
+                    placeholder={isWarehouse ? "Search by delivery number, salesperson, or cancellation reason..." : "Search by delivery number, customer, salesperson, or cancellation reason..."}
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="pl-10 bg-brand-blue/5"
                   />
-                </svg>
-                <Input
-                  placeholder={isWarehouse ? "Search by delivery number, salesperson, or cancellation reason..." : "Search by delivery number, customer, salesperson, or cancellation reason..."}
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-10 bg-brand-blue/5"
-                />
+                </div>
               </div>
+
+              {/* Export Button */}
+              <button
+                onClick={handleExportToExcel}
+                disabled={filteredAndSortedDeliveries.length === 0}
+                className="flex items-center gap-2 px-4 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed border border-emerald-200"
+                title="Export to Excel"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                <span className="text-sm font-medium">Export to Excel</span>
+              </button>
             </div>
 
             {/* Filters Row */}
@@ -401,7 +510,37 @@ export function DeliveriesPage() {
                 </div>
               </div>
 
+              {/* NEW: Delivery Status Selector */}
+              <div className="flex items-center gap-2 bg-brand-blue/5 rounded-lg px-3 py-2">
+                <span className="text-xs text-brand-blue/60 whitespace-nowrap">Delivery:</span>
+                <select
+                  value={deliveryStatusFilter}
+                  onChange={(e) => setDeliveryStatusFilter(e.target.value as DeliveryStatusFilter)}
+                  className="bg-transparent text-xs text-brand-blue/70 font-medium focus:outline-none cursor-pointer hover:text-brand-blue"
+                >
+                  <option value="all">All</option>
+                  <option value="fullyReceived">Fully Received</option>
+                  <option value="partialReceived">Partial Received</option>
+                  <option value="canceled">Canceled</option>
+                </select>
+              </div>
+
+              {/* NEW: Invoice Status Selector */}
+              <div className="flex items-center gap-2 bg-brand-blue/5 rounded-lg px-3 py-2">
+                <span className="text-xs text-brand-blue/60 whitespace-nowrap">Invoice:</span>
+                <select
+                  value={invoiceStatusFilter}
+                  onChange={(e) => setInvoiceStatusFilter(e.target.value as InvoiceStatusFilter)}
+                  className="bg-transparent text-xs text-brand-blue/70 font-medium focus:outline-none cursor-pointer hover:text-brand-blue"
+                >
+                  <option value="all">All</option>
+                  <option value="invoiced">Invoiced</option>
+                  <option value="pending">Pending Invoice</option>
+                </select>
+              </div>
+
               {/* Discrepancy Filter */}
+              {/* 
               <label className="flex items-center gap-2 cursor-pointer bg-brand-blue/5 rounded-lg px-3 py-2">
                 <input
                   type="checkbox"
@@ -414,6 +553,7 @@ export function DeliveriesPage() {
                   Discrepancies Only
                 </span>
               </label>
+              */}
             </div>
           </div>
         </CardContent>
