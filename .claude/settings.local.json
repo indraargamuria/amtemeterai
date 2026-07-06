@@ -9,7 +9,8 @@
       "Bash(dotnet build:*)",
       "mcp__ide__getDiagnostics",
       "Bash(find:*)",
-      "Bash(ls:*)"
+      "Bash(ls:*)",
+      "Bash(dotnet run:*)"
     ]
   }
 }

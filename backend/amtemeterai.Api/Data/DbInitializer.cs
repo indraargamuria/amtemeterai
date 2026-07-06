@@ -15,6 +15,9 @@ public static class DbInitializer
         // Ensure database migrations are up to date
         await context.Database.MigrateAsync();
 
+        // Seed configuration settings first
+        await SeedConfigurationSettingsAsync(context);
+
         // 1. SEED SYSTEM ROLES
         string[] roles = { "sysadmin", "finance", "warehouse", "sales" };
         foreach (var roleName in roles)
@@ -139,5 +142,53 @@ public static class DbInitializer
         {
             await context.RolePermissions.AddAsync(new RolePermission { RoleId = roleId, PermissionId = permissionId });
         }
+    }
+
+    private static async Task SeedConfigurationSettingsAsync(AppDbContext context)
+    {
+        var defaultSettings = new List<ConfigurationSetting>
+        {
+            new()
+            {
+                Key = "BillingSync_Interval_Hours",
+                Value = "1",
+                Description = "For auto sync invoice for DO - Interval in hours to check for received deliveries ready for invoicing",
+                UpdatedAt = DateTime.UtcNow
+            },
+            new()
+            {
+                Key = "DeliveryClose_Interval_Weeks",
+                Value = "1",
+                Description = "For auto close sync for DO - Interval in weeks to automatically close old deliveries",
+                UpdatedAt = DateTime.UtcNow
+            },
+            new()
+            {
+                Key = "CustomerSync_Interval_Daily",
+                Value = "1",
+                Description = "For auto sync customer data - Interval in days between customer sync operations",
+                UpdatedAt = DateTime.UtcNow
+            }
+        };
+
+        foreach (var setting in defaultSettings)
+        {
+            var existing = await context.ConfigurationSettings.FindAsync(setting.Key);
+            if (existing == null)
+            {
+                await context.ConfigurationSettings.AddAsync(setting);
+            }
+            else
+            {
+                // Update description if it exists but description is null or outdated
+                if (string.IsNullOrEmpty(existing.Description) && !string.IsNullOrEmpty(setting.Description))
+                {
+                    existing.Description = setting.Description;
+                    existing.UpdatedAt = DateTime.UtcNow;
+                }
+            }
+        }
+
+        await context.SaveChangesAsync();
     }
 }

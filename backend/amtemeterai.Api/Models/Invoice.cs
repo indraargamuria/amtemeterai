@@ -8,7 +8,9 @@ public class Invoice
         Stamped = 2,
         SyncFailed = 3,
         SyncedToSap = 4,
-        Canceled = 5
+        Canceled = 5,
+        NotInvoiced = 6,
+        InvoiceBlocked = 7
     }
 
     // 1. Renamed the enum declaration to avoid naming conflict
@@ -29,6 +31,13 @@ public class Invoice
     public DateTime InvoicedDate { get; set; }
 
     public InvoiceStatus Status { get; set; } = InvoiceStatus.Draft;
+
+    /// <summary>
+    /// Indicates whether the invoice has been voided/reversed.
+    /// This is separate from Status and provides an explicit voided flag for business logic.
+    /// Default: false
+    /// </summary>
+    public bool IsVoided { get; set; } = false;
 
     // Optional link to Delivery Order
     public int? DeliveryHeaderId { get; set; }

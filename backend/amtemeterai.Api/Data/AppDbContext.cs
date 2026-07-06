@@ -28,6 +28,9 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<Plant> Plant { get; set; } = null!;
     public DbSet<UserPlant> UserPlant { get; set; } = null!;
 
+    // Configuration Settings
+    public DbSet<ConfigurationSetting> ConfigurationSettings { get; set; } = null!;
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
@@ -184,6 +187,16 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
             .WithMany()
             .HasForeignKey(d => d.Plant) // Assuming DeliveryHeader already has a string property named 'Plant'
             .IsRequired(false); // Make it optional or required based on your ERP data constraints
+
+        // Configuration Settings
+        modelBuilder.Entity<ConfigurationSetting>(entity =>
+        {
+            entity.HasKey(e => e.Key);
+            entity.Property(e => e.Key).HasMaxLength(200);
+            entity.Property(e => e.Value).IsRequired().HasMaxLength(1000);
+            entity.Property(e => e.Description).HasMaxLength(500);
+            entity.Property(e => e.UpdatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP AT TIME ZONE 'UTC'");
+        });
 
         // ============================================================================
         // 🚀 GLOBAL UTC DATETIME CONVERTER FOR POSTGRESQL
