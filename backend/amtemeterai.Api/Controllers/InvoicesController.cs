@@ -321,6 +321,108 @@ public class InvoicesController : ControllerBase
         }
     }
 
+    /// <summary>
+    /// Void an invoice by its SAP invoice number.
+    /// Sets IsVoided = true, Status = Canceled, and resets linked delivery if applicable.
+    /// Wraps all operations in an explicit database transaction for atomicity.
+    /// </summary>
+    [HttpPost("by-number/{invoiceNumber}/void")]
+    [Authorize]
+    public async Task<IActionResult> VoidInvoiceByNumber(string invoiceNumber)
+    {
+        if (string.IsNullOrWhiteSpace(invoiceNumber))
+        {
+            return BadRequest("Invoice number is required.");
+        }
+
+        var invoice = await _db.Invoices
+            .Include(i => i.DeliveryHeader)
+            .FirstOrDefaultAsync(i => i.InvoiceNumber == invoiceNumber);
+
+        if (invoice == null)
+            return NotFound($"Invoice with number {invoiceNumber} not found.");
+
+        if (invoice.IsVoided)
+            return BadRequest($"Invoice {invoiceNumber} is already voided.");
+
+        _logger.LogInformation("Starting void operation for invoice {InvoiceNumber}", invoiceNumber);
+
+        // Execute within explicit transaction for atomicity
+        using var transaction = await _db.Database.BeginTransactionAsync();
+        try
+        {
+            // Step 1: Mark invoice as voided
+            invoice.IsVoided = true;
+            invoice.Status = Invoice.InvoiceStatus.Canceled;
+
+            // Step 2: If linked delivery exists, reset it to operational baseline
+            if (invoice.DeliveryHeaderId.HasValue && invoice.DeliveryHeader != null)
+            {
+                var delivery = invoice.DeliveryHeader;
+
+                // Reset delivery invoiced flag to allow re-invoicing
+                delivery.Invoiced = false;
+
+                // Optionally reset status to indicate it's ready for re-invoice processing
+                // Keep the original ReceiverStatus (FullyReceived/PartialReceived) as it was
+                // This allows the billing background processor to evaluate it again
+
+                _logger.LogInformation(
+                    "Reset linked delivery {DeliveryNumber} invoiced flag for voided invoice {InvoiceNumber}",
+                    delivery.DeliveryNumber,
+                    invoiceNumber);
+            }
+
+            await _db.SaveChangesAsync();
+
+            // Log the activity
+            var activityLog = new ActivityLog
+            {
+                EventType = "InvoiceVoided",
+                ReferenceID = invoiceNumber,
+                Message = $"Invoice {invoiceNumber} has been voided." +
+                          (invoice.DeliveryHeaderId.HasValue ? $" Linked delivery {invoice.DeliveryHeader!.DeliveryNumber} reset for re-invoicing." : ""),
+                Severity = "Warning"
+            };
+            _db.ActivityLogs.Add(activityLog);
+            await _db.SaveChangesAsync();
+
+            await transaction.CommitAsync();
+
+            _logger.LogInformation("Successfully voided invoice {InvoiceNumber}", invoiceNumber);
+
+            return Ok(new
+            {
+                success = true,
+                message = $"Invoice {invoiceNumber} has been successfully voided.",
+                invoiceNumber = invoice.InvoiceNumber,
+                invoiceId = invoice.InvoiceID,
+                isVoided = invoice.IsVoided,
+                status = (int)invoice.Status,
+                statusText = GetStatusText(invoice.Status),
+                linkedDeliveryReset = invoice.DeliveryHeaderId.HasValue,
+                linkedDeliveryNumber = invoice.DeliveryHeader?.DeliveryNumber
+            });
+        }
+        catch (Exception ex)
+        {
+            await transaction.RollbackAsync();
+            _logger.LogError(ex, "Failed to void invoice {InvoiceNumber}", invoiceNumber);
+
+            var activityLog = new ActivityLog
+            {
+                EventType = "InvoiceVoidFailed",
+                ReferenceID = invoiceNumber,
+                Message = $"Failed to void invoice {invoiceNumber}: {ex.Message}",
+                Severity = "Error"
+            };
+            _db.ActivityLogs.Add(activityLog);
+            await _db.SaveChangesAsync();
+
+            return StatusCode(500, $"Failed to void invoice: {ex.Message}");
+        }
+    }
+
     [HttpGet]
     public async Task<ActionResult<IEnumerable<InvoiceResponseDto>>> GetAllInvoices()
     {
@@ -643,6 +745,8 @@ public class InvoicesController : ControllerBase
             Invoice.InvoiceStatus.SyncFailed => "Sync Failed",
             Invoice.InvoiceStatus.SyncedToSap => "Synced to SAP",
             Invoice.InvoiceStatus.Canceled => "Canceled",
+            Invoice.InvoiceStatus.NotInvoiced => "Not Invoiced",
+            Invoice.InvoiceStatus.InvoiceBlocked => "Invoice Blocked",
             _ => "Unknown"
         };
     }

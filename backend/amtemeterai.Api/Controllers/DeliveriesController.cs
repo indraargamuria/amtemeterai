@@ -1372,4 +1372,108 @@ public class DeliveriesController : ControllerBase
             return StatusCode(500, $"SAP invoice creation failed: {ex.Message}");
         }
     }
+
+    /// <summary>
+    /// Mark a delivery as ready for re-invoicing.
+    /// Resets the invoiced flag and optionally voids any linked invoice,
+    /// allowing the billing background processor to evaluate the delivery again.
+    /// </summary>
+    [HttpPost("by-number/{deliveryNumber}/ready-to-reinvoice")]
+    [Authorize]
+    public async Task<IActionResult> MarkDeliveryReadyToReinvoice(string deliveryNumber)
+    {
+        if (string.IsNullOrWhiteSpace(deliveryNumber))
+        {
+            return BadRequest("Delivery number is required.");
+        }
+
+        _logger.LogInformation(
+            "Starting ready-to-reinvoice operation for delivery {DeliveryNumber}",
+            deliveryNumber);
+
+        try
+        {
+            // Step 1: Find the delivery with its linked invoice
+            var delivery = await _db.DeliveryHeaders
+                .Include(d => d.Invoices)
+                .FirstOrDefaultAsync(d => d.DeliveryNumber == deliveryNumber);
+
+            if (delivery == null)
+                return NotFound($"Delivery {deliveryNumber} not found.");
+
+            if (!delivery.Invoiced)
+                return BadRequest($"Delivery {deliveryNumber} is not marked as invoiced. No action needed.");
+
+            // Execute within explicit transaction for atomicity
+            using var transaction = await _db.Database.BeginTransactionAsync();
+            try
+            {
+                // Step 2: Reset delivery invoiced flag
+                delivery.Invoiced = false;
+
+                // Step 3: Find and void any linked invoices
+                var linkedInvoice = delivery.Invoices.FirstOrDefault();
+                bool invoiceVoided = false;
+
+                if (linkedInvoice != null)
+                {
+                    // Mark the invoice as voided
+                    linkedInvoice.IsVoided = true;
+                    linkedInvoice.Status = Invoice.InvoiceStatus.Canceled;
+                    invoiceVoided = true;
+
+                    _logger.LogInformation(
+                        "Voided linked invoice {InvoiceNumber} for delivery {DeliveryNumber}",
+                        linkedInvoice.InvoiceNumber,
+                        deliveryNumber);
+                }
+
+                await _db.SaveChangesAsync();
+
+                // Log the activity
+                await LogActivity(
+                    "DeliveryMarkedReadyToReinvoice",
+                    deliveryNumber,
+                    $"Delivery {deliveryNumber} marked as ready for re-invoicing." +
+                    (invoiceVoided ? $" Linked invoice {linkedInvoice?.InvoiceNumber} voided." : ""),
+                    "Info"
+                );
+
+                await transaction.CommitAsync();
+
+                _logger.LogInformation(
+                    "Successfully marked delivery {DeliveryNumber} as ready for re-invoicing",
+                    deliveryNumber);
+
+                return Ok(new
+                {
+                    success = true,
+                    message = $"Delivery {deliveryNumber} is now ready for re-invoicing.",
+                    deliveryNumber = deliveryNumber,
+                    invoiced = delivery.Invoiced,
+                    linkedInvoiceVoided = invoiceVoided,
+                    linkedInvoiceNumber = linkedInvoice?.InvoiceNumber
+                });
+            }
+            catch (Exception ex)
+            {
+                await transaction.RollbackAsync();
+                _logger.LogError(ex, "Transaction failed during ready-to-reinvoice for delivery {DeliveryNumber}", deliveryNumber);
+                throw;
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to mark delivery {DeliveryNumber} as ready for re-invoicing", deliveryNumber);
+
+            await LogActivity(
+                "ReadyToReinvoiceFailed",
+                deliveryNumber,
+                $"Failed to mark delivery as ready for re-invoicing: {ex.Message}",
+                "Error"
+            );
+
+            return StatusCode(500, $"Failed to mark delivery as ready for re-invoicing: {ex.Message}");
+        }
+    }
 }
