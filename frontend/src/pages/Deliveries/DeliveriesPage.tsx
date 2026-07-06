@@ -64,7 +64,7 @@ export function DeliveriesPage() {
   const [sortOrder, setSortOrder] = useState<SortOrder>("desc")
   const [complianceFilter, setComplianceFilter] = useState<ComplianceFilter>("all")
   const [pipelineFilter, _setPipelineFilter] = useState<PipelineFilter>("active") // Defaults to hiding noise from cancelled rows
-  const [showDiscrepancyOnly, setShowDiscrepancyOnly] = useState(false)
+  const [showDiscrepancyOnly, _setShowDiscrepancyOnly] = useState(false)
   // NEW: Delivery Status Filter
   const [deliveryStatusFilter, setDeliveryStatusFilter] = useState<DeliveryStatusFilter>("all")
   // NEW: Invoice Status Filter
@@ -623,7 +623,7 @@ export function DeliveriesPage() {
                   className={`cursor-pointer transition-colors ${
                     delivery.isCanceled 
                       ? "bg-slate-50/60 opacity-75 hover:bg-slate-100/50" 
-                      : "hover:bg-brand-blue/[0.02]"
+                      : "hover:bg-brand-blue/2"
                   }`}
                   onClick={() => handleRowClick(delivery.deliveryId)}
                 >
@@ -667,7 +667,7 @@ export function DeliveriesPage() {
                     <div className="flex flex-col gap-1.5">
                       {getFulfillmentBadge(delivery.status, delivery.received, delivery.isCanceled)}
                       {delivery.isCanceled ? (
-                        <p className="text-[11px] font-medium text-rose-600/80 max-w-[180px] truncate" title={delivery.cancelReason || "No custom reason specified"}>
+                        <p className="text-[11px] font-medium text-rose-600/80 max-w-45 truncate" title={delivery.cancelReason || "No custom reason specified"}>
                           Reason: {delivery.cancelReason || "System/Manual Void"}
                         </p>
                       ) : (
