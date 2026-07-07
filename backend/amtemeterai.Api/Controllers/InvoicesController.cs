@@ -321,108 +321,6 @@ public class InvoicesController : ControllerBase
         }
     }
 
-    /// <summary>
-    /// Void an invoice by its SAP invoice number.
-    /// Sets IsVoided = true, Status = Canceled, and resets linked delivery if applicable.
-    /// Wraps all operations in an explicit database transaction for atomicity.
-    /// </summary>
-    [HttpPost("by-number/{invoiceNumber}/void")]
-    [Authorize]
-    public async Task<IActionResult> VoidInvoiceByNumber(string invoiceNumber)
-    {
-        if (string.IsNullOrWhiteSpace(invoiceNumber))
-        {
-            return BadRequest("Invoice number is required.");
-        }
-
-        var invoice = await _db.Invoices
-            .Include(i => i.DeliveryHeader)
-            .FirstOrDefaultAsync(i => i.InvoiceNumber == invoiceNumber);
-
-        if (invoice == null)
-            return NotFound($"Invoice with number {invoiceNumber} not found.");
-
-        if (invoice.IsVoided)
-            return BadRequest($"Invoice {invoiceNumber} is already voided.");
-
-        _logger.LogInformation("Starting void operation for invoice {InvoiceNumber}", invoiceNumber);
-
-        // Execute within explicit transaction for atomicity
-        using var transaction = await _db.Database.BeginTransactionAsync();
-        try
-        {
-            // Step 1: Mark invoice as voided
-            invoice.IsVoided = true;
-            invoice.Status = Invoice.InvoiceStatus.Canceled;
-
-            // Step 2: If linked delivery exists, reset it to operational baseline
-            if (invoice.DeliveryHeaderId.HasValue && invoice.DeliveryHeader != null)
-            {
-                var delivery = invoice.DeliveryHeader;
-
-                // Reset delivery invoiced flag to allow re-invoicing
-                delivery.Invoiced = false;
-
-                // Optionally reset status to indicate it's ready for re-invoice processing
-                // Keep the original ReceiverStatus (FullyReceived/PartialReceived) as it was
-                // This allows the billing background processor to evaluate it again
-
-                _logger.LogInformation(
-                    "Reset linked delivery {DeliveryNumber} invoiced flag for voided invoice {InvoiceNumber}",
-                    delivery.DeliveryNumber,
-                    invoiceNumber);
-            }
-
-            await _db.SaveChangesAsync();
-
-            // Log the activity
-            var activityLog = new ActivityLog
-            {
-                EventType = "InvoiceVoided",
-                ReferenceID = invoiceNumber,
-                Message = $"Invoice {invoiceNumber} has been voided." +
-                          (invoice.DeliveryHeaderId.HasValue ? $" Linked delivery {invoice.DeliveryHeader!.DeliveryNumber} reset for re-invoicing." : ""),
-                Severity = "Warning"
-            };
-            _db.ActivityLogs.Add(activityLog);
-            await _db.SaveChangesAsync();
-
-            await transaction.CommitAsync();
-
-            _logger.LogInformation("Successfully voided invoice {InvoiceNumber}", invoiceNumber);
-
-            return Ok(new
-            {
-                success = true,
-                message = $"Invoice {invoiceNumber} has been successfully voided.",
-                invoiceNumber = invoice.InvoiceNumber,
-                invoiceId = invoice.InvoiceID,
-                isVoided = invoice.IsVoided,
-                status = (int)invoice.Status,
-                statusText = GetStatusText(invoice.Status),
-                linkedDeliveryReset = invoice.DeliveryHeaderId.HasValue,
-                linkedDeliveryNumber = invoice.DeliveryHeader?.DeliveryNumber
-            });
-        }
-        catch (Exception ex)
-        {
-            await transaction.RollbackAsync();
-            _logger.LogError(ex, "Failed to void invoice {InvoiceNumber}", invoiceNumber);
-
-            var activityLog = new ActivityLog
-            {
-                EventType = "InvoiceVoidFailed",
-                ReferenceID = invoiceNumber,
-                Message = $"Failed to void invoice {invoiceNumber}: {ex.Message}",
-                Severity = "Error"
-            };
-            _db.ActivityLogs.Add(activityLog);
-            await _db.SaveChangesAsync();
-
-            return StatusCode(500, $"Failed to void invoice: {ex.Message}");
-        }
-    }
-
     [HttpGet]
     public async Task<ActionResult<IEnumerable<InvoiceResponseDto>>> GetAllInvoices()
     {
@@ -441,7 +339,7 @@ public class InvoicesController : ControllerBase
                     .Where(c => c.CustomerCode == i.CustomerNumber)
                     .Select(c => c.CustomerName)
                     .FirstOrDefault() ?? string.Empty,
-                InvoiceAmount = i.InvoiceAmount,
+                InvoiceAmount = i.InvoiceAmount * 100,
                 InvoicedDate = i.InvoicedDate,
                 Status = (int)i.Status,
                 StatusText = GetStatusText(i.Status),
@@ -736,6 +634,71 @@ public class InvoicesController : ControllerBase
         }
     }
 
+    /// <summary>
+    /// Void invoice by SAP invoice number.
+    /// Transactional operation that voids the invoice and blocks the delivery from re-billing.
+    /// </summary>
+    [HttpPost("by-sap-number/{invoiceNumber}/void")]
+    public async Task<IActionResult> VoidInvoiceBySapNumber(string invoiceNumber)
+    {
+        if (string.IsNullOrWhiteSpace(invoiceNumber))
+        {
+            return BadRequest("Invoice number is required.");
+        }
+
+        // Start explicit transaction for atomicity
+        using var transaction = await _db.Database.BeginTransactionAsync();
+        try
+        {
+            // Look up the invoice by its SAP target number
+            var invoice = await _db.Invoices
+                .Include(i => i.DeliveryHeader)
+                .FirstOrDefaultAsync(i => i.InvoiceNumber == invoiceNumber);
+
+            if (invoice == null)
+            {
+                return NotFound($"Invoice with SAP number {invoiceNumber} not found.");
+            }
+
+            // Set invoice status to Voided
+            invoice.Status = Invoice.InvoiceStatus.Voided;
+
+            // Traverse to the associated DeliveryHeader and set billing status to blocked
+            if (invoice.DeliveryHeader != null)
+            {
+                invoice.DeliveryHeader.BillingStatus = DeliveryHeader.DeliveryBillingStatus.BillingBlocked;
+            }
+
+            await _db.SaveChangesAsync();
+
+            // Commit transaction
+            await transaction.CommitAsync();
+
+            _logger.LogInformation(
+                "Invoice {InvoiceNumber} voided and delivery {DeliveryNumber} billing blocked.",
+                invoiceNumber,
+                invoice.DeliveryHeader?.DeliveryNumber ?? "N/A");
+
+            return Ok(new
+            {
+                success = true,
+                message = $"Invoice {invoiceNumber} has been voided and associated delivery billing blocked.",
+                invoiceNumber = invoiceNumber,
+                deliveryNumber = invoice.DeliveryHeader?.DeliveryNumber,
+                invoiceStatus = "Voided",
+                deliveryBillingStatus = invoice.DeliveryHeader?.BillingStatus.ToString()
+            });
+        }
+        catch (Exception ex)
+        {
+            // Rollback transaction on error
+            await transaction.RollbackAsync();
+
+            _logger.LogError(ex, "Error voiding invoice {InvoiceNumber}", invoiceNumber);
+            return StatusCode(500, $"Internal error during invoice void: {ex.Message}");
+        }
+    }
+
     private static string GetStatusText(Invoice.InvoiceStatus status)
     {
         return status switch
@@ -745,8 +708,7 @@ public class InvoicesController : ControllerBase
             Invoice.InvoiceStatus.SyncFailed => "Sync Failed",
             Invoice.InvoiceStatus.SyncedToSap => "Synced to SAP",
             Invoice.InvoiceStatus.Canceled => "Canceled",
-            Invoice.InvoiceStatus.NotInvoiced => "Not Invoiced",
-            Invoice.InvoiceStatus.InvoiceBlocked => "Invoice Blocked",
+            Invoice.InvoiceStatus.Voided => "Voided",
             _ => "Unknown"
         };
     }

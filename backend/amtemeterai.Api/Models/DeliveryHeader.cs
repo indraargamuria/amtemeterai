@@ -15,6 +15,37 @@ public class DeliveryHeader
         Canceled = 3 // 🚀 ADDED: Explicit state tracking for cancellation
     }
 
+    /// <summary>
+    /// Billing lifecycle states for delivery orders.
+    /// Tracks the complete transactional flow from initial fulfillment through SAP invoicing,
+    /// invoice void handling, financial lock enforcement, and re-billing authorization.
+    /// </summary>
+    public enum DeliveryBillingStatus
+    {
+        /// <summary>
+        /// Initial state: Delivery confirmed by buyer, ready for initial invoice generation and SAP sync.
+        /// </summary>
+        Unbilled = 1,
+
+        /// <summary>
+        /// Invoice successfully generated and synced to SAP ERP.
+        /// Delivery has completed its billing cycle.
+        /// </summary>
+        Billed = 2,
+
+        /// <summary>
+        /// Invoice voided by SAP; re-billing is strictly prohibited in this lock state.
+        /// Delivery must be explicitly released by SAP before any new invoice can be generated.
+        /// </summary>
+        BillingBlocked = 3,
+
+        /// <summary>
+        /// SAP has explicitly unlocked the delivery order, allowing a new invoice simulation run.
+        /// The system can now proceed to generate a fresh invoice for this delivery.
+        /// </summary>
+        ReadyToRebill = 4
+    }
+
     public int DeliveryID { get; set; }
 
     public int CustomerID { get; set; }
@@ -38,6 +69,13 @@ public class DeliveryHeader
     public bool Received { get; set; }
     public DateTime? ReceiveDate { get; set; }
     public bool Invoiced { get; set; }
+
+    /// <summary>
+    /// Tracks the billing lifecycle state for this delivery order.
+    /// Defaults to Unbilled, allowing initial invoice generation.
+    /// Transitions through Billed → BillingBlocked → ReadyToRebill based on SAP interactions.
+    /// </summary>
+    public DeliveryBillingStatus BillingStatus { get; set; } = DeliveryBillingStatus.Unbilled;
 
     public string? Plant { get; set; }           
     public string? SalesPersonName { get; set; }

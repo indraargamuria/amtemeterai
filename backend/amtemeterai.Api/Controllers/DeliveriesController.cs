@@ -1208,6 +1208,7 @@ public class DeliveriesController : ControllerBase
     /// Trigger actual SAP Invoice creation for a delivery number
     /// This endpoint calls the real SAP billing endpoint to create an invoice
     /// Now supports idempotent execution - returns existing invoice if already created
+    /// Enforces business interlocking rules for billing lifecycle management
     /// </summary>
     [HttpPost("{deliveryNumber}/invoice")]
     [Authorize]
@@ -1233,6 +1234,33 @@ public class DeliveriesController : ControllerBase
             if (delivery == null)
             {
                 return NotFound($"Delivery {deliveryNumber} not found.");
+            }
+
+            // === Step 1.5: Business Interlocking Rules ===
+            // Guard: Reject if delivery is in BillingBlocked state
+            if (delivery.BillingStatus == DeliveryHeader.DeliveryBillingStatus.BillingBlocked)
+            {
+                _logger.LogWarning(
+                    "Invoice creation rejected for delivery {DeliveryNumber}: Billing is barred while delivery remains blocked.",
+                    deliveryNumber);
+
+                return StatusCode(403, "Invoicing is barred while this delivery order remains blocked.");
+            }
+
+            // Guard: Reject if delivery is already Billed (duplicate invoicing prevention)
+            if (delivery.BillingStatus == DeliveryHeader.DeliveryBillingStatus.Billed)
+            {
+                _logger.LogWarning(
+                    "Invoice creation rejected for delivery {DeliveryNumber}: Duplicate invoicing attempt - delivery already billed.",
+                    deliveryNumber);
+
+                return BadRequest(new
+                {
+                    success = false,
+                    message = "Delivery has already been billed. Duplicate invoicing is not permitted.",
+                    deliveryNumber = deliveryNumber,
+                    billingStatus = delivery.BillingStatus.ToString()
+                });
             }
 
             // === Step 2: Idempotency Check - Local Database Invoice Lookup ===
@@ -1309,6 +1337,18 @@ public class DeliveriesController : ControllerBase
                 // Mark delivery as invoiced
                 delivery.Invoiced = true;
 
+                // Advance billing status to Billed when syncing from Unbilled or ReadyToRebill
+                if (delivery.BillingStatus == DeliveryHeader.DeliveryBillingStatus.Unbilled ||
+                    delivery.BillingStatus == DeliveryHeader.DeliveryBillingStatus.ReadyToRebill)
+                {
+                    delivery.BillingStatus = DeliveryHeader.DeliveryBillingStatus.Billed;
+
+                    _logger.LogInformation(
+                        "Delivery {DeliveryNumber} billing status advanced from {PreviousStatus} to Billed",
+                        deliveryNumber,
+                        delivery.BillingStatus == DeliveryHeader.DeliveryBillingStatus.Billed ? "PreSync" : "ReadyToRebill");
+                }
+
                 // Create invoice record
                 var invoice = new Invoice
                 {
@@ -1374,13 +1414,12 @@ public class DeliveriesController : ControllerBase
     }
 
     /// <summary>
-    /// Mark a delivery as ready for re-invoicing.
-    /// Resets the invoiced flag and optionally voids any linked invoice,
-    /// allowing the billing background processor to evaluate the delivery again.
+    /// Authorization Release API - Clears financial lock on a delivery order.
+    /// Invoked exclusively by SAP to unlock a delivery for re-billing.
     /// </summary>
-    [HttpPost("by-number/{deliveryNumber}/ready-to-reinvoice")]
+    [HttpPost("by-number/{deliveryNumber}/release-rebill")]
     [Authorize]
-    public async Task<IActionResult> MarkDeliveryReadyToReinvoice(string deliveryNumber)
+    public async Task<IActionResult> ReleaseRebillAuthorization(string deliveryNumber)
     {
         if (string.IsNullOrWhiteSpace(deliveryNumber))
         {
@@ -1388,92 +1427,58 @@ public class DeliveriesController : ControllerBase
         }
 
         _logger.LogInformation(
-            "Starting ready-to-reinvoice operation for delivery {DeliveryNumber}",
+            "Processing release-rebill authorization for delivery {DeliveryNumber}",
             deliveryNumber);
 
         try
         {
-            // Step 1: Find the delivery with its linked invoice
+            // Look up the DeliveryHeader via its business identifier (DeliveryNumber)
             var delivery = await _db.DeliveryHeaders
-                .Include(d => d.Invoices)
                 .FirstOrDefaultAsync(d => d.DeliveryNumber == deliveryNumber);
 
             if (delivery == null)
-                return NotFound($"Delivery {deliveryNumber} not found.");
-
-            if (!delivery.Invoiced)
-                return BadRequest($"Delivery {deliveryNumber} is not marked as invoiced. No action needed.");
-
-            // Execute within explicit transaction for atomicity
-            using var transaction = await _db.Database.BeginTransactionAsync();
-            try
             {
-                // Step 2: Reset delivery invoiced flag
-                delivery.Invoiced = false;
+                return NotFound($"Delivery {deliveryNumber} not found.");
+            }
 
-                // Step 3: Find and void any linked invoices
-                var linkedInvoice = delivery.Invoices.FirstOrDefault();
-                bool invoiceVoided = false;
-
-                if (linkedInvoice != null)
+            // Guard check: Ensure its current BillingStatus is exactly BillingBlocked
+            if (delivery.BillingStatus != DeliveryHeader.DeliveryBillingStatus.BillingBlocked)
+            {
+                return BadRequest(new
                 {
-                    // Mark the invoice as voided
-                    linkedInvoice.IsVoided = true;
-                    linkedInvoice.Status = Invoice.InvoiceStatus.Canceled;
-                    invoiceVoided = true;
-
-                    _logger.LogInformation(
-                        "Voided linked invoice {InvoiceNumber} for delivery {DeliveryNumber}",
-                        linkedInvoice.InvoiceNumber,
-                        deliveryNumber);
-                }
-
-                await _db.SaveChangesAsync();
-
-                // Log the activity
-                await LogActivity(
-                    "DeliveryMarkedReadyToReinvoice",
-                    deliveryNumber,
-                    $"Delivery {deliveryNumber} marked as ready for re-invoicing." +
-                    (invoiceVoided ? $" Linked invoice {linkedInvoice?.InvoiceNumber} voided." : ""),
-                    "Info"
-                );
-
-                await transaction.CommitAsync();
-
-                _logger.LogInformation(
-                    "Successfully marked delivery {DeliveryNumber} as ready for re-invoicing",
-                    deliveryNumber);
-
-                return Ok(new
-                {
-                    success = true,
-                    message = $"Delivery {deliveryNumber} is now ready for re-invoicing.",
-                    deliveryNumber = deliveryNumber,
-                    invoiced = delivery.Invoiced,
-                    linkedInvoiceVoided = invoiceVoided,
-                    linkedInvoiceNumber = linkedInvoice?.InvoiceNumber
+                    success = false,
+                    message = $"Delivery {deliveryNumber} is not in BillingBlocked status. Current status: {delivery.BillingStatus}",
+                    currentStatus = delivery.BillingStatus.ToString()
                 });
             }
-            catch (Exception ex)
+
+            // Transition the state to ReadyToRebill
+            delivery.BillingStatus = DeliveryHeader.DeliveryBillingStatus.ReadyToRebill;
+            await _db.SaveChangesAsync();
+
+            _logger.LogInformation(
+                "Delivery {DeliveryNumber} billing status transitioned from BillingBlocked to ReadyToRebill",
+                deliveryNumber);
+
+            await LogActivity(
+                "RebillAuthorizationReleased",
+                deliveryNumber,
+                $"SAP released re-billing authorization for delivery {deliveryNumber}",
+                "Info");
+
+            return Ok(new
             {
-                await transaction.RollbackAsync();
-                _logger.LogError(ex, "Transaction failed during ready-to-reinvoice for delivery {DeliveryNumber}", deliveryNumber);
-                throw;
-            }
+                success = true,
+                message = $"Delivery {deliveryNumber} has been released for re-billing.",
+                deliveryNumber = deliveryNumber,
+                previousStatus = "BillingBlocked",
+                newStatus = "ReadyToRebill"
+            });
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to mark delivery {DeliveryNumber} as ready for re-invoicing", deliveryNumber);
-
-            await LogActivity(
-                "ReadyToReinvoiceFailed",
-                deliveryNumber,
-                $"Failed to mark delivery as ready for re-invoicing: {ex.Message}",
-                "Error"
-            );
-
-            return StatusCode(500, $"Failed to mark delivery as ready for re-invoicing: {ex.Message}");
+            _logger.LogError(ex, "Error releasing re-billing authorization for delivery {DeliveryNumber}", deliveryNumber);
+            return StatusCode(500, $"Internal error during release authorization: {ex.Message}");
         }
     }
 }
