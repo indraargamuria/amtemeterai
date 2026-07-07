@@ -339,7 +339,13 @@ public class InvoicesController : ControllerBase
                     .Where(c => c.CustomerCode == i.CustomerNumber)
                     .Select(c => c.CustomerName)
                     .FirstOrDefault() ?? string.Empty,
+                // Legacy amount field
                 InvoiceAmount = i.InvoiceAmount * 100,
+                // New dual-currency fields
+                AmountForeign = i.AmountForeign * 100,
+                AmountLocal = i.AmountLocal * 100,
+                Currency = i.Currency,
+                ComplianceCategory = i.ComplianceCategory,
                 InvoicedDate = i.InvoicedDate,
                 Status = (int)i.Status,
                 StatusText = GetStatusText(i.Status),
@@ -348,15 +354,15 @@ public class InvoicesController : ControllerBase
                 SerialNumber = i.SerialNumber,
                 StampingStatus = (int)i.StampingStatus,
                 StampingStatusText = GetStampingStatusText(i.StampingStatus),
-                
+
                 // Check if any invoice printout document exists for this invoice
                 HasPrintoutDocument = _db.Documents.Any(d =>
                     d.InvoiceID == i.InvoiceID && d.Type == DocumentType.InvoicePrintOut),
 
                 // Pull the storage key that belongs to the 'printouts' directory structure
                 UnstampedStorageKey = _db.Documents
-                    .Where(d => d.InvoiceID == i.InvoiceID && 
-                                d.Type == DocumentType.InvoicePrintOut && 
+                    .Where(d => d.InvoiceID == i.InvoiceID &&
+                                d.Type == DocumentType.InvoicePrintOut &&
                                 d.StorageKey.Contains("/printouts/"))
                     .OrderByDescending(d => d.UploadedAt)
                     .Select(d => d.StorageKey)
@@ -364,8 +370,8 @@ public class InvoicesController : ControllerBase
 
                 // Pull the storage key that belongs to the 'stamped' directory structure
                 StampedStorageKey = _db.Documents
-                    .Where(d => d.InvoiceID == i.InvoiceID && 
-                                d.Type == DocumentType.InvoicePrintOut && 
+                    .Where(d => d.InvoiceID == i.InvoiceID &&
+                                d.Type == DocumentType.InvoicePrintOut &&
                                 d.StorageKey.Contains("/stamped/"))
                     .OrderByDescending(d => d.UploadedAt)
                     .Select(d => d.StorageKey)
@@ -381,6 +387,10 @@ public class InvoicesController : ControllerBase
             CustomerNumber = i.CustomerNumber,
             CustomerName = i.CustomerName,
             InvoiceAmount = i.InvoiceAmount,
+            AmountForeign = i.AmountForeign,
+            AmountLocal = i.AmountLocal,
+            Currency = i.Currency,
+            ComplianceCategory = i.ComplianceCategory,
             InvoicedDate = i.InvoicedDate,
             Status = i.Status,
             StatusText = i.StatusText,
@@ -390,15 +400,15 @@ public class InvoicesController : ControllerBase
             StampingStatus = i.StampingStatus,
             StampingStatusText = i.StampingStatusText,
             HasPrintoutDocument = i.HasPrintoutDocument,
-            
+
             UnstampedDocumentUrl = !string.IsNullOrEmpty(i.UnstampedStorageKey)
                 ? $"{baseApiUrl.TrimEnd('/')}/api/deliveries/files/download?key={Uri.EscapeDataString(i.UnstampedStorageKey)}"
                 : null,
-                
+
             StampedDocumentUrl = !string.IsNullOrEmpty(i.StampedStorageKey)
                 ? $"{baseApiUrl.TrimEnd('/')}/api/deliveries/files/download?key={Uri.EscapeDataString(i.StampedStorageKey)}"
                 : null,
-                
+
             CreatedAt = i.InvoicedDate
         }).ToList();
 
@@ -424,6 +434,11 @@ public class InvoicesController : ControllerBase
             InvoiceNumber = invoice.InvoiceNumber,
             CustomerNumber = invoice.CustomerNumber,
             InvoiceAmount = invoice.InvoiceAmount,
+            // New dual-currency fields
+            AmountForeign = invoice.AmountForeign,
+            AmountLocal = invoice.AmountLocal,
+            Currency = invoice.Currency,
+            ComplianceCategory = invoice.ComplianceCategory,
             InvoicedDate = invoice.InvoicedDate,
             Status = (int)invoice.Status,
             StatusText = GetStatusText(invoice.Status),

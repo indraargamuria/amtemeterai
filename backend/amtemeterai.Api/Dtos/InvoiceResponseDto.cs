@@ -6,7 +6,16 @@ public class InvoiceResponseDto
     public string InvoiceNumber { get; set; } = string.Empty;
     public string CustomerNumber { get; set; } = string.Empty;
     public string? CustomerName { get; set; }
+
+    // Legacy single amount field - kept for backward compatibility
     public decimal InvoiceAmount { get; set; }
+
+    // New dual-currency fields
+    public decimal AmountForeign { get; set; }
+    public decimal AmountLocal { get; set; }
+    public string Currency { get; set; } = string.Empty;
+    public string? ComplianceCategory { get; set; }
+
     public DateTime InvoicedDate { get; set; }
     public int Status { get; set; }
     public string StatusText { get; set; } = string.Empty;

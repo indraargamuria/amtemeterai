@@ -105,6 +105,27 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
             .IsRequired()
             .HasMaxLength(50);
 
+        // Dual-currency amount fields with precision configuration
+        modelBuilder.Entity<Invoice>()
+            .Property(x => x.AmountForeign)
+            .HasPrecision(18, 2);
+
+        modelBuilder.Entity<Invoice>()
+            .Property(x => x.AmountLocal)
+            .HasPrecision(18, 2);
+
+        // Currency code configuration
+        modelBuilder.Entity<Invoice>()
+            .Property(x => x.Currency)
+            .IsRequired()
+            .HasMaxLength(10);
+
+        // Compliance category (optional BC/NonBC classification)
+        modelBuilder.Entity<Invoice>()
+            .Property(x => x.ComplianceCategory)
+            .HasMaxLength(10);
+
+        // Legacy InvoiceAmount configuration for backward compatibility
         modelBuilder.Entity<Invoice>()
             .Property(x => x.InvoiceAmount)
             .HasPrecision(18, 2);

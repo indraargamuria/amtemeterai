@@ -14,49 +14,92 @@ public class SapBillingRequestDto
 
 /// <summary>
 /// Response DTO for simulated SAP billing endpoint
-/// Contains the simulated SAP invoice data
+/// Updated to support dual-currency and BC/NonBC classification
+/// Matches the updated SAP ERP response schema
 /// </summary>
 public class SapBillingResponseDto
 {
     /// <summary>
-    /// Simulated SAP invoice number
+    /// SAP invoice number
     /// </summary>
-    public string SapInvoiceNumber { get; set; } = string.Empty;
+    public string sapInvoiceNumber { get; set; } = string.Empty;
 
     /// <summary>
     /// Billing date from SAP
     /// </summary>
-    public DateTime BillingDate { get; set; }
+    public DateTime billingDate { get; set; }
 
     /// <summary>
-    /// Invoice amount
+    /// Foreign currency amount (e.g., USD)
     /// </summary>
-    public decimal Amount { get; set; }
+    public decimal amountForeign { get; set; }
 
     /// <summary>
-    /// Currency code (e.g., IDR)
+    /// Local currency amount (e.g., IDR)
     /// </summary>
-    public string Currency { get; set; } = "IDR";
+    public decimal amountLocal { get; set; }
+
+    /// <summary>
+    /// Currency code (e.g., "USD", "IDR")
+    /// </summary>
+    public string currency { get; set; } = string.Empty;
 
     /// <summary>
     /// Customer number from SAP
     /// </summary>
-    public string CustomerNumber { get; set; } = string.Empty;
+    public string customerNumber { get; set; } = string.Empty;
 
     /// <summary>
     /// Customer name from SAP
     /// </summary>
-    public string CustomerName { get; set; } = string.Empty;
+    public string customerName { get; set; } = string.Empty;
 
     /// <summary>
-    /// PO Number reference
+    /// PO Number reference from SAP
     /// </summary>
-    public string? PoNumber { get; set; }
+    public string poNumber { get; set; } = string.Empty;
 
     /// <summary>
     /// Delivery number reference
     /// </summary>
+    public string deliveryNumber { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Response message from SAP (MESSAGE field)
+    /// </summary>
+    public string MESSAGE { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Compliance/Integration classification indicator
+    /// Values: "BC" or "NonBC"
+    /// </summary>
+    public string ComplianceCategory { get; set; } = string.Empty;
+
+    // Legacy properties for backward compatibility (will be deprecated)
+    [Obsolete("Use sapInvoiceNumber")]
+    public string SapInvoiceNumber { get; set; } = string.Empty;
+
+    [Obsolete("Use billingDate")]
+    public DateTime BillingDate { get; set; }
+
+    [Obsolete("Use amountForeign/amountLocal")]
+    public decimal Amount { get; set; }
+
+    [Obsolete("Use currency")]
+    public string Currency { get; set; } = "IDR";
+
+    [Obsolete("Use customerNumber")]
+    public string CustomerNumber { get; set; } = string.Empty;
+
+    [Obsolete("Use customerName")]
+    public string CustomerName { get; set; } = string.Empty;
+
+    [Obsolete("Use poNumber")]
+    public string? PoNumber { get; set; }
+
+    [Obsolete("Use deliveryNumber")]
     public string DeliveryNumber { get; set; } = string.Empty;
-    
+
+    [Obsolete("Use MESSAGE")]
     public string Message { get; set; } = string.Empty;
 }

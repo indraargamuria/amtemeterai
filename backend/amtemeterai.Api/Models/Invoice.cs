@@ -26,7 +26,36 @@ public class Invoice
     public string InvoiceNumber { get; set; } = null!;
     public string CustomerNumber { get; set; } = null!;
 
+    // Old single amount field - deprecated in favor of dual-currency support
+    // Kept for backward compatibility during migration
+    [Obsolete("Use AmountLocal and AmountForeign for dual-currency support")]
     public decimal InvoiceAmount { get; set; }
+
+    /// <summary>
+    /// Foreign currency amount (e.g., USD) from SAP ERP
+    /// Precision: 18 digits, 2 decimal places
+    /// </summary>
+    public decimal AmountForeign { get; set; }
+
+    /// <summary>
+    /// Local currency amount (e.g., IDR) from SAP ERP
+    /// Precision: 18 digits, 2 decimal places
+    /// </summary>
+    public decimal AmountLocal { get; set; }
+
+    /// <summary>
+    /// Currency code (ISO 4217)
+    /// Required, Max Length 10 (e.g., "USD", "IDR", "EUR")
+    /// </summary>
+    public string Currency { get; set; } = null!;
+
+    /// <summary>
+    /// Compliance/integration classification from SAP
+    /// "BC" - Bank Compliance category
+    /// "NonBC" - Non-Bank Compliance category
+    /// </summary>
+    public string? ComplianceCategory { get; set; }
+
     public DateTime InvoicedDate { get; set; }
 
     public InvoiceStatus Status { get; set; } = InvoiceStatus.Draft;
