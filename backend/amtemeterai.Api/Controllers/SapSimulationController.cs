@@ -60,14 +60,17 @@ public class SapSimulationController : ControllerBase
 
         // Calculate total amount from delivery lines
         // Using sales quantity * a simulated unit price for demo purposes
-        decimal totalAmount = 0;
+        decimal totalLocalAmount = 0;
+        decimal totalForeignAmount = 0;
         string? buyerPONumber = null;
         if (delivery.Lines != null && delivery.Lines.Any())
         {
             // Simulate unit price calculation: 10000 IDR per sales quantity unit
             foreach (var line in delivery.Lines)
             {
-                totalAmount += line.SalesQuantity * 10000;
+                totalLocalAmount += line.SalesQuantity * 10000;
+                // Simulate foreign amount (e.g., USD): divide by 15000
+                totalForeignAmount += line.SalesQuantity * 10000 / 15000;
                 // Get BuyerPONumber from first line (now at line level)
                 if (buyerPONumber == null && !string.IsNullOrEmpty(line.BuyerPONumber))
                 {
@@ -75,6 +78,9 @@ public class SapSimulationController : ControllerBase
                 }
             }
         }
+
+        // Determine compliance category based on delivery type
+        string complianceCategory = delivery.Type == DeliveryHeader.DeliveryType.BC ? "BC" : "NonBC";
 
         // Generate simulated SAP invoice number
         // Format: SAP-INV-yyyyMMddHHmmss
@@ -84,19 +90,25 @@ public class SapSimulationController : ControllerBase
         {
             SapInvoiceNumber = sapInvoiceNumber,
             BillingDate = DateTime.UtcNow,
-            Amount = totalAmount,
-            Currency = "IDR",
+            // New dual-currency fields
+            AmountLocal = totalLocalAmount,
+            AmountForeign = totalForeignAmount,
+            Currency = "USD",
+            ComplianceCategory = complianceCategory,
             CustomerNumber = delivery.Customer?.CustomerCode ?? "UNKNOWN",
             CustomerName = delivery.Customer?.CustomerName ?? "Unknown Customer",
-            PoNumber = buyerPONumber,
-            DeliveryNumber = delivery.DeliveryNumber
+            PoNumber = buyerPONumber ?? string.Empty,
+            DeliveryNumber = delivery.DeliveryNumber,
+            Message = "Billing simulation completed successfully"
         };
 
         _logger.LogInformation(
-            "SAP Simulation: Generated invoice {SapInvoiceNumber} for {CustomerNumber} with amount {Amount:C}",
+            "SAP Simulation: Generated invoice {SapInvoiceNumber} for {CustomerNumber} - Foreign: {AmountForeign} {Currency}, Local: {AmountLocal}",
             response.SapInvoiceNumber,
             response.CustomerNumber,
-            response.Amount);
+            response.AmountForeign,
+            response.Currency,
+            response.AmountLocal);
 
         return Ok(response);
     }

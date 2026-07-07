@@ -114,9 +114,11 @@ public class TestController : ControllerBase
             }
 
             _logger.LogInformation(
-                "Step A Complete: Received SAP invoice {SapInvoiceNumber} with amount {Amount}",
+                "Step A Complete: Received SAP invoice {SapInvoiceNumber} - Foreign: {AmountForeign} {Currency}, Local: {AmountLocal}",
                 sapBillingData.SapInvoiceNumber,
-                sapBillingData.Amount);
+                sapBillingData.AmountForeign,
+                sapBillingData.Currency,
+                sapBillingData.AmountLocal);
 
             // === STEP B: Upload dummy PDF as delivery printout ===
             _logger.LogInformation(
@@ -192,7 +194,13 @@ public class TestController : ControllerBase
                 {
                     InvoiceNumber = sapBillingData.SapInvoiceNumber,
                     CustomerNumber = sapBillingData.CustomerNumber,
-                    InvoiceAmount = sapBillingData.Amount,
+                    // Use local amount for legacy field
+                    InvoiceAmount = sapBillingData.AmountLocal,
+                    // New dual-currency fields
+                    AmountForeign = sapBillingData.AmountForeign,
+                    AmountLocal = sapBillingData.AmountLocal,
+                    Currency = sapBillingData.Currency,
+                    ComplianceCategory = sapBillingData.ComplianceCategory,
                     InvoicedDate = sapBillingData.BillingDate,
                     Status = Invoice.InvoiceStatus.Draft,
                     DeliveryHeaderId = delivery.DeliveryID,
@@ -211,7 +219,8 @@ public class TestController : ControllerBase
                 {
                     EventType = "DeliverySettlementCompleted",
                     ReferenceID = deliveryNumber,
-                    Message = $"Delivery settlement completed. Invoice {sapBillingData.SapInvoiceNumber} created for {sapBillingData.Amount:C}",
+                    Message = $"Delivery settlement completed. Invoice {sapBillingData.SapInvoiceNumber} created. " +
+                              $"Foreign: {sapBillingData.AmountForeign} {sapBillingData.Currency}, Local: {sapBillingData.AmountLocal}",
                     Severity = "Success"
                 };
                 _db.ActivityLogs.Add(activityLog);
@@ -232,7 +241,7 @@ public class TestController : ControllerBase
                     Success = true,
                     Message = $"Settlement completed successfully. Invoice {sapBillingData.SapInvoiceNumber} created.",
                     InvoiceNumber = sapBillingData.SapInvoiceNumber,
-                    InvoiceAmount = sapBillingData.Amount,
+                    InvoiceAmount = sapBillingData.AmountLocal,
                     BillingDate = sapBillingData.BillingDate,
                     DocumentId = printoutDocument.DocumentID,
                     StorageKey = storageKey,

@@ -1327,10 +1327,10 @@ public class DeliveriesController : ControllerBase
 
             _logger.LogInformation(
                 "Received SAP invoice {SapInvoiceNumber} - Foreign: {AmountForeign} {Currency}, Local: {AmountLocal}",
-                sapBillingData.sapInvoiceNumber,
-                sapBillingData.amountForeign,
-                sapBillingData.currency,
-                sapBillingData.amountLocal);
+                sapBillingData.SapInvoiceNumber,
+                sapBillingData.AmountForeign,
+                sapBillingData.Currency,
+                sapBillingData.AmountLocal);
 
             // === Step 5: Database Updates (Transactional) ===
             using var transaction = await _db.Database.BeginTransactionAsync();
@@ -1353,16 +1353,16 @@ public class DeliveriesController : ControllerBase
                 // Create invoice record with dual-currency support
                 var invoice = new Invoice
                 {
-                    InvoiceNumber = sapBillingData.sapInvoiceNumber,
-                    CustomerNumber = sapBillingData.customerNumber,
+                    InvoiceNumber = sapBillingData.SapInvoiceNumber,
+                    CustomerNumber = sapBillingData.CustomerNumber,
                     // Legacy field for backward compatibility
-                    InvoiceAmount = sapBillingData.amountLocal,
+                    InvoiceAmount = sapBillingData.AmountLocal,
                     // New dual-currency fields
-                    AmountForeign = sapBillingData.amountForeign,
-                    AmountLocal = sapBillingData.amountLocal,
-                    Currency = sapBillingData.currency,
+                    AmountForeign = sapBillingData.AmountForeign,
+                    AmountLocal = sapBillingData.AmountLocal,
+                    Currency = sapBillingData.Currency,
                     ComplianceCategory = sapBillingData.ComplianceCategory,
-                    InvoicedDate = sapBillingData.billingDate,
+                    InvoicedDate = sapBillingData.BillingDate,
                     Status = Invoice.InvoiceStatus.Draft,
                     DeliveryHeaderId = delivery.DeliveryID,
                     StampingStatus = Invoice.InvoiceStampingStatus.NotStamped
@@ -1375,8 +1375,8 @@ public class DeliveriesController : ControllerBase
                 await LogActivity(
                     "SapInvoiceCreated",
                     deliveryNumber,
-                    $"SAP Invoice {sapBillingData.sapInvoiceNumber} created for delivery {deliveryNumber}. " +
-                    $"Foreign: {sapBillingData.amountForeign} {sapBillingData.currency}, Local: {sapBillingData.amountLocal}, Category: {sapBillingData.ComplianceCategory}",
+                    $"SAP Invoice {sapBillingData.SapInvoiceNumber} created for delivery {deliveryNumber}. " +
+                    $"Foreign: {sapBillingData.AmountForeign} {sapBillingData.Currency}, Local: {sapBillingData.AmountLocal}, Category: {sapBillingData.ComplianceCategory}",
                     "Success");
 
                 // Commit transaction
@@ -1392,9 +1392,9 @@ public class DeliveriesController : ControllerBase
                 return Ok(new DeliverySettlementResponseDto
                 {
                     Success = true,
-                    Message = sapBillingData.MESSAGE,
-                    InvoiceNumber = sapBillingData.sapInvoiceNumber,
-                    InvoiceAmount = sapBillingData.amountLocal,
+                    Message = sapBillingData.Message,
+                    InvoiceNumber = sapBillingData.SapInvoiceNumber,
+                    InvoiceAmount = sapBillingData.AmountLocal,
                     BillingDate = sapBillingData.BillingDate,
                     DeliveryNumber = deliveryNumber
                 });
