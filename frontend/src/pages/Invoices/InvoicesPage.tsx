@@ -73,6 +73,28 @@ export function InvoicesPage() {
     }).format(amount)
   }
 
+  const formatForeignCurrency = (amount: number, currency: string) => {
+    if (!currency || currency === "IDR") {
+      return formatCurrency(amount)
+    }
+    try {
+      return new Intl.NumberFormat("en-US", {
+        style: "currency",
+        currency: currency,
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+      }).format(amount / 100) // Convert back from cents
+    } catch {
+      return `${currency} ${(amount / 100).toFixed(2)}`
+    }
+  }
+
+  const getComplianceBadgeVariant = (category?: string): "default" | "success" | "warning" | "accent" | "outline" => {
+    if (category === "BC") return "success"
+    if (category === "NonBC") return "default"
+    return "outline"
+  }
+
   const getStatusVariant = (statusText: string): "default" | "success" | "warning" | "accent" | "outline" => {
     switch (statusText) {
       case "Draft": return "default"
@@ -198,7 +220,9 @@ export function InvoicesPage() {
                   <TableHead className="font-semibold text-brand-blue text-xs uppercase tracking-wider py-3 px-4">Invoice</TableHead>
                   <TableHead className="font-semibold text-brand-blue text-xs uppercase tracking-wider py-3 px-4">Customer</TableHead>
                   <TableHead className="font-semibold text-brand-blue text-xs uppercase tracking-wider py-3 px-4">Invoice Date</TableHead>
-                  <TableHead className="font-semibold text-brand-blue text-xs uppercase tracking-wider py-3 px-4 text-right">Amount</TableHead>
+                  <TableHead className="font-semibold text-brand-blue text-xs uppercase tracking-wider py-3 px-4 text-right">Local Amount</TableHead>
+                  <TableHead className="font-semibold text-brand-blue text-xs uppercase tracking-wider py-3 px-4 text-right">Foreign Amount</TableHead>
+                  <TableHead className="font-semibold text-brand-blue text-xs uppercase tracking-wider py-3 px-4">Category</TableHead>
                   <TableHead className="font-semibold text-brand-blue text-xs uppercase tracking-wider py-3 px-4">Serial</TableHead>
                   <TableHead className="font-semibold text-brand-blue text-xs uppercase tracking-wider py-3 px-4">Status</TableHead>
                   <TableHead className="font-semibold text-brand-blue text-xs uppercase tracking-wider py-3 px-4">Stamping</TableHead>
@@ -214,7 +238,7 @@ export function InvoicesPage() {
                   </TableRow>
                 ) : filteredInvoices.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={8} className="text-center text-brand-blue/50 py-12">
+                    <TableCell colSpan={9} className="text-center text-brand-blue/50 py-12">
                       {invoices.length === 0 ? "No invoices found" : "No invoices match your search"}
                     </TableCell>
                   </TableRow>
@@ -250,11 +274,36 @@ export function InvoicesPage() {
                         </span>
                       </TableCell>
 
-                      {/* Amount */}
+                      {/* Local Amount */}
                       <TableCell className="py-2.5 px-4 text-right">
                         <span className="text-sm font-semibold text-brand-blue tabular-nums">
-                          {formatCurrency(invoice.invoiceAmount)}
+                          {formatCurrency(invoice.amountLocal)}
                         </span>
+                      </TableCell>
+
+                      {/* Foreign Amount */}
+                      <TableCell className="py-2.5 px-4 text-right">
+                        <div className="space-y-0.5">
+                          <span className="text-sm font-medium text-brand-blue/70 tabular-nums block">
+                            {formatForeignCurrency(invoice.amountForeign, invoice.currency)}
+                          </span>
+                          {invoice.currency && invoice.currency !== "IDR" && (
+                            <span className="text-xs text-brand-blue/40 tabular-nums">
+                              {invoice.currency}
+                            </span>
+                          )}
+                        </div>
+                      </TableCell>
+
+                      {/* Compliance Category Badge */}
+                      <TableCell className="py-2.5 px-4">
+                        {invoice.complianceCategory ? (
+                          <Badge variant={getComplianceBadgeVariant(invoice.complianceCategory)} className="text-xs">
+                            {invoice.complianceCategory}
+                          </Badge>
+                        ) : (
+                          <span className="text-xs text-brand-blue/30">—</span>
+                        )}
                       </TableCell>
 
                       {/* Serial Number */}

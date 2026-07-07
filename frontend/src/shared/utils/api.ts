@@ -124,7 +124,13 @@ export interface Invoice {
   invoiceNumber: string
   customerNumber: string
   customerName?: string
+  // Legacy single amount field - kept for backward compatibility
   invoiceAmount: number
+  // New dual-currency fields
+  amountForeign: number
+  amountLocal: number
+  currency: string
+  complianceCategory?: string // "BC" or "NonBC"
   invoicedDate: string
   status: number
   statusText: string
