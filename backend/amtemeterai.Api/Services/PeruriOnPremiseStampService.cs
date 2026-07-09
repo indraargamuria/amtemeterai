@@ -49,6 +49,14 @@ public interface IPeruriOnPremiseStampService
         public decimal Amount { get; set; }
         // Invoice printout storage key for streaming
         public string? PrintoutStorageKey { get; set; }
+
+        // Optional PDF anchor coordinates for dynamic stamp positioning
+        // If provided, these will override the default hardcoded coordinates
+        public int? VisLLX { get; set; }
+        public int? VisLLY { get; set; }
+        public int? VisURX { get; set; }
+        public int? VisURY { get; set; }
+        public int? StampPageNumber { get; set; }
     }
 }
 
@@ -353,13 +361,14 @@ public class PeruriOnPremiseStampService : IPeruriOnPremiseStampService
 
                 refToken = sn,
                 jwToken = jwtToken,
-                visSignaturePage = 1,
-                // --- UPDATED COORDINATES FOR METADATA ALIGNMENT ---
-                visLLX = 428,
-                visLLY = 215,
-                visURX = 482,
-                visURY = 269, 
-                // --------------------------------------------------
+                visSignaturePage = request.StampPageNumber ?? 1,
+
+                // Dynamic Interlock: Use saved coordinates if available, otherwise fall back to defaults
+                visLLX = request.VisLLX ?? 428,
+                visLLY = request.VisLLY ?? 215,
+                visURX = request.VisURX ?? 482,
+                visURY = request.VisURY ?? 269,
+
                 profileName = "default",
                 docpass = "",
                 location = "Jakarta",

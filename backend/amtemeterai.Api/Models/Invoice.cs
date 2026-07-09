@@ -80,6 +80,38 @@ public class Invoice
     /// </summary>
     public int? QrImageDocumentId { get; set; }
 
+    // PDF Anchor Text Bounding Box Coordinates
+    // Calculated from "Notes" keyword position for dynamic e-Meterai stamping
+    /// <summary>
+    /// Lower-Left X coordinate of the e-Meterai stamp bounding box
+    /// Calculated as visURX - 54 to maintain 54x54 point stamp size
+    /// </summary>
+    public int? VisLLX { get; set; }
+
+    /// <summary>
+    /// Lower-Left Y coordinate of the e-Meterai stamp bounding box
+    /// Calculated as visURY - 54 to maintain 54x54 point stamp size
+    /// </summary>
+    public int? VisLLY { get; set; }
+
+    /// <summary>
+    /// Upper-Right X coordinate of the e-Meterai stamp bounding box
+    /// Hardcoded to 428 as per alignment requirements
+    /// </summary>
+    public int? VisURX { get; set; }
+
+    /// <summary>
+    /// Upper-Right Y coordinate of the e-Meterai stamp bounding box
+    /// Calculated dynamically from "Notes" keyword Y position with vertical offset
+    /// </summary>
+    public int? VisURY { get; set; }
+
+    /// <summary>
+    /// Page number where the "Notes" anchor text was found
+    /// Used to ensure stamping occurs on the correct page
+    /// </summary>
+    public int? StampPageNumber { get; set; }
+
     // 2. The property now references the renamed enum type perfectly
     public InvoiceStampingStatus StampingStatus { get; set; } = InvoiceStampingStatus.NotStamped;
 

@@ -22,6 +22,7 @@ public class InvoicesController : ControllerBase
     private readonly ILogger<InvoicesController> _logger;
     private readonly IPeriuriPdsService _periuriPdsService;
     private readonly IPeruriOnPremiseStampService? _peruriOnPremiseStampService;
+    private readonly IPdfAnchorService _pdfAnchorService;
 
     public InvoicesController(
         AppDbContext db,
@@ -29,6 +30,7 @@ public class InvoicesController : ControllerBase
         IStorageService storageService,
         ILogger<InvoicesController> logger,
         IPeriuriPdsService periuriPdsService,
+        IPdfAnchorService pdfAnchorService,
         IPeruriOnPremiseStampService? peruriOnPremiseStampService = null)
     {
         _db = db;
@@ -36,6 +38,7 @@ public class InvoicesController : ControllerBase
         _storageService = storageService;
         _logger = logger;
         _periuriPdsService = periuriPdsService;
+        _pdfAnchorService = pdfAnchorService;
         _peruriOnPremiseStampService = peruriOnPremiseStampService;
     }
 
@@ -206,7 +209,13 @@ public class InvoicesController : ControllerBase
                     PdfContent = pdfBytes,
                     CustomerName = invoice.DeliveryHeader?.Customer?.CustomerName ?? "Unknown",
                     CustomerNumber = invoice.CustomerNumber,
-                    Amount = invoice.InvoiceAmount
+                    Amount = invoice.InvoiceAmount,
+                    // Pass saved coordinates for dynamic stamp positioning
+                    VisLLX = invoice.VisLLX,
+                    VisLLY = invoice.VisLLY,
+                    VisURX = invoice.VisURX,
+                    VisURY = invoice.VisURY,
+                    StampPageNumber = invoice.StampPageNumber
                 };
 
                 var stampResult = await _peruriOnPremiseStampService.StampInvoiceAsync(stampRequest);
@@ -624,6 +633,55 @@ public class InvoicesController : ControllerBase
 
             _db.Documents.Add(documentRecord);
             await _db.SaveChangesAsync();
+
+            // Extract PDF anchor coordinates if this is a PDF file
+            if (contentType.StartsWith("application/pdf") || file.FileName.ToLowerInvariant().EndsWith(".pdf"))
+            {
+                try
+                {
+                    // Create a new stream for coordinate extraction (original stream was already consumed)
+                    using var pdfStream = file.OpenReadStream();
+                    var coordinates = await _pdfAnchorService.ExtractStampCoordinatesAsync(pdfStream);
+
+                    if (coordinates.HasValue)
+                    {
+                        // Update invoice with extracted coordinates
+                        invoice.VisLLX = coordinates.Value.visLLX;
+                        invoice.VisLLY = coordinates.Value.visLLY;
+                        invoice.VisURX = coordinates.Value.visURX;
+                        invoice.VisURY = coordinates.Value.visURY;
+                        invoice.StampPageNumber = coordinates.Value.stampPageNumber;
+
+                        await _db.SaveChangesAsync();
+
+                        _logger.LogInformation(
+                            "PDF anchor coordinates extracted for invoice {InvoiceNumber}: " +
+                            "LLX={VisLLX}, LLY={VisLLY}, URX={VisURX}, URY={VisURY}, Page={PageNumber}",
+                            invoice.InvoiceNumber,
+                            coordinates.Value.visLLX,
+                            coordinates.Value.visLLY,
+                            coordinates.Value.visURX,
+                            coordinates.Value.visURY,
+                            coordinates.Value.stampPageNumber);
+                    }
+                    else
+                    {
+                        _logger.LogWarning(
+                            "Could not find 'Notes' anchor text in PDF for invoice {InvoiceNumber}. " +
+                            "Will use default coordinates during stamping.",
+                            invoice.InvoiceNumber);
+                    }
+                }
+                catch (Exception coordEx)
+                {
+                    // Log coordinate extraction error but don't fail the upload
+                    _logger.LogError(
+                        coordEx,
+                        "Failed to extract PDF coordinates for invoice {InvoiceNumber}. " +
+                        "Will use default coordinates during stamping.",
+                        invoice.InvoiceNumber);
+                }
+            }
 
             _logger.LogInformation(
                 "Printout document '{FileName}' uploaded for invoice {InvoiceNumber}",

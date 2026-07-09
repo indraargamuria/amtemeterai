@@ -56,7 +56,7 @@ public class PeruriOptions
     /// Signing path: /adapter/pdfsigning/rest/docSigningZ
     /// Uses internal Docker DNS for container-to-container communication
     /// </summary>
-    public string KeyStamp { get; set; } = "http://signadapter:7777";
+    public string KeyStamp { get; set; } = "http://localhost:9999";
 
     /// <summary>
     /// Shared folder path for Docker named volume (relative to container filesystem)

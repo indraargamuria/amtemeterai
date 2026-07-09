@@ -80,6 +80,9 @@ builder.Services.AddScoped<IPeriuriPdsService, PeriuriPdsService>();
 builder.Services.AddScoped<IPeruriSessionService, PeruriSessionService>();
 builder.Services.AddScoped<IPeruriOnPremiseStampService, PeruriOnPremiseStampService>();
 
+// Register PDF Anchor Service for dynamic e-Meterai coordinate extraction
+builder.Services.AddScoped<IPdfAnchorService, PdfAnchorService>();
+
 // Register the named HttpClient that your DeliveriesController uses to talk to SAP
 builder.Services.AddHttpClient("SapClient", (serviceProvider, client) =>
 {
