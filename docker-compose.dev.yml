@@ -1,0 +1,21 @@
+# Docker Compose for Local Development
+# Use this when running backend locally via 'npm run dev'
+# Only signadapter runs in container with bind mount to local filesystem
+version: "3.9"
+
+services:
+  signadapter:
+    image: registry.perurica.co.id/e-meterai/signadapter:2.0
+    container_name: signadapter
+    restart: always
+    ports:
+      - "9999:7777"
+    environment:
+      ENV: STAGING
+      TZ: Asia/Jakarta
+    volumes:
+      - ./logs:/app/logs
+      # Bind mount to local backend directory for local development
+      # Backend runs on host (Windows), signadapter runs in container
+      # This allows the container to access files written by the local backend
+      - ./backend/amtemeterai.Api/sharefolder:/app/sharefolder

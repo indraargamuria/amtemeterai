@@ -10,7 +10,8 @@
       "mcp__ide__getDiagnostics",
       "Bash(find:*)",
       "Bash(ls:*)",
-      "Bash(dotnet add package:*)"
+      "Bash(dotnet add package:*)",
+      "Bash(docker exec:*)"
     ]
   }
 }

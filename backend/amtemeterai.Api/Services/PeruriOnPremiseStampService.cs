@@ -3,6 +3,7 @@ using amtemeterai.Api.Data;
 using amtemeterai.Api.Dtos;
 using amtemeterai.Api.Models;
 using Microsoft.Extensions.Options;
+using Microsoft.AspNetCore.Hosting;
 using System.IO;
 using System.Text.Json;
 
@@ -71,6 +72,7 @@ public class PeruriOnPremiseStampService : IPeruriOnPremiseStampService
     private readonly ILogger<PeruriOnPremiseStampService> _logger;
     private readonly AppDbContext _dbContext;
     private readonly IStorageService _storageService;
+    private readonly IWebHostEnvironment _webEnv;
 
     public PeruriOnPremiseStampService(
         IOptions<PeruriOptions> options,
@@ -78,7 +80,8 @@ public class PeruriOnPremiseStampService : IPeruriOnPremiseStampService
         IHttpClientFactory httpClientFactory,
         ILogger<PeruriOnPremiseStampService> logger,
         AppDbContext dbContext,
-        IStorageService storageService)
+        IStorageService storageService,
+        IWebHostEnvironment webEnv)
     {
         _options = options.Value;
         _sessionService = sessionService;
@@ -86,6 +89,7 @@ public class PeruriOnPremiseStampService : IPeruriOnPremiseStampService
         _logger = logger;
         _dbContext = dbContext;
         _storageService = storageService;
+        _webEnv = webEnv;
     }
 
     public async Task<IPeruriOnPremiseStampService.PeruriStampResult> StampInvoiceAsync(
@@ -99,44 +103,64 @@ public class PeruriOnPremiseStampService : IPeruriOnPremiseStampService
         };
 
         // =================================================================
-        // PHASE 1: TRANSIENT WORKSPACE PATH RESOLUTION (Docker Named Volume)
+        // PHASE 1: TRANSIENT WORKSPACE PATH RESOLUTION (Environment-Aware)
         // =================================================================
-        // Standardize base root directory tracks from injected configuration paths
-        string sharedRoot = _options.SharedFolder.Replace(Path.DirectorySeparatorChar, '/').TrimEnd('/');
+        // Dynamically resolve shared folder path based on environment
+        string absoluteRoot;
+        string payloadRoot;
 
-        // Separate processing contexts cleanly by using the absolute file tracking name
-        string unsignedDirPath = $"{sharedRoot}/UNSIGNED";
-        string stampDirPath = $"{sharedRoot}/STAMP";
-        string signedDirPath = $"{sharedRoot}/SIGNED";
+        if (_webEnv.IsDevelopment())
+        {
+            // Local development: backend runs on host, uses Windows path
+            absoluteRoot = Path.Combine(Directory.GetCurrentDirectory(), "sharefolder");
+            // Container still expects Linux-style paths
+            payloadRoot = "/app/sharefolder";
+
+            _logger.LogInformation("Running in local development mode. Using local sharefolder: {AbsoluteRoot}", absoluteRoot);
+
+            // Ensure the physical local folder exists
+            if (!Directory.Exists(absoluteRoot))
+            {
+                Directory.CreateDirectory(absoluteRoot);
+                _logger.LogInformation("Created local sharefolder directory at: {AbsoluteRoot}", absoluteRoot);
+            }
+        }
+        else
+        {
+            absoluteRoot = _options.SharedFolder.Replace(Path.DirectorySeparatorChar, '/').TrimEnd('/');
+            payloadRoot = absoluteRoot; // In production/docker, they match perfectly
+            _logger.LogInformation("Running in containerized mode. Using container sharefolder: {AbsoluteRoot}", absoluteRoot);
+        }
+
+        // Subdirectories used for Physical Host operations (creating folders, writing streams)
+        string unsignedDirPath = Path.Combine(absoluteRoot, "UNSIGNED");
+        string stampDirPath = Path.Combine(absoluteRoot, "STAMP");
+        string signedDirPath = Path.Combine(absoluteRoot, "SIGNED");
 
         // Guarantee system directories exist in the shared volumes architecture
         Directory.CreateDirectory(unsignedDirPath);
         Directory.CreateDirectory(stampDirPath);
         Directory.CreateDirectory(signedDirPath);
 
-        // Determine if container execution rules apply
-        bool isRunningInDocker = Directory.Exists("/app") || Environment.GetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER") == "true";
-
         // Fix Linux Permissions: Grant full 777 access to the subdirectories so the non-root signadapter user can read/write files safely
-        try
+        // Only apply in containerized environment
+        if (!_webEnv.IsDevelopment())
         {
-            if (isRunningInDocker)
+            try
             {
                 System.Diagnostics.Process.Start("chmod", $"-R 777 {unsignedDirPath} {stampDirPath} {signedDirPath}")?.WaitForExit();
                 _logger.LogInformation("Successfully adjusted Linux volume folder permissions to 777.");
             }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Could not adjust permissions via chmod. Proceeding anyway.");
+            }
         }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Could not adjust permissions via chmod. Proceeding anyway.");
-        }
-
-        _logger.LogInformation("Using root shared storage paths for processing instance: {Workspace}", sharedRoot);
 
         // Generate flat paths for files inside the shared root directories
-        string localPdfPath = $"{unsignedDirPath}/{invoiceNumber}.pdf";
-        string localQrPath = $"{stampDirPath}/{invoiceNumber}_qr.png";
-        string localSignedPath = $"{signedDirPath}/stamped_{invoiceNumber}.pdf";
+        string localPdfPath = Path.Combine(unsignedDirPath, $"{invoiceNumber}.pdf");
+        string localQrPath = Path.Combine(stampDirPath, $"{invoiceNumber}_qr.png");
+        string localSignedPath = Path.Combine(signedDirPath, $"stamped_{invoiceNumber}.pdf");
         // Local files for cleanup tracking
         List<string> transientFiles = new List<string>();
 
@@ -340,24 +364,49 @@ public class PeruriOnPremiseStampService : IPeruriOnPremiseStampService
             var signingClient = _httpClientFactory.CreateClient();
             signingClient.Timeout = TimeSpan.FromSeconds(15);
 
-            string targetUrl = _options.KeyStamp;
-
-            if (!isRunningInDocker)
+            // Dynamically resolve Peruri adapter base URL based on environment
+            string peruriBaseUrl;
+            if (_webEnv.IsDevelopment())
             {
-                targetUrl = targetUrl.Replace("signadapter:7777", "localhost:9999");
+                // Local development environment lookup targeting host machine exposed ports
+                peruriBaseUrl = "http://localhost:9999";
                 _logger.LogInformation("Running in local development mode. Routing KeyStamp endpoint to localhost:9999");
             }
+            else
+            {
+                // Containerized network landscape utilizing internal bridge network DNS
+                peruriBaseUrl = _options.KeyStamp;
+                _logger.LogInformation("Running in containerized mode. Routing KeyStamp endpoint to {TargetUrl}", peruriBaseUrl);
+            }
 
-            var signingUrl = $"{targetUrl.TrimEnd('/')}/adapter/pdfsigning/rest/docSigningZ";
+            var signingUrl = $"{peruriBaseUrl.TrimEnd('/')}/adapter/pdfsigning/rest/docSigningZ";
 
-            // Strip the leading "/app/" path prefix so the Peruri adapter does not double-prefix it to "/app/app/sharefolder"
+            // Normalize paths for KeyStamp signing request
+            // Convert physical host paths to container-relative paths
+            string NormalizePathForAdapter(string physicalPath, string absRoot, string payRoot)
+            {
+                // Convert physical path back to relative from the root, then combine with container target root
+                string relativePart = Path.GetRelativePath(absRoot, physicalPath).Replace('\\', '/');
+                string result = $"{payRoot.TrimEnd('/')}/{relativePart.TrimStart('/')}".Replace('\\', '/');
+
+                // Strip the /app/ prefix to prevent double-prefixing
+                // KeyStamp adapter ALWAYS runs in a container and internally adds /app/ prefix
+                // So we ALWAYS send paths like "sharefolder/..." not "/app/sharefolder/..."
+                if (result.StartsWith("/app/"))
+                {
+                    result = result.Substring(5); // Remove "/app/" prefix
+                }
+
+                return result;
+            }
+
             var signingRequest = new KeyStampSigningRequestDto
             {
                 certificatelevel = "NOT_CERTIFIED",
 
-                src = localPdfPath.StartsWith("/app/") ? localPdfPath.Substring(5) : localPdfPath,
-                dest = localSignedPath.StartsWith("/app/") ? localSignedPath.Substring(5) : localSignedPath,
-                spesimenPath = localQrPath.StartsWith("/app/") ? localQrPath.Substring(5) : localQrPath,
+                src = NormalizePathForAdapter(localPdfPath, absoluteRoot, payloadRoot),
+                dest = NormalizePathForAdapter(localSignedPath, absoluteRoot, payloadRoot),
+                spesimenPath = NormalizePathForAdapter(localQrPath, absoluteRoot, payloadRoot),
 
                 refToken = sn,
                 jwToken = jwtToken,
@@ -467,46 +516,53 @@ public class PeruriOnPremiseStampService : IPeruriOnPremiseStampService
         finally
         {
             // =================================================================
-            // ZERO-FOOTPRINT TRANSIENT WORKSPACE CLEANUP
+            // ZERO-FOOTPRINT TRANSIENT WORKSPACE CLEANUP (Skipped in Dev for Debugging)
             // =================================================================
-            _logger.LogInformation("PHASE 7: Zero-footprint cleanup - Clearing temporary workspace contents");
-
-            // Clean individual generated files first
-            foreach (var file in transientFiles)
+            if (_webEnv.IsDevelopment())
             {
+                _logger.LogInformation("DEBUGGING: Local development mode detected. SKIPPING file and subdirectory cleanup to preserve workspace states.");
+            }
+            else
+            {
+                _logger.LogInformation("PHASE 7: Zero-footprint cleanup - Clearing temporary workspace contents");
+
+                // Clean individual generated files first
+                foreach (var file in transientFiles)
+                {
+                    try
+                    {
+                        if (File.Exists(file))
+                        {
+                            File.Delete(file);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Failed to delete transient file: {Path}", file);
+                    }
+                }
+
+                // Safely delete contents of the subdirectories. DO NOT delete 'sharedRoot' directly because Docker locks it!
                 try
                 {
-                    if (File.Exists(file))
+                    if (Directory.Exists(unsignedDirPath))
                     {
-                        File.Delete(file);
+                        Directory.Delete(unsignedDirPath, true);
                     }
+                    if (Directory.Exists(stampDirPath))
+                    {
+                        Directory.Delete(stampDirPath, true);
+                    }
+                    if (Directory.Exists(signedDirPath))
+                    {
+                        Directory.Delete(signedDirPath, true);
+                    }
+                    _logger.LogInformation("PHASE 7 Complete: Subdirectories cleanly flushed.");
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogWarning(ex, "Failed to delete transient file: {Path}", file);
+                    _logger.LogError(ex, "Fallback directory clearing failed.");
                 }
-            }
-
-            // Safely delete contents of the subdirectories. DO NOT delete 'sharedRoot' directly because Docker locks it!
-            try
-            {
-                if (Directory.Exists(unsignedDirPath))
-                {
-                    Directory.Delete(unsignedDirPath, true);
-                }
-                if (Directory.Exists(stampDirPath))
-                {
-                    Directory.Delete(stampDirPath, true);
-                }
-                if (Directory.Exists(signedDirPath))
-                {
-                    Directory.Delete(signedDirPath, true);
-                }
-                _logger.LogInformation("PHASE 7 Complete: Subdirectories cleanly flushed.");
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Fallback directory clearing failed.");
             }
         }
     }
