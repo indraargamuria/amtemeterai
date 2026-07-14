@@ -1,0 +1,34 @@
+# =========================================================
+# OPEXIO CONFIGURATION
+# =========================================================
+
+# TITLE
+VITE_APP_TITLE=[DEV] OpexNOW
+
+# --- DATABASE CONFIGURATION ---
+DB_NAME=opexdb
+DB_USER=postgres
+DB_PASSWORD=postgres
+DB_PORT=5432
+
+# --- BACKEND SECURITY ---
+# Generate a unique, long random string for each customer
+JWT_SECRET=af326aa84d2198e82c5a8dce01f26d96cb29539d3c92e8028f10b58aa3df7204
+JWT_ISSUER=amtemeterai-api
+JWT_AUDIENCE=amtemeterai-web
+
+# MinIO
+MINIO_ROOT_USER=argo_storageadmin
+MINIO_ROOT_PASSWORD=argo_zP7-8WoQGnIecic96iAW
+
+# --- NETWORK SETTINGS ---
+# Set this to the customer's actual domain or IP address
+PUBLIC_BASE_URL=http://localhost
+API_BASE_URL=http://localhost
+
+
+# --- SAP CONFIGURATION ---
+SAP_BASE_URL=http://10.2.38.138:8000
+SAP_CLIENT=250
+SAP_USERNAME=OPEXCG01
+SAP_PASSWORD=Cikokol@12345678

@@ -1,7 +1,8 @@
 // Services/MinioStorageService.cs
 using Amazon.S3;
 using Amazon.S3.Model;
-using Microsoft.Extensions.Configuration;
+using amtemeterai.Api.Config;
+using Microsoft.Extensions.Options;
 using System;
 using System.IO;
 using System.Threading.Tasks;
@@ -12,20 +13,40 @@ namespace amtemeterai.Api.Services
     {
         private readonly IAmazonS3 _s3Client;
         private readonly string _bucketName;
+        private readonly MinioOptions _options;
 
-        public MinioStorageService(IConfiguration configuration)
+        public MinioStorageService(IOptions<MinioOptions> options)
         {
-            var minioConfig = configuration.GetSection("Minio");
-            
+            _options = options.Value;
+
+            // Validate required configuration
+            if (string.IsNullOrWhiteSpace(_options.Endpoint))
+            {
+                throw new InvalidOperationException("MinIO configuration error: 'Endpoint' is missing or empty.");
+            }
+            if (string.IsNullOrWhiteSpace(_options.AccessKey))
+            {
+                throw new InvalidOperationException("MinIO configuration error: 'AccessKey' is missing or empty.");
+            }
+            if (string.IsNullOrWhiteSpace(_options.SecretKey))
+            {
+                throw new InvalidOperationException("MinIO configuration error: 'SecretKey' is missing or empty.");
+            }
+            if (string.IsNullOrWhiteSpace(_options.BucketName))
+            {
+                throw new InvalidOperationException("MinIO configuration error: 'BucketName' is missing or empty.");
+            }
+
             var s3Config = new AmazonS3Config
             {
-                ServiceURL = $"http://{minioConfig["Endpoint"]}",
-                ForcePathStyle = true // This flag is mandatory for local MinIO routing
+                ServiceURL = _options.Secure
+                    ? $"https://{_options.Endpoint}"
+                    : $"http://{_options.Endpoint}",
+                ForcePathStyle = true // This flag is mandatory for MinIO routing
             };
 
-            _s3Client = new AmazonS3Client(minioConfig["AccessKey"], minioConfig["SecretKey"], s3Config);
-            _bucketName = minioConfig["BucketName"] 
-              ?? throw new InvalidOperationException("MinIO configuration error: 'BucketName' is missing in appsettings.json");
+            _s3Client = new AmazonS3Client(_options.AccessKey, _options.SecretKey, s3Config);
+            _bucketName = _options.BucketName;
         }
 
         public async Task DeleteFileAsync(string objectKey)

@@ -1,8 +1,12 @@
 namespace amtemeterai.Api.Config
 {
+    /// <summary>
+    /// Configuration options for SMTP email service
+    /// Uses MailKit for email transport with STARTTLS support
+    /// </summary>
     public class SmtpSettings
     {
-        public const string SectionName = "Smtp";
+        public const string SectionName = "SmtpSettings";
 
         public string Host { get; set; } = string.Empty;
         public int Port { get; set; }

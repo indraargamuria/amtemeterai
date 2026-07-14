@@ -29,6 +29,24 @@ builder.Services.Configure<SapOptions>(builder.Configuration.GetSection(SapOptio
 // 2026-06-09 - Configure Peruri Options for e-Meterai on-premise stamping
 builder.Services.Configure<PeruriOptions>(builder.Configuration.GetSection(PeruriOptions.SectionName));
 
+// Configure MinIO Options for object storage
+builder.Services.Configure<MinioOptions>(builder.Configuration.GetSection(MinioOptions.SectionName));
+
+// Configure JWT Options for authentication
+builder.Services.Configure<JwtOptions>(builder.Configuration.GetSection(JwtOptions.SectionName));
+
+// Configure Billing Sync Options for background service
+builder.Services.Configure<BillingSyncOptions>(builder.Configuration.GetSection(BillingSyncOptions.SectionName));
+
+// Configure Email Routing Options for staging/production routing
+builder.Services.Configure<EmailRoutingOptions>(builder.Configuration.GetSection(EmailRoutingOptions.SectionName));
+
+// Configure App Options for URL generation
+builder.Services.Configure<AppOptions>(builder.Configuration.GetSection(AppOptions.SectionName));
+
+// Configure Google Maps Options for geocoding
+builder.Services.Configure<GoogleMapsOptions>(builder.Configuration.GetSection(GoogleMapsOptions.SectionName));
+
 // 2026-04-30 - Add Controllers
 builder.Services.AddControllers();
 
@@ -152,6 +170,9 @@ builder.Services.AddAuthentication(options =>
         ClockSkew = TimeSpan.Zero
     };
 });
+
+// Bind JWT options for service injection (used by services that need JWT config)
+builder.Services.Configure<JwtOptions>(builder.Configuration.GetSection(JwtOptions.SectionName));
 
 builder.Services.AddAuthorization();
 

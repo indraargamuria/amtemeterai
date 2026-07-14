@@ -2,8 +2,10 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.EntityFrameworkCore;
+using amtemeterai.Api.Config;
 using amtemeterai.Api.Data;
 using amtemeterai.Api.Models;
+using Microsoft.Extensions.Options;
 using System.Text.Json;
 
 namespace amtemeterai.Api.Services;
@@ -12,25 +14,24 @@ public class BillingBackgroundService : BackgroundService
 {
     private readonly IServiceProvider _serviceProvider;
     private readonly ILogger<BillingBackgroundService> _logger;
-    private readonly IConfiguration _configuration;
+    private readonly BillingSyncOptions _options;
 
     public BillingBackgroundService(
         IServiceProvider serviceProvider,
         ILogger<BillingBackgroundService> logger,
-        IConfiguration configuration)
+        IOptions<BillingSyncOptions> options)
     {
         _serviceProvider = serviceProvider;
         _logger = logger;
-        _configuration = configuration;
+        _options = options.Value;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        _logger.LogInformation("Billing Background Service is starting.");
+        _logger.LogInformation("Billing Background Service is starting. Delay: {Delay} minutes, Check Interval: {Interval} minutes", _options.DelayMinutes, _options.CheckIntervalMinutes);
 
-        // Read configuration
-        var delayMinutes = _configuration.GetValue<int>("BillingSync:DelayMinutes", 30);
-        var checkIntervalMinutes = _configuration.GetValue<int>("BillingSync:CheckIntervalMinutes", 5);
+        var delayMinutes = _options.DelayMinutes;
+        var checkIntervalMinutes = _options.CheckIntervalMinutes;
 
         while (!stoppingToken.IsCancellationRequested)
         {

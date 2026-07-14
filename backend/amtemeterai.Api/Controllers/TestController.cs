@@ -1,10 +1,12 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
+using amtemeterai.Api.Config;
 using amtemeterai.Api.Data;
 using amtemeterai.Api.Dtos;
 using amtemeterai.Api.Models;
 using amtemeterai.Api.Services;
+using Microsoft.Extensions.Options;
 using System.Text.Json;
 
 namespace amtemeterai.Api.Controllers;
@@ -19,25 +21,24 @@ namespace amtemeterai.Api.Controllers;
 public class TestController : ControllerBase
 {
     private readonly AppDbContext _db;
-    private readonly IConfiguration _configuration;
+    private readonly AppOptions _appOptions;
     private readonly IStorageService _storageService;
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly ILogger<TestController> _logger;
-    private readonly string _baseApiUrl;
 
     public TestController(
         AppDbContext db,
-        IConfiguration configuration,
+        IOptions<AppOptions> appOptions,
         IStorageService storageService,
         IHttpClientFactory httpClientFactory,
         ILogger<TestController> _logger)
     {
         _db = db;
-        _configuration = configuration;
+                _appOptions = appOptions.Value;
         _storageService = storageService;
         _httpClientFactory = httpClientFactory;
         this._logger = _logger;
-        _baseApiUrl = configuration["App:ApiBaseUrl"] ?? "http://localhost:8080";
+        // Remove _appOptions.ApiBaseUrl field - using _appOptions.ApiBaseUrl directly
     }
 
     /// <summary>
@@ -89,7 +90,7 @@ public class TestController : ControllerBase
 
             // Call the SAP simulation endpoint via HTTP
             var sapClient = _httpClientFactory.CreateClient();
-            var sapUrl = $"{_baseApiUrl}/api/sap-sim/billing";
+            var sapUrl = $"{_appOptions.ApiBaseUrl}/api/sap-sim/billing";
 
             // Get the authorization header from current request
             var authHeader = HttpContext.Request.Headers["Authorization"].ToString();
@@ -234,7 +235,7 @@ public class TestController : ControllerBase
                     "Step C Complete: Settlement transaction committed. Invoice ID: {InvoiceId}",
                     invoice.InvoiceID);
 
-                var downloadUrl = $"{_baseApiUrl.TrimEnd('/')}/api/deliveries/files/download?key={Uri.EscapeDataString(storageKey)}";
+                var downloadUrl = $"{_appOptions.ApiBaseUrl.TrimEnd('/')}/api/deliveries/files/download?key={Uri.EscapeDataString(storageKey)}";
 
                 return Ok(new DeliverySettlementResponseDto
                 {

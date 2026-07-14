@@ -1,0 +1,76 @@
+{
+  "Logging": {
+    "LogLevel": {
+      "Default": "Information",
+      "Microsoft.AspNetCore": "Warning",
+      "Microsoft.EntityFrameworkCore.Database.Command": "Warning"
+    }
+  },
+  "AllowedHosts": "*",
+
+  "ConnectionStrings": {
+    "DefaultConnection": "Host=${DB_HOST};Port=${DB_PORT};Database=${DB_NAME};Username=${DB_USER};Password=${DB_PASSWORD}"
+  },
+
+  "Cors": {
+    "Origins": "${CORS_ORIGINS}"
+  },
+
+  "App": {
+    "PublicBaseUrl": "${PUBLIC_BASE_URL}",
+    "ApiBaseUrl": "${API_BASE_URL}"
+  },
+
+  "CustomerSource": "Erp",
+
+  "Jwt": {
+    "Key": "${JWT_SECRET}",
+    "Issuer": "${JWT_ISSUER}",
+    "Audience": "${JWT_AUDIENCE}"
+  },
+
+  "SapOptions": {
+    "BaseUrl": "${SAP_BASE_URL}",
+    "Client": "${SAP_CLIENT}",
+    "Username": "${SAP_USERNAME}",
+    "Password": "${SAP_PASSWORD}"
+  },
+
+  "Peruri": {
+    "BackendStg": "${PERURI_BACKEND_STG}",
+    "Stampv2Stg": "${PERURI_STAMP_V2_STG}",
+    "InventoryStg": "${PERURI_INVENTORY_STG}",
+    "User": "${PERURI_USER}",
+    "Password": "${PERURI_PASSWORD}",
+    "KeyStamp": "${PERURI_KEYSTAMP_DOCKER}",
+    "SharedFolder": "${PERURI_SHARED_FOLDER}",
+    "TokenExpiryBufferMinutes": "${PERURI_TOKEN_EXPIRY_BUFFER_MINUTES}"
+  },
+
+  "Minio": {
+    "Endpoint": "${MINIO_ENDPOINT}",
+    "AccessKey": "${MINIO_ACCESS_KEY}",
+    "SecretKey": "${MINIO_SECRET_KEY}",
+    "BucketName": "${MINIO_BUCKET_NAME}",
+    "Secure": "${MINIO_SECURE}"
+  },
+
+  "SmtpSettings": {
+    "Host": "${SMTP_HOST}",
+    "Port": "${SMTP_PORT}",
+    "EnableSsl": "${SMTP_ENABLE_SSL}",
+    "Username": "${SMTP_USERNAME}",
+    "Password": "${SMTP_PASSWORD}",
+    "SenderEmail": "${SMTP_SENDER_EMAIL}",
+    "SenderName": "${SMTP_SENDER_NAME}"
+  },
+
+  "GoogleMaps": {
+    "ApiKey": "${GOOGLE_MAPS_API_KEY}"
+  },
+
+  "BillingSync": {
+    "DelayMinutes": 30,
+    "CheckIntervalMinutes": 5
+  }
+}

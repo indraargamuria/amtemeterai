@@ -1,10 +1,12 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
+using amtemeterai.Api.Config;
 using amtemeterai.Api.Data;
 using amtemeterai.Api.Dtos;
 using amtemeterai.Api.Models;
 using amtemeterai.Api.Services;
+using Microsoft.Extensions.Options;
 using System.Text.Json;
 using System.Text;
 using System.IO;
@@ -17,7 +19,7 @@ namespace amtemeterai.Api.Controllers;
 public class InvoicesController : ControllerBase
 {
     private readonly AppDbContext _db;
-    private readonly IConfiguration _configuration;
+    private readonly AppOptions _appOptions;
     private readonly IStorageService _storageService;
     private readonly ILogger<InvoicesController> _logger;
     private readonly IPeriuriPdsService _periuriPdsService;
@@ -26,7 +28,7 @@ public class InvoicesController : ControllerBase
 
     public InvoicesController(
         AppDbContext db,
-        IConfiguration configuration,
+        IOptions<AppOptions> appOptions,
         IStorageService storageService,
         ILogger<InvoicesController> logger,
         IPeriuriPdsService periuriPdsService,
@@ -34,7 +36,7 @@ public class InvoicesController : ControllerBase
         IPeruriOnPremiseStampService? peruriOnPremiseStampService = null)
     {
         _db = db;
-        _configuration = configuration;
+        _appOptions = appOptions.Value;
         _storageService = storageService;
         _logger = logger;
         _periuriPdsService = periuriPdsService;
@@ -128,7 +130,7 @@ public class InvoicesController : ControllerBase
                 invoice.InvoiceNumber,
                 stampingResult.SerialNumber);
 
-            var baseApiUrl = _configuration["App:ApiBaseUrl"] ?? "http://localhost:8080";
+            var baseApiUrl = _appOptions.ApiBaseUrl ?? "http://localhost:8080";
 
             return Ok(new
             {
@@ -308,7 +310,7 @@ public class InvoicesController : ControllerBase
                 invoiceNumber,
                 serialNumber);
 
-            var baseApiUrl = _configuration["App:ApiBaseUrl"] ?? "http://localhost:8080";
+            var baseApiUrl = _appOptions.ApiBaseUrl ?? "http://localhost:8080";
 
             return Ok(new
             {
@@ -333,7 +335,7 @@ public class InvoicesController : ControllerBase
     [HttpGet]
     public async Task<ActionResult<IEnumerable<InvoiceResponseDto>>> GetAllInvoices()
     {
-        var baseApiUrl = _configuration["App:ApiBaseUrl"] ?? "http://localhost:8080";
+        var baseApiUrl = _appOptions.ApiBaseUrl ?? "http://localhost:8080";
 
         // Step 1: Query the database and filter by StorageKey path contents
         var rawInvoices = await _db.Invoices
@@ -427,7 +429,7 @@ public class InvoicesController : ControllerBase
     [HttpGet("{id:int}")]
     public async Task<ActionResult<InvoiceResponseDto>> GetInvoiceById(int id)
     {
-        var baseApiUrl = _configuration["App:ApiBaseUrl"] ?? "http://localhost:8080";
+        var baseApiUrl = _appOptions.ApiBaseUrl ?? "http://localhost:8080";
 
         var invoice = await _db.Invoices
             .Include(i => i.DeliveryHeader)
@@ -522,7 +524,7 @@ public class InvoicesController : ControllerBase
 
         await _db.SaveChangesAsync();
 
-        var baseApiUrl = _configuration["App:ApiBaseUrl"] ?? "http://localhost:8080";
+        var baseApiUrl = _appOptions.ApiBaseUrl ?? "http://localhost:8080";
 
         var response = new InvoiceResponseDto
         {
@@ -688,7 +690,7 @@ public class InvoicesController : ControllerBase
                 file.FileName,
                 invoice.InvoiceNumber);
 
-            var baseApiUrl = _configuration["App:ApiBaseUrl"] ?? "http://localhost:8080";
+            var baseApiUrl = _appOptions.ApiBaseUrl ?? "http://localhost:8080";
             var downloadUrl = $"{baseApiUrl.TrimEnd('/')}/api/deliveries/files/download?key={Uri.EscapeDataString(storageKey)}";
 
             return Ok(new

@@ -20,12 +20,12 @@ namespace amtemeterai.Api.Controllers;
 public class DeliveriesController : ControllerBase
 {
     private readonly AppDbContext _db;
-    private readonly IConfiguration _configuration;
+    private readonly AppOptions _appOptions;
+    private readonly GoogleMapsOptions _googleMapsOptions;
     private readonly IWebHostEnvironment _env;
     private readonly IStorageService _storageService;
-    private readonly string _googleApiKey;
-    private readonly IHttpClientFactory _httpClientFactory; 
-    private readonly SapOptions _sapOptions;               
+    private readonly IHttpClientFactory _httpClientFactory;
+    private readonly SapOptions _sapOptions;
     private readonly IServiceProvider _serviceProvider;
     private readonly ILogger<DeliveriesController> _logger;
 
@@ -45,7 +45,8 @@ public class DeliveriesController : ControllerBase
 
     public DeliveriesController(
         AppDbContext db,
-        IConfiguration configuration,
+        IOptions<AppOptions> appOptions,
+        IOptions<GoogleMapsOptions> googleMapsOptions,
         IWebHostEnvironment env,
         IStorageService storageService,
         IHttpClientFactory httpClientFactory,
@@ -54,12 +55,12 @@ public class DeliveriesController : ControllerBase
         ILogger<DeliveriesController> logger)
     {
         _db = db;
-        _configuration = configuration;
+        _appOptions = appOptions.Value;
+        _googleMapsOptions = googleMapsOptions.Value;
         _env = env;
         _storageService = storageService;
         _httpClientFactory = httpClientFactory;
         _sapOptions = sapOptions.Value;
-        _googleApiKey = configuration["GoogleMaps:ApiKey"] ?? string.Empty;
         _serviceProvider = serviceProvider;
         _logger = logger;
     }
@@ -73,7 +74,7 @@ public class DeliveriesController : ControllerBase
     [HttpGet]
     public async Task<ActionResult<IEnumerable<DeliveryHeaderDto>>> GetAllDeliveries()
     {
-        var baseUrl = _configuration["App:PublicBaseUrl"] ?? "http://localhost:5173";
+        var baseUrl = _appOptions.PublicBaseUrl ?? "http://localhost:5173";
 
         // 🚀 1. CEK CONFIG MATRIX RBAC & CLAIMS DATA PLANT
         var isSysAdmin = User.IsInRole("sysadmin");
@@ -196,7 +197,7 @@ public class DeliveriesController : ControllerBase
             }
         }
 
-        var baseApiUrl = _configuration["App:ApiBaseUrl"] ?? "http://localhost:8080";
+        var baseApiUrl = _appOptions.ApiBaseUrl ?? "http://localhost:8080";
 
         // 🆕 Lookup associated invoice number if it exists
         var associatedInvoiceNumber = await _db.Invoices
@@ -370,7 +371,7 @@ public class DeliveriesController : ControllerBase
 
         if (associatedDocs != null && associatedDocs.Any())
         {
-            string baseUrl = _configuration["App:ApiBaseUrl"] ?? "http://localhost:8080";
+            string baseUrl = _appOptions.ApiBaseUrl ?? "http://localhost:8080";
 
             foreach (var doc in associatedDocs)
             {
@@ -685,10 +686,12 @@ public class DeliveriesController : ControllerBase
             var client = _httpClientFactory.CreateClient("SapClient");
             
             // 🎯 Use dynamic absolute URL matching the CreateSapInvoice connection strategy
-            // Falling back to your explicit dev IP string if configuration properties evaluate to empty
-            string baseSapUrl = !string.IsNullOrEmpty(_sapOptions.BaseUrl) 
-                ? _sapOptions.BaseUrl.TrimEnd('/') 
-                : "http://10.2.38.138:8000";
+            // Use configured SAP base URL, throw if missing (no fallback to hardcoded value)
+            if (string.IsNullOrWhiteSpace(_sapOptions.BaseUrl))
+            {
+                throw new InvalidOperationException("SAP BaseUrl is not configured. Please check the SapOptions configuration.");
+            }
+            string baseSapUrl = _sapOptions.BaseUrl.TrimEnd('/');
 
             string sapClientParam = !string.IsNullOrEmpty(_sapOptions.Client) 
                 ? _sapOptions.Client 
@@ -983,7 +986,7 @@ public class DeliveriesController : ControllerBase
     private async Task<GeoLocationResult?> ReverseGeocodeAsync(double lat, double lng)
     {
         using var client = new HttpClient();
-        string url = $"https://maps.googleapis.com/maps/api/geocode/json?latlng={lat},{lng}&key={_googleApiKey}";
+        string url = $"{_googleMapsOptions.BaseUrl}/maps/api/geocode/json?latlng={lat},{lng}&key={_googleMapsOptions.ApiKey}";
         
         var jsonString = await client.GetStringAsync(url);
         // Console.WriteLine("=== RAW GOOGLE RESPONSE FOR LAPTOP ===");
@@ -1179,7 +1182,7 @@ public class DeliveriesController : ControllerBase
                 "Info"
             );
 
-            var baseApiUrl = _configuration["App:ApiBaseUrl"] ?? "http://localhost:8080";
+            var baseApiUrl = _appOptions.ApiBaseUrl ?? "http://localhost:8080";
             var downloadUrl = $"{baseApiUrl.TrimEnd('/')}/api/deliveries/files/download?key={Uri.EscapeDataString(storageKey)}";
 
             return Ok(new
@@ -1301,7 +1304,7 @@ public class DeliveriesController : ControllerBase
 
             // Use a clean client instance to avoid base address issues
             var sapClient = _httpClientFactory.CreateClient("SapClient");
-            var sapUrl = "http://10.2.38.138:8000/sap/bc/zr_createinv?sap-client=250";
+            var sapUrl = $"{_sapOptions.BaseUrl.TrimEnd('/')}/sap/bc/zr_createinv?sap-client={_sapOptions.Client}";
 
             var sapResponse = await sapClient.PostAsJsonAsync(sapUrl, sapRequest);
 
@@ -1387,7 +1390,7 @@ public class DeliveriesController : ControllerBase
                     deliveryNumber);
 
                 // === Step 6: Return Values ===
-                var baseApiUrl = _configuration["App:ApiBaseUrl"] ?? "http://localhost:8080";
+                var baseApiUrl = _appOptions.ApiBaseUrl ?? "http://localhost:8080";
 
                 return Ok(new DeliverySettlementResponseDto
                 {

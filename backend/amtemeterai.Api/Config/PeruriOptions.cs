@@ -21,42 +21,45 @@ public class PeruriOptions
     /// <summary>
     /// Backend staging URL base address
     /// Used for user login API calls
-    /// Default (Staging): https://backendservicestg.e-meterai.co.id
+    /// Configured via appsettings.json: Peruri:BackendStg
     /// </summary>
-    public string BackendStg { get; set; } = "https://backendservicestg.e-meterai.co.id";
+    public string BackendStg { get; set; } = string.Empty;
 
     /// <summary>
     /// Stamp v2 staging URL base address
     /// Used for stamp/chanel operations
-    /// Default (Staging): https://stampv2stg.e-meterai.co.id
     /// Allotment path: /chanel/stampv2
+    /// Configured via appsettings.json: Peruri:Stampv2Stg
     /// </summary>
-    public string Stampv2Stg { get; set; } = "https://stampv2stg.e-meterai.co.id";
+    public string Stampv2Stg { get; set; } = string.Empty;
 
     /// <summary>
     /// Inventory staging URL base address
     /// Used for inventory management operations
+    /// Configured via appsettings.json: Peruri:InventoryStg
     /// </summary>
     public string InventoryStg { get; set; } = string.Empty;
 
     /// <summary>
     /// Peruri service account username for authentication
+    /// Configured via appsettings.json: Peruri:User
     /// </summary>
-    public string User { get; set; } = "opex_emet@yopmail.com";
+    public string User { get; set; } = string.Empty;
 
     /// <summary>
     /// Peruri service account password for authentication
+    /// Configured via appsettings.json: Peruri:Password
     /// </summary>
-    public string Password { get; set; } = "Emeterai123!";
+    public string Password { get; set; } = string.Empty;
 
     /// <summary>
     /// KeyStamp (Docker adapter) URL base address
     /// Used for on-premise PDF signing operations
-    /// Corrected (Container-to-Container): http://signadapter:7777
-    /// Signing path: /adapter/pdfsigning/rest/docSigningZ
-    /// Uses internal Docker DNS for container-to-container communication
+    /// Container-to-Container: http://signadapter:7777 (production)
+    /// Local Development: http://localhost:9999 (development)
+    /// Configured via appsettings.json: Peruri:KeyStamp
     /// </summary>
-    public string KeyStamp { get; set; } = "http://localhost:9999";
+    public string KeyStamp { get; set; } = string.Empty;
 
     /// <summary>
     /// Shared folder path for Docker named volume (relative to container filesystem)
@@ -74,12 +77,16 @@ public class PeruriOptions
     ///
     /// These paths are accessible to both containers, allowing the KeyStamp adapter
     /// to read from and write to the shared volume using absolute paths.
+    /// Configured via appsettings.json: Peruri:SharedFolder
+    /// Default: "/app/sharefolder" (Docker container path)
     /// </summary>
     public string SharedFolder { get; set; } = "/app/sharefolder";
 
     /// <summary>
     /// Token expiry buffer in minutes
     /// Tokens will be refreshed this many minutes before actual expiry
+    /// Configured via appsettings.json: Peruri:TokenExpiryBufferMinutes
+    /// Default: 5 minutes
     /// </summary>
     public int TokenExpiryBufferMinutes { get; set; } = 5;
 }

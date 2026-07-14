@@ -16,55 +16,58 @@ namespace amtemeterai.Api.Services
     public class EmailService : IEmailService
     {
         private readonly AppDbContext _db;
-        private readonly SmtpSettings _settings;
+        private readonly SmtpSettings _smtpSettings;
+        private readonly EmailRoutingOptions _routingOptions;
         private readonly ILogger<EmailService> _logger;
 
         public EmailService(
             AppDbContext db,
-            IOptions<SmtpSettings> settings,
+            IOptions<SmtpSettings> smtpSettings,
+            IOptions<EmailRoutingOptions> routingOptions,
             ILogger<EmailService> logger)
         {
             _db = db;
-            _settings = settings.Value;
+            _smtpSettings = smtpSettings.Value;
+            _routingOptions = routingOptions.Value;
             _logger = logger;
 
             // Diagnostic configuration validation to prevent silent empty connections
-            if (string.IsNullOrWhiteSpace(_settings.Host))
+            if (string.IsNullOrWhiteSpace(_smtpSettings.Host))
             {
                 throw new InvalidOperationException(
                     "SMTP configuration is invalid: 'Host' property is null or empty. " +
-                    "Check that the 'Smtp' section exists in appsettings.json with a valid 'Host' value. " +
-                    "Expected structure: \"Smtp\": { \"Host\": \"smtp.example.com\", \"Port\": 587, ... }");
+                    "Check that the 'SmtpSettings' section exists in appsettings.json with a valid 'Host' value. " +
+                    "Expected structure: \"SmtpSettings\": { \"Host\": \"smtp.example.com\", \"Port\": 587, ... }");
             }
 
-            if (_settings.Port <= 0)
+            if (_smtpSettings.Port <= 0)
             {
                 throw new InvalidOperationException(
                     "SMTP configuration is invalid: 'Port' must be a positive integer. " +
-                    $"Current value: {_settings.Port}");
+                    $"Current value: {_smtpSettings.Port}");
             }
 
-            if (string.IsNullOrWhiteSpace(_settings.Username))
+            if (string.IsNullOrWhiteSpace(_smtpSettings.Username))
             {
                 throw new InvalidOperationException(
                     "SMTP configuration is invalid: 'Username' property is null or empty.");
             }
 
-            if (string.IsNullOrWhiteSpace(_settings.Password))
+            if (string.IsNullOrWhiteSpace(_smtpSettings.Password))
             {
                 throw new InvalidOperationException(
                     "SMTP configuration is invalid: 'Password' property is null or empty.");
             }
 
-            if (string.IsNullOrWhiteSpace(_settings.SenderEmail))
+            if (string.IsNullOrWhiteSpace(_smtpSettings.SenderEmail))
             {
                 throw new InvalidOperationException(
                     "SMTP configuration is invalid: 'SenderEmail' property is null or empty.");
             }
 
             _logger.LogInformation(
-                "EmailService initialized with Host={Host}, Port={Port}, SenderEmail={SenderEmail}",
-                _settings.Host, _settings.Port, _settings.SenderEmail);
+                "EmailService initialized with Host={Host}, Port={Port}, SenderEmail={SenderEmail}, StagingMode={StagingMode}",
+                _smtpSettings.Host, _smtpSettings.Port, _smtpSettings.SenderEmail, _routingOptions.EnableStagingMode);
         }
 
         public async Task SendDeliveryConfirmationEmailAsync(int deliveryId)
@@ -81,26 +84,36 @@ namespace amtemeterai.Api.Services
             }
 
             // ====================================================================
-            // 🔒 RECIPIENT ROUTING ENGINE (TEMPORARY HARDCODE GUARD)
+            // 📧 RECIPIENT ROUTING ENGINE (Staging/Production Mode)
             // ====================================================================
-            // [STAGING MODE ACTIVE]: Direct delivery targets explicitly defined
-            string targetToEmail = "syarif@opexcg.com";
-            
-            // 🚀 FIXED: Array explicitly typed as string[] to eliminate compile-time inference issues (CS0826)
-            string[] targetCcEmails = new string[] 
-            { 
-                "arga@opexcg.com", 
-                "hari@opexcg.com" // You can append additional testing emails here
-            };
+            // Routes emails based on EnableStagingMode configuration:
+            // - Staging Mode (true): Routes to configured staging test addresses
+            // - Production Mode (false): Routes to actual delivery salesperson and customer
 
-            /* // TODO: UNCOMMENT THIS BLOCK TO ACTIVATE DYNAMIC PRODUCTION SALESPERSON ROUTING ON LIVE GO-LIVE
-            if (string.IsNullOrWhiteSpace(delivery.SalesPersonEmail))
+            string targetToEmail;
+            string[] targetCcEmails;
+
+            if (_routingOptions.EnableStagingMode)
             {
-                _logger.LogWarning("Email task skipped: SalesPersonEmail field is null or empty for Delivery: {Num}", delivery.DeliveryNumber);
-                return;
+                // STAGING MODE: Use configured staging addresses
+                targetToEmail = _routingOptions.StagingTo;
+                targetCcEmails = _routingOptions.StagingCc.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+                _logger.LogInformation("Email routing in STAGING mode: To={To}, CC={Cc}", targetToEmail, string.Join(", ", targetCcEmails));
             }
-            string targetToEmail = delivery.SalesPersonEmail;
-            */
+            else
+            {
+                // PRODUCTION MODE: Use actual delivery salesperson
+                if (string.IsNullOrWhiteSpace(delivery.SalesPersonEmail))
+                {
+                    _logger.LogWarning("Email task skipped: SalesPersonEmail field is null or empty for Delivery: {Num}", delivery.DeliveryNumber);
+                    return;
+                }
+                targetToEmail = delivery.SalesPersonEmail;
+                targetCcEmails = Array.Empty<string>();
+
+                _logger.LogInformation("Email routing in PRODUCTION mode: To={To}", targetToEmail);
+            }
             // ====================================================================
 
             // 2. Identify if any items were damaged, missing, or rejected
@@ -116,7 +129,7 @@ namespace amtemeterai.Api.Services
 
             // 4. Transport execution core via MailKit
             var message = new MimeMessage();
-            message.From.Add(new MailboxAddress(_settings.SenderName, _settings.SenderEmail));
+            message.From.Add(new MailboxAddress(_smtpSettings.SenderName, _smtpSettings.SenderEmail));
             
             // Assign Staging/Production Target Maps
             message.To.Add(new MailboxAddress("", targetToEmail));
@@ -139,8 +152,8 @@ namespace amtemeterai.Api.Services
             try
             {
                 // Connect using explicitly typed STARTTLS configurations required by Google
-                await client.ConnectAsync(_settings.Host, _settings.Port, SecureSocketOptions.StartTls);
-                await client.AuthenticateAsync(_settings.Username, _settings.Password);
+                await client.ConnectAsync(_smtpSettings.Host, _smtpSettings.Port, SecureSocketOptions.StartTls);
+                await client.AuthenticateAsync(_smtpSettings.Username, _smtpSettings.Password);
                 await client.SendAsync(message);
                 
                 // Join targets for cleaner structured trace logging
@@ -214,26 +227,36 @@ namespace amtemeterai.Api.Services
         public async Task<bool> SendPinEmailAsync(string customerEmail, string customerPin, string deliveryNumber)
         {
             // ====================================================================
-            // 🔒 RECIPIENT ROUTING ENGINE (TEMPORARY HARDCODE GUARD FOR UAT)
+            // 📧 RECIPIENT ROUTING ENGINE (Staging/Production Mode)
             // ====================================================================
-            // [STAGING MODE ACTIVE]: Direct PIN delivery targets explicitly defined
-            string targetToEmail = "syarif@opexcg.com";
-            
-            // 🚀 FIXED: Explicitly typed as string[] to clear up compilation (CS0826)
-            string[] targetCcEmails = new string[] 
-            { 
-                "arga@opexcg.com", 
-                "hari@opexcg.com" 
-            };
+            // Routes PIN emails based on EnableStagingMode configuration:
+            // - Staging Mode (true): Routes to configured staging test address
+            // - Production Mode (false): Routes to actual customer email
 
-            /* // TODO: UNCOMMENT THIS BLOCK TO ACTIVATE PRODUCTION LIVE CUSTOMER PIN ROUTING
-            if (string.IsNullOrWhiteSpace(customerEmail))
+            string targetToEmail;
+            string[] targetCcEmails;
+
+            if (_routingOptions.EnableStagingMode)
             {
-                _logger.LogWarning("Email task skipped: Customer email is null or empty for delivery {DeliveryNumber}", deliveryNumber);
-                return false;
+                // STAGING MODE: Use configured staging address
+                targetToEmail = _routingOptions.StagingPinTo;
+                targetCcEmails = _routingOptions.StagingCc.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+                _logger.LogInformation("PIN email routing in STAGING mode: To={To}, CC={Cc}", targetToEmail, string.Join(", ", targetCcEmails));
             }
-            string targetToEmail = customerEmail;
-            */
+            else
+            {
+                // PRODUCTION MODE: Use actual customer email
+                if (string.IsNullOrWhiteSpace(customerEmail))
+                {
+                    _logger.LogWarning("Email task skipped: Customer email is null or empty for delivery {DeliveryNumber}", deliveryNumber);
+                    return false;
+                }
+                targetToEmail = customerEmail;
+                targetCcEmails = Array.Empty<string>();
+
+                _logger.LogInformation("PIN email routing in PRODUCTION mode: To={To}", targetToEmail);
+            }
             // ====================================================================
 
             string subject = $"Verification Access Code - Document {deliveryNumber}";
@@ -241,7 +264,7 @@ namespace amtemeterai.Api.Services
             var emailBody = BuildPinEmailTemplate(customerPin, deliveryNumber);
 
             var message = new MimeMessage();
-            message.From.Add(new MailboxAddress(_settings.SenderName, _settings.SenderEmail));
+            message.From.Add(new MailboxAddress(_smtpSettings.SenderName, _smtpSettings.SenderEmail));
             
             // Assign Staging Target Maps
             message.To.Add(new MailboxAddress("", targetToEmail));
@@ -263,8 +286,8 @@ namespace amtemeterai.Api.Services
             using var client = new SmtpClient();
             try
             {
-                await client.ConnectAsync(_settings.Host, _settings.Port, SecureSocketOptions.StartTls);
-                await client.AuthenticateAsync(_settings.Username, _settings.Password);
+                await client.ConnectAsync(_smtpSettings.Host, _smtpSettings.Port, SecureSocketOptions.StartTls);
+                await client.AuthenticateAsync(_smtpSettings.Username, _smtpSettings.Password);
                 await client.SendAsync(message);
 
                 string ccTraceList = string.Join(", ", targetCcEmails);
