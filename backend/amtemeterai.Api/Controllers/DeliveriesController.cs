@@ -101,6 +101,19 @@ public class DeliveriesController : ControllerBase
         var isWarehouseRole = User.IsInRole("warehouse");
 
         // 4. Eksekusi penarikan data yang sudah ter-filter aman
+        // Also preload invoice data for state calculation
+        var deliveryIds = query.Select(d => d.DeliveryID).ToList();
+        var invoicesData = await _db.Invoices
+            .Where(i => deliveryIds.Contains(i.DeliveryHeaderId.Value))
+            .Select(i => new
+            {
+                i.DeliveryHeaderId,
+                i.InvoiceNumber,
+                IsVoided = i.Status == Invoice.InvoiceStatus.Canceled || i.Status == Invoice.InvoiceStatus.Voided,
+                IsActive = i.Status != Invoice.InvoiceStatus.Canceled && i.Status != Invoice.InvoiceStatus.Voided
+            })
+            .ToListAsync();
+
         var deliveries = await query
             .Include(d => d.Customer)
             .Select(d => new
@@ -118,6 +131,7 @@ public class DeliveriesController : ControllerBase
                 ReceiveDate = d.ReceiveDate,
                 Invoiced = d.Invoiced,
                 ReceiverToken = d.ReceiverToken,
+                BillingStatus = d.BillingStatus,
 
                 Plant = d.Plant,
                 Type = d.Type,
@@ -138,32 +152,75 @@ public class DeliveriesController : ControllerBase
             .OrderByDescending(d => d.DeliveryDate)
             .ToListAsync();
 
-        var result = deliveries.Select(d => new DeliveryHeaderDto
+        var result = deliveries.Select(d =>
         {
-            DeliveryId = d.DeliveryId,
-            DeliveryNumber = d.DeliveryNumber,
-            DeliveryDate = d.DeliveryDate,
-            DeliveryRemarks = d.DeliveryRemarks,
-            CustomerCode = d.CustomerCode ?? string.Empty,
-            CustomerName = d.CustomerName ?? string.Empty,
-            Received = d.Received,
-            ReceiveDate = d.ReceiveDate,
-            Invoiced = d.Invoiced,
-            PublicUrl = $"{baseUrl}/receive/{d.ReceiverToken}",
+            // Calculate invoice state based on invoices data
+            var deliveryInvoices = invoicesData.Where(i => i.DeliveryHeaderId == d.DeliveryId).ToList();
+            var activeInvoice = deliveryInvoices.FirstOrDefault(i => i.IsActive);
+            var hasCanceledInvoices = deliveryInvoices.Any(i => i.IsVoided);
 
-            Plant = d.Plant,
-            SalesPersonName = d.SalesPersonName,
-            SalesPersonEmail = d.SalesPersonEmail,
-            CityRegency = d.CityRegency,
-            District = d.District,
-            Province = d.Province,
-            PhotosCount = d.PhotosCount,
+            string invoiceState;
+            string invoiceNumber;
+            bool isInvoiced;
 
-            IsCanceled = d.IsCanceled,
-            CancelReason = d.CancelReason,
+            if (activeInvoice != null)
+            {
+                // Billed: Valid invoice exists that is not voided
+                invoiceState = "Billed";
+                invoiceNumber = activeInvoice.InvoiceNumber;
+                isInvoiced = true;
+            }
+            else if (hasCanceledInvoices)
+            {
+                // Determine between Blocked & Voided vs Ready to Re Billing
+                if (d.BillingStatus == DeliveryHeader.DeliveryBillingStatus.BillingBlocked)
+                {
+                    invoiceState = "Blocked & Voided";
+                }
+                else
+                {
+                    invoiceState = "Ready to Re Billing";
+                }
+                invoiceNumber = "-";
+                isInvoiced = false;
+            }
+            else
+            {
+                // Unbilled: No invoices exist
+                invoiceState = "Unbilled";
+                invoiceNumber = "-";
+                isInvoiced = false;
+            }
 
-            Type = (int?)d.Type,
-            Status = (int?)d.Status
+            return new DeliveryHeaderDto
+            {
+                DeliveryId = d.DeliveryId,
+                DeliveryNumber = d.DeliveryNumber,
+                DeliveryDate = d.DeliveryDate,
+                DeliveryRemarks = d.DeliveryRemarks,
+                CustomerCode = d.CustomerCode ?? string.Empty,
+                CustomerName = d.CustomerName ?? string.Empty,
+                Received = d.Received,
+                ReceiveDate = d.ReceiveDate,
+                Invoiced = isInvoiced,
+                InvoiceState = invoiceState,
+                InvoiceNumber = invoiceNumber,
+                PublicUrl = $"{baseUrl}/receive/{d.ReceiverToken}",
+
+                Plant = d.Plant,
+                SalesPersonName = d.SalesPersonName,
+                SalesPersonEmail = d.SalesPersonEmail,
+                CityRegency = d.CityRegency,
+                District = d.District,
+                Province = d.Province,
+                PhotosCount = d.PhotosCount,
+
+                IsCanceled = d.IsCanceled,
+                CancelReason = d.CancelReason,
+
+                Type = (int?)d.Type,
+                Status = (int?)d.Status
+            };
         }).ToList();
 
         return Ok(result);
@@ -199,11 +256,53 @@ public class DeliveriesController : ControllerBase
 
         var baseApiUrl = _appOptions.ApiBaseUrl ?? "http://localhost:8080";
 
-        // 🆕 Lookup associated invoice number if it exists
-        var associatedInvoiceNumber = await _db.Invoices
+        // Calculate invoice state based on delivery's invoices
+        var deliveryInvoices = await _db.Invoices
             .Where(i => i.DeliveryHeaderId == delivery.DeliveryID)
-            .Select(i => i.InvoiceNumber)
-            .FirstOrDefaultAsync();
+            .Select(i => new
+            {
+                i.InvoiceNumber,
+                IsActive = i.Status != Invoice.InvoiceStatus.Canceled && i.Status != Invoice.InvoiceStatus.Voided,
+                IsVoided = i.Status == Invoice.InvoiceStatus.Canceled || i.Status == Invoice.InvoiceStatus.Voided
+            })
+            .ToListAsync();
+
+        // Determine invoice state and number
+        string invoiceState;
+        string invoiceNumber;
+        bool isInvoiced;
+
+        var activeInvoice = deliveryInvoices.FirstOrDefault(i => i.IsActive);
+        var hasCanceledInvoices = deliveryInvoices.Any(i => i.IsVoided);
+
+        if (activeInvoice != null)
+        {
+            // Billed: Valid invoice exists that is not voided
+            invoiceState = "Billed";
+            invoiceNumber = activeInvoice.InvoiceNumber;
+            isInvoiced = true;
+        }
+        else if (hasCanceledInvoices)
+        {
+            // Determine between Blocked & Voided vs Ready to Re Billing
+            if (delivery.BillingStatus == DeliveryHeader.DeliveryBillingStatus.BillingBlocked)
+            {
+                invoiceState = "Blocked & Voided";
+            }
+            else
+            {
+                invoiceState = "Ready to Re Billing";
+            }
+            invoiceNumber = "-";
+            isInvoiced = false;
+        }
+        else
+        {
+            // Unbilled: No invoices exist
+            invoiceState = "Unbilled";
+            invoiceNumber = "-";
+            isInvoiced = false;
+        }
 
         var photos = await _db.Documents
             .Where(doc => doc.DeliveryID == deliveryId && doc.Type == DocumentType.DeliveryPhoto)
@@ -235,8 +334,9 @@ public class DeliveriesController : ControllerBase
             ReceiverNotes = delivery.ReceiverNotes,
             Received = delivery.Received,
             ReceiveDate = delivery.ReceiveDate,
-            Invoiced = delivery.Invoiced,
-            InvoiceNumber = associatedInvoiceNumber, 
+            Invoiced = isInvoiced,
+            InvoiceState = invoiceState,
+            InvoiceNumber = invoiceNumber,
             PublicUrl = GetPublicUrl(delivery.ReceiverToken, _appOptions.PublicBaseUrl),
 
             Plant = delivery.Plant,
@@ -305,11 +405,53 @@ public class DeliveriesController : ControllerBase
 
         if (data == null) return NotFound();
 
-        // 🆕 Lookup associated invoice number if it exists
-        var associatedInvoiceNumber = await _db.Invoices
+        // Calculate invoice state based on delivery's invoices
+        var deliveryInvoices = await _db.Invoices
             .Where(i => i.DeliveryHeaderId == data.DeliveryID)
-            .Select(i => i.InvoiceNumber)
-            .FirstOrDefaultAsync();
+            .Select(i => new
+            {
+                i.InvoiceNumber,
+                IsActive = i.Status != Invoice.InvoiceStatus.Canceled && i.Status != Invoice.InvoiceStatus.Voided,
+                IsVoided = i.Status == Invoice.InvoiceStatus.Canceled || i.Status == Invoice.InvoiceStatus.Voided
+            })
+            .ToListAsync();
+
+        // Determine invoice state and number
+        string invoiceState;
+        string invoiceNumber;
+        bool isInvoiced;
+
+        var activeInvoice = deliveryInvoices.FirstOrDefault(i => i.IsActive);
+        var hasCanceledInvoices = deliveryInvoices.Any(i => i.IsVoided);
+
+        if (activeInvoice != null)
+        {
+            // Billed: Valid invoice exists that is not voided
+            invoiceState = "Billed";
+            invoiceNumber = activeInvoice.InvoiceNumber;
+            isInvoiced = true;
+        }
+        else if (hasCanceledInvoices)
+        {
+            // Determine between Blocked & Voided vs Ready to Re Billing
+            if (data.BillingStatus == DeliveryHeader.DeliveryBillingStatus.BillingBlocked)
+            {
+                invoiceState = "Blocked & Voided";
+            }
+            else
+            {
+                invoiceState = "Ready to Re Billing";
+            }
+            invoiceNumber = "-";
+            isInvoiced = false;
+        }
+        else
+        {
+            // Unbilled: No invoices exist
+            invoiceState = "Unbilled";
+            invoiceNumber = "-";
+            isInvoiced = false;
+        }
 
         // Materialize the list in memory to prevent self-referencing query evaluation issues inside EF LINQ projection
         var dbLines = data.Lines ?? new List<DeliveryLine>();
@@ -329,8 +471,9 @@ public class DeliveriesController : ControllerBase
             ReceiverNotes = data.ReceiverNotes,
             Received = data.Received,
             ReceiveDate = data.ReceiveDate,
-            Invoiced = data.Invoiced,
-            InvoiceNumber = associatedInvoiceNumber, 
+            Invoiced = isInvoiced,
+            InvoiceState = invoiceState,
+            InvoiceNumber = invoiceNumber,
             PublicUrl = GetPublicUrl(data.ReceiverToken, _appOptions.PublicBaseUrl),
             Lines = dbLines.Select(l => 
             {

@@ -21,7 +21,17 @@ public class DeliveryResponseDto
     public bool Received { get; set; }
     public DateTime? ReceiveDate { get; set; }
     public bool Invoiced { get; set; }
-    public string? InvoiceNumber { get; set; }  // 🆕 Added: SAP invoice number from Invoices table
+
+    /// <summary>
+    /// Calculated invoice state based on the delivery's invoice lifecycle.
+    /// Possible values: "Unbilled", "Billed", "Blocked & Voided", "Ready to Re Billing"
+    /// </summary>
+    public string InvoiceState { get; set; } = string.Empty;
+
+    /// <summary>
+    /// The SAP invoice number when state is "Billed", otherwise "-" or empty
+    /// </summary>
+    public string InvoiceNumber { get; set; } = string.Empty;
 
     public string PublicUrl { get; set; } = null!;
 
