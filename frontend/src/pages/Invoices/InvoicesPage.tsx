@@ -463,7 +463,7 @@ export function InvoicesPage() {
                             variant={getComplianceBadgeVariant(invoice.complianceCategory)}
                             className="text-xs font-medium px-2 py-0.5"
                           >
-                            {invoice.complianceCategory}
+                            {invoice.complianceCategory === 'BC' ? 'BC' : 'Non-BC'}
                           </Badge>
                         ) : (
                           <span className="text-xs text-brand-blue/30">—</span>
