@@ -352,11 +352,11 @@ public class InvoicesController : ControllerBase
                     .FirstOrDefault() ?? string.Empty,
 #pragma warning disable CS0618 // Type or member is obsolete
                 // Legacy amount field for backward compatibility
-                InvoiceAmount = i.InvoiceAmount * 100,
+                InvoiceAmount = i.InvoiceAmount,
 #pragma warning restore CS0618
                 // New dual-currency fields
-                AmountForeign = i.AmountForeign * 100,
-                AmountLocal = i.AmountLocal * 100,
+                AmountForeign = i.AmountForeign,
+                AmountLocal = i.AmountLocal,
                 Currency = i.Currency,
                 ComplianceCategory = i.ComplianceCategory,
                 InvoicedDate = i.InvoicedDate,

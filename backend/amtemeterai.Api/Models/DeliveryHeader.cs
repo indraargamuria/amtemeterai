@@ -77,6 +77,13 @@ public class DeliveryHeader
     /// </summary>
     public DeliveryBillingStatus BillingStatus { get; set; } = DeliveryBillingStatus.Unbilled;
 
+    /// <summary>
+    /// Indicates whether the delivery order is open for structural modifications.
+    /// Default state for incoming dispatches. When closed, the delivery record
+    /// is locked from further structural changes while still allowing receipt submission.
+    /// </summary>
+    public bool IsOpen { get; set; } = true;
+
     public string? Plant { get; set; }           
     public string? SalesPersonName { get; set; }
     public string? SalesPersonEmail { get; set; }
