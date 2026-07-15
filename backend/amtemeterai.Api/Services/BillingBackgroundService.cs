@@ -144,7 +144,11 @@ public class BillingBackgroundService : BackgroundService
             {
                 InvoiceNumber = invoiceNumber,
                 CustomerNumber = delivery.Customer?.CustomerCode ?? string.Empty,
+#pragma warning disable CS0618 // Type or member is obsolete
                 InvoiceAmount = totalAmount,
+#pragma warning restore CS0618
+                AmountLocal = totalAmount,
+                AmountForeign = 0,
                 InvoicedDate = DateTime.UtcNow,
                 Status = Invoice.InvoiceStatus.Draft,
                 DeliveryHeaderId = delivery.DeliveryID,

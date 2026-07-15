@@ -211,7 +211,7 @@ public class InvoicesController : ControllerBase
                     PdfContent = pdfBytes,
                     CustomerName = invoice.DeliveryHeader?.Customer?.CustomerName ?? "Unknown",
                     CustomerNumber = invoice.CustomerNumber,
-                    Amount = invoice.InvoiceAmount,
+                    Amount = invoice.AmountLocal,
                     // Pass saved coordinates for dynamic stamp positioning
                     VisLLX = invoice.VisLLX,
                     VisLLY = invoice.VisLLY,
@@ -350,8 +350,10 @@ public class InvoicesController : ControllerBase
                     .Where(c => c.CustomerCode == i.CustomerNumber)
                     .Select(c => c.CustomerName)
                     .FirstOrDefault() ?? string.Empty,
-                // Legacy amount field
+#pragma warning disable CS0618 // Type or member is obsolete
+                // Legacy amount field for backward compatibility
                 InvoiceAmount = i.InvoiceAmount * 100,
+#pragma warning restore CS0618
                 // New dual-currency fields
                 AmountForeign = i.AmountForeign * 100,
                 AmountLocal = i.AmountLocal * 100,
@@ -444,7 +446,10 @@ public class InvoicesController : ControllerBase
             InvoiceID = invoice.InvoiceID,
             InvoiceNumber = invoice.InvoiceNumber,
             CustomerNumber = invoice.CustomerNumber,
+#pragma warning disable CS0618 // Type or member is obsolete
+            // Legacy amount field for backward compatibility
             InvoiceAmount = invoice.InvoiceAmount,
+#pragma warning restore CS0618
             // New dual-currency fields
             AmountForeign = invoice.AmountForeign,
             AmountLocal = invoice.AmountLocal,
@@ -502,7 +507,9 @@ public class InvoicesController : ControllerBase
         {
             InvoiceNumber = dto.InvoiceNumber,
             CustomerNumber = dto.CustomerNumber,
+#pragma warning disable CS0618 // Type or member is obsolete
             InvoiceAmount = dto.InvoiceAmount,
+#pragma warning restore CS0618
             InvoicedDate = dto.InvoicedDate,
             Status = Invoice.InvoiceStatus.Draft,
             DeliveryHeaderId = dto.DeliveryHeaderId,
@@ -531,7 +538,9 @@ public class InvoicesController : ControllerBase
             InvoiceID = invoice.InvoiceID,
             InvoiceNumber = invoice.InvoiceNumber,
             CustomerNumber = invoice.CustomerNumber,
+#pragma warning disable CS0618 // Type or member is obsolete
             InvoiceAmount = invoice.InvoiceAmount,
+#pragma warning restore CS0618
             InvoicedDate = invoice.InvoicedDate,
             Status = (int)invoice.Status,
             StatusText = GetStatusText(invoice.Status),

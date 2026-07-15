@@ -237,7 +237,7 @@ public class DeliveriesController : ControllerBase
             ReceiveDate = delivery.ReceiveDate,
             Invoiced = delivery.Invoiced,
             InvoiceNumber = associatedInvoiceNumber, 
-            PublicUrl = GetPublicUrl(delivery.ReceiverToken, _configuration["App:PublicBaseUrl"]),
+            PublicUrl = GetPublicUrl(delivery.ReceiverToken, _appOptions.PublicBaseUrl),
 
             Plant = delivery.Plant,
             SalesPersonName = delivery.SalesPersonName,
@@ -331,7 +331,7 @@ public class DeliveriesController : ControllerBase
             ReceiveDate = data.ReceiveDate,
             Invoiced = data.Invoiced,
             InvoiceNumber = associatedInvoiceNumber, 
-            PublicUrl = GetPublicUrl(data.ReceiverToken, _configuration["App:PublicBaseUrl"]),
+            PublicUrl = GetPublicUrl(data.ReceiverToken, _appOptions.PublicBaseUrl),
             Lines = dbLines.Select(l => 
             {
                 // 🎯 Identify if this line acts as a structural parent to any split-batch child lines
@@ -446,7 +446,7 @@ public class DeliveriesController : ControllerBase
             "Success"
         );
 
-        var publicUrl = GetPublicUrl(header.ReceiverToken, _configuration["App:PublicBaseUrl"]);
+        var publicUrl = GetPublicUrl(header.ReceiverToken, _appOptions.PublicBaseUrl);
         var qrCodeBase64 = QrCodeHelper.GenerateQrBase64(publicUrl);
 
         var response = new DeliveryCreateResponseDto
@@ -1285,7 +1285,9 @@ public class DeliveriesController : ControllerBase
                     Success = true,
                     Message = "Invoice already created previously",
                     InvoiceNumber = existingInvoice.InvoiceNumber,
+#pragma warning disable CS0618 // Type or member is obsolete
                     InvoiceAmount = existingInvoice.InvoiceAmount,
+#pragma warning restore CS0618
                     BillingDate = existingInvoice.InvoicedDate,
                     DeliveryNumber = deliveryNumber
                 });
@@ -1358,8 +1360,10 @@ public class DeliveriesController : ControllerBase
                 {
                     InvoiceNumber = sapBillingData.SapInvoiceNumber,
                     CustomerNumber = sapBillingData.CustomerNumber,
+#pragma warning disable CS0618 // Type or member is obsolete
                     // Legacy field for backward compatibility
                     InvoiceAmount = sapBillingData.AmountLocal,
+#pragma warning restore CS0618
                     // New dual-currency fields
                     AmountForeign = sapBillingData.AmountForeign,
                     AmountLocal = sapBillingData.AmountLocal,

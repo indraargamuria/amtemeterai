@@ -207,7 +207,7 @@ public class PeruriOnPremiseStampService : IPeruriOnPremiseStampService
                     _logger.LogInformation("Restoring missing physical QR PNG file from MinIO storage.");
                     try
                     {
-                        using var qrStream = await _storageService.GetFileStreamAsync(qrImageStorageKey);
+                        using var qrStream = await _storageService.GetFileStreamAsync(qrImageStorageKey!);
                         using var fileStream = new FileStream(localQrPath, FileMode.Create, FileAccess.Write, FileShare.None, 4096, useAsync: true);
                         await qrStream.CopyToAsync(fileStream);
                         await fileStream.FlushAsync(); 
@@ -279,7 +279,7 @@ public class PeruriOnPremiseStampService : IPeruriOnPremiseStampService
                 _logger.LogInformation("=== RECEIVED PERURI API RESPONSE PAYLOAD ===\n{Json}\n============================================", parsedJsonString);
 
                 var root = jsonDoc.RootElement;
-                string statusCode = root.GetProperty("statusCode").GetString();
+                string? statusCode = root.GetProperty("statusCode").GetString();
 
                 if (statusCode != "00")
                 {

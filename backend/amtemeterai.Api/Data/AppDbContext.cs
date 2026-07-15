@@ -126,9 +126,11 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
             .HasMaxLength(10);
 
         // Legacy InvoiceAmount configuration for backward compatibility
+#pragma warning disable CS0618 // Type or member is obsolete
         modelBuilder.Entity<Invoice>()
             .Property(x => x.InvoiceAmount)
             .HasPrecision(18, 2);
+#pragma warning restore CS0618
 
         // Invoice <-> DeliveryHeader (optional 1:many, but treated as 1:1)
         modelBuilder.Entity<Invoice>()

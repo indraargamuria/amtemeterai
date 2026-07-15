@@ -195,8 +195,10 @@ public class TestController : ControllerBase
                 {
                     InvoiceNumber = sapBillingData.SapInvoiceNumber,
                     CustomerNumber = sapBillingData.CustomerNumber,
+#pragma warning disable CS0618 // Type or member is obsolete
                     // Use local amount for legacy field
                     InvoiceAmount = sapBillingData.AmountLocal,
+#pragma warning restore CS0618
                     // New dual-currency fields
                     AmountForeign = sapBillingData.AmountForeign,
                     AmountLocal = sapBillingData.AmountLocal,
