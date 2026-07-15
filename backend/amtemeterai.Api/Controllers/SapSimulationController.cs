@@ -80,7 +80,9 @@ public class SapSimulationController : ControllerBase
         }
 
         // Determine compliance category based on delivery type
-        string complianceCategory = delivery.Type == DeliveryHeader.DeliveryType.BC ? "BC" : "NonBC";
+        // Match real SAP behavior: return "Non - BC" (with space) for NonBC type
+        // The ComplianceCategory computed property will normalize this to "NonBC"
+        string sapTypeValue = delivery.Type == DeliveryHeader.DeliveryType.BC ? "BC" : "Non - BC";
 
         // Generate simulated SAP invoice number
         // Format: SAP-INV-yyyyMMddHHmmss
@@ -94,7 +96,8 @@ public class SapSimulationController : ControllerBase
             AmountLocal = totalLocalAmount,
             AmountForeign = totalForeignAmount,
             Currency = "USD",
-            ComplianceCategory = complianceCategory,
+            // Set Type property (maps to "type" JSON field from SAP)
+            Type = sapTypeValue,
             CustomerNumber = delivery.Customer?.CustomerCode ?? "UNKNOWN",
             CustomerName = delivery.Customer?.CustomerName ?? "Unknown Customer",
             PoNumber = buyerPONumber ?? string.Empty,

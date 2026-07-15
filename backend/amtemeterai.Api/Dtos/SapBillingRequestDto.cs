@@ -82,9 +82,29 @@ public class SapBillingResponseDto
     public string Message { get; set; } = string.Empty;
 
     /// <summary>
-    /// Compliance/Integration classification indicator
-    /// Values: "BC" or "NonBC"
+    /// Compliance/Integration classification indicator from SAP
+    /// Maps from "type" field in SAP response
+    /// Raw values from SAP: "BC" or "Non - BC" (with space)
+    /// Will be normalized to: "BC" or "NonBC" (without space)
     /// </summary>
-    [JsonPropertyName("ComplianceCategory")]
-    public string ComplianceCategory { get; set; } = string.Empty;
+    [JsonPropertyName("type")]
+    public string Type { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Gets the normalized compliance category for database storage
+    /// Converts "BC" -> "BC" and "Non - BC" -> "NonBC"
+    /// </summary>
+    [JsonIgnore]
+    public string ComplianceCategory
+    {
+        get
+        {
+            if (string.IsNullOrWhiteSpace(Type))
+                return string.Empty;
+
+            // Normalize: "Non - BC" (with space) -> "NonBC" (without space)
+            // "BC" -> "BC"
+            return Type == "BC" ? "BC" : "NonBC";
+        }
+    }
 }
