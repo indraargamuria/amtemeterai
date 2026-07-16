@@ -74,6 +74,8 @@ interface DeliveryDetail {
   formattedAddress?: string | null
   photos?: DeliveryPhoto[]
   lines: DeliveryLine[]
+  // 🆕 Task 5: Invoice State Transition Matrix Field
+  invoiceState?: string // "Unbilled", "Billed", "Blocked & Voided", "Ready to Re Billing"
 }
 
 // 🆕 Toast notification interface
@@ -785,6 +787,38 @@ export function DeliveryDetailPage() {
     return <Badge variant="info" className="text-brand-blue/70 border-brand-blue/10">Pending</Badge>
   }
 
+  // 🆕 Task 5: Invoice State Badge Display
+  const getInvoiceStateBadge = (invoiceState: string | undefined) => {
+    switch (invoiceState) {
+      case "Billed":
+        return (
+          <Badge variant="success" className="text-emerald-700 border-emerald/20">
+            <span className="mr-1">✓</span>Billed
+          </Badge>
+        )
+      case "Unbilled":
+        return (
+          <Badge variant="info" className="text-brand-blue/70 border-brand-blue/10">
+            Unbilled
+          </Badge>
+        )
+      case "Blocked & Voided":
+        return (
+          <Badge variant="warning" className="text-rose-700 border-rose/20 bg-rose-50">
+            <span className="mr-1">✕</span>Blocked & Voided
+          </Badge>
+        )
+      case "Ready to Re Billing":
+        return (
+          <Badge variant="warning" className="text-amber-700 border-amber/20 bg-amber-50">
+            <span className="mr-1">↻</span>Ready to Re-Bill
+          </Badge>
+        )
+      default:
+        return null
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -833,33 +867,44 @@ export function DeliveryDetailPage() {
         </div>
         <div className="flex items-center gap-2">
           {getTypeBadge(delivery.type)}
-          {delivery.invoiced ? (
-            <Badge variant="outline" className="border-brand-blue/30 text-brand-blue/70">
-              Invoiced
-            </Badge>
-          ) : (
-            <Badge variant="outline" className="border-dashed border-slate-300 text-slate-400">
-              Uninvoiced
-            </Badge>
-          )}
-          {/* 🆕 SAP Invoice Generate/Sync Button */}
-          {delivery.received && delivery.status !== 3 && (
-            <Button
-              variant={delivery.invoiced || delivery.invoiceNumber ? "outline" : "default"}
-              size="sm"
-              onClick={handleGenerateInvoice}
-              disabled={processingBilling}
-              className="whitespace-nowrap"
-            >
-              {processingBilling ? (
-                <>Processing...</>
-              ) : delivery.invoiced || delivery.invoiceNumber ? (
-                <>Sync SAP Invoice</>
-              ) : (
-                <>Generate SAP Invoice</>
-              )}
-            </Button>
-          )}
+          {/* 🆕 Task 5: Invoice State Badge Display */}
+          {getInvoiceStateBadge(delivery.invoiceState)}
+          {/* 🆕 Task 5: Dynamic Action Buttons based on Compliance Type and Invoice State */}
+          {(() => {
+            const canBill = delivery.invoiceState === "Unbilled" || delivery.invoiceState === "Ready to Re Billing"
+            const isBC = delivery.type === 1
+            const isNonBC = delivery.type === 2
+
+            if (delivery.received && delivery.status !== 3) {
+              if (isNonBC && canBill) {
+                return (
+                  <Button
+                    variant="default"
+                    size="sm"
+                    onClick={handleGenerateInvoice}
+                    disabled={processingBilling}
+                    className="whitespace-nowrap"
+                  >
+                    {processingBilling ? "Processing..." : "Generate SAP Invoice"}
+                  </Button>
+                )
+              }
+              if (isBC && canBill) {
+                return (
+                  <Button
+                    variant="default"
+                    size="sm"
+                    onClick={handleGenerateInvoice}
+                    disabled={processingBilling}
+                    className="whitespace-nowrap"
+                  >
+                    {processingBilling ? "Processing..." : "Sync SAP Invoice"}
+                  </Button>
+                )
+              }
+            }
+            return null
+          })()}
         </div>
       </div>
 
@@ -919,6 +964,16 @@ export function DeliveryDetailPage() {
                   <p className="text-sm text-brand-blue/80">
                     {formatDate(delivery.receiveDate)}
                   </p>
+                </div>
+              )}
+
+              {/* 🆕 Invoice State Display - Shown when applicable */}
+              {delivery.invoiceState && (
+                <div className="space-y-1">
+                  <p className="text-xs font-medium text-brand-blue/50 uppercase tracking-wider">
+                    Invoice State
+                  </p>
+                  {getInvoiceStateBadge(delivery.invoiceState)}
                 </div>
               )}
 

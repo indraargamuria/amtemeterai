@@ -104,6 +104,9 @@ interface DeliveryDetail {
   customerName?: string | null
   buyerPONumber?: string | null
   orderNumber?: string | null
+  // 🆕 Task 7: Open Status and Invoice State for Lock Logic
+  isOpen?: boolean
+  invoiceState?: string // "Unbilled", "Billed", "Blocked & Voided", "Ready to Re Billing"
 }
 
 interface LineFormState {
@@ -2851,13 +2854,20 @@ export function DeliveryReceivePage() {
 
         {/* Blocked alert */}
         {delivery.invoiced && (
-          <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 flex items-start gap-3">
-            <div className="w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center shrink-0">
-              <Lock className="w-4 h-4 text-amber-700" />
+          <div className="bg-blue-50 border border-blue-200 text-blue-800 p-4 rounded-md">
+            This delivery order has been invoiced. You may still submit or modify structural receipts as needed.
+          </div>
+        )}
+
+        {/* 🆕 Task 7: Lock out alert when delivery is closed */}
+        {delivery.isOpen === false && (
+          <div className="bg-slate-100 border border-slate-300 text-slate-700 p-4 rounded-md flex items-start gap-3">
+            <div className="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center shrink-0">
+              <Lock className="w-4 h-4 text-slate-600" />
             </div>
             <div>
-              <h3 className="text-sm font-semibold text-amber-900">Goods Receipt Blocked</h3>
-              <p className="text-xs text-amber-700 mt-0.5">Invoice document has been posted. No further modifications allowed.</p>
+              <h3 className="text-sm font-semibold text-slate-900">Delivery Closed</h3>
+              <p className="text-xs text-slate-600 mt-0.5">This delivery order has been closed and locked from further modifications.</p>
             </div>
           </div>
         )}
@@ -2927,7 +2937,7 @@ export function DeliveryReceivePage() {
                   id="receiverName"
                   value={receiverName}
                   onChange={(e) => setReceiverName(e.target.value)}
-                  disabled={delivery.invoiced || submitted || submitting}
+                  disabled={delivery.invoiced || submitted || submitting || delivery.isOpen === false}
                   placeholder="Enter your full name"
                   className="h-10 text-sm border-slate-300 focus:border-[#1d2351] focus:ring-[#1d2351]"
                   required
@@ -2958,7 +2968,7 @@ export function DeliveryReceivePage() {
                       }
                     }
                   }}
-                  disabled={delivery.invoiced || submitted || submitting}
+                  disabled={delivery.invoiced || submitted || submitting || delivery.isOpen === false}
                   className="h-10 text-sm border-slate-300 focus:border-[#1d2351] focus:ring-[#1d2351]"
                   required
                   max={new Date().toISOString().split('T')[0]}
@@ -3273,7 +3283,7 @@ export function DeliveryReceivePage() {
                 e.preventDefault()
               }}
               className="flex-1 h-12 text-sm font-semibold bg-[#1d2351] hover:bg-[#2a3266] text-white shadow-lg shadow-[#1d2351]/20"
-              disabled={delivery.invoiced || submitting || !receiverName.trim()}
+              disabled={delivery.invoiced || submitting || !receiverName.trim() || delivery.isOpen === false}
             >
               {submitting ? "Posting..." : "Post Goods Receipt"}
             </Button>

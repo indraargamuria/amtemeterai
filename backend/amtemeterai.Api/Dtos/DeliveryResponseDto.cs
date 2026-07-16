@@ -53,6 +53,12 @@ public class DeliveryResponseDto
     public bool IsCanceled { get; set; }
     public string? CancelReason { get; set; }
 
+    /// <summary>
+    /// Indicates whether the delivery order is open for structural modifications.
+    /// When false, the delivery is locked from further changes while still allowing receipt submission.
+    /// </summary>
+    public bool IsOpen { get; set; } = true;
+
     public List<DeliveryLineResponseDto> Lines { get; set; } = new();
     //2026-05-19 21:19:04
     public List<DeliveryPhotoResponseDto> Photos { get; set; } = new();

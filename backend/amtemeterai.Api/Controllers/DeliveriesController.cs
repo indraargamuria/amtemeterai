@@ -132,6 +132,7 @@ public class DeliveriesController : ControllerBase
                 Invoiced = d.Invoiced,
                 ReceiverToken = d.ReceiverToken,
                 BillingStatus = d.BillingStatus,
+                IsOpen = d.IsOpen,
 
                 Plant = d.Plant,
                 Type = d.Type,
@@ -206,7 +207,7 @@ public class DeliveriesController : ControllerBase
                 InvoiceState = invoiceState,
                 InvoiceNumber = invoiceNumber,
                 PublicUrl = $"{baseUrl}/receive/{d.ReceiverToken}",
-
+                IsOpen = d.IsOpen,
                 Plant = d.Plant,
                 SalesPersonName = d.SalesPersonName,
                 SalesPersonEmail = d.SalesPersonEmail,
@@ -214,10 +215,8 @@ public class DeliveriesController : ControllerBase
                 District = d.District,
                 Province = d.Province,
                 PhotosCount = d.PhotosCount,
-
                 IsCanceled = d.IsCanceled,
                 CancelReason = d.CancelReason,
-
                 Type = (int?)d.Type,
                 Status = (int?)d.Status
             };
@@ -325,7 +324,7 @@ public class DeliveriesController : ControllerBase
             DeliveryDate = delivery.DeliveryDate,
             DeliveryRemarks = delivery.DeliveryRemarks,
             ShipToAddress = delivery.ShipToAddress,
-            
+
             // Conditional: Hide CustomerCode and CustomerName for warehouse role
             CustomerCode = isWarehouseRole ? string.Empty : (delivery.Customer?.CustomerCode ?? "UNKNOWN"),
             CustomerName = isWarehouseRole ? string.Empty : (delivery.Customer?.CustomerName ?? "UNKNOWN"),
@@ -337,6 +336,7 @@ public class DeliveriesController : ControllerBase
             Invoiced = isInvoiced,
             InvoiceState = invoiceState,
             InvoiceNumber = invoiceNumber,
+            IsOpen = delivery.IsOpen,
             PublicUrl = GetPublicUrl(delivery.ReceiverToken, _appOptions.PublicBaseUrl),
 
             Plant = delivery.Plant,
@@ -474,6 +474,7 @@ public class DeliveriesController : ControllerBase
             Invoiced = isInvoiced,
             InvoiceState = invoiceState,
             InvoiceNumber = invoiceNumber,
+            IsOpen = data.IsOpen,
             PublicUrl = GetPublicUrl(data.ReceiverToken, _appOptions.PublicBaseUrl),
             Lines = dbLines.Select(l => 
             {

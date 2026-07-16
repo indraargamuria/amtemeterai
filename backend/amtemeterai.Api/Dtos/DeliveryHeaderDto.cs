@@ -36,5 +36,11 @@ namespace amtemeterai.Api.Dtos
         
         public bool IsCanceled { get; set; }
         public string? CancelReason { get; set; }
+
+        /// <summary>
+        /// Indicates whether the delivery order is open for structural modifications.
+        /// When false, the delivery is locked from further changes while still allowing receipt submission.
+        /// </summary>
+        public bool IsOpen { get; set; } = true;
     }
 }

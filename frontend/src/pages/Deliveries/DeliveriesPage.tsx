@@ -39,6 +39,9 @@ interface DeliveryHeader {
   cancelReason?: string | null
   // NEW: Printout document tracking
   hasPrintoutDocument?: boolean
+  // 🆕 Task 5: Invoice State Transition Matrix Fields
+  invoiceState?: string // "Unbilled", "Billed", "Blocked & Voided", "Ready to Re Billing"
+  invoiceNumber?: string | null
 }
 
 type SortField = "deliveryDate" | "deliveryNumber" | "status"
@@ -309,6 +312,40 @@ export function DeliveriesPage() {
         Uninvoiced
       </Badge>
     )
+  }
+
+  // 🆕 Task 5: Invoice State Badge with High-Density Display
+  const getInvoiceStateBadge = (invoiceState: string | undefined, isCanceled?: boolean) => {
+    if (isCanceled) return null
+
+    switch (invoiceState) {
+      case "Billed":
+        return (
+          <Badge variant="success" className="text-emerald-700 border-emerald/20">
+            <span className="mr-1">✓</span>Billed
+          </Badge>
+        )
+      case "Unbilled":
+        return (
+          <Badge variant="info" className="text-brand-blue/70 border-brand-blue/10">
+            Unbilled
+          </Badge>
+        )
+      case "Blocked & Voided":
+        return (
+          <Badge variant="warning" className="text-rose-700 border-rose/20 bg-rose-50">
+            <span className="mr-1">✕</span>Blocked & Voided
+          </Badge>
+        )
+      case "Ready to Re Billing":
+        return (
+          <Badge variant="warning" className="text-amber-700 border-amber/20 bg-amber-50">
+            <span className="mr-1">↻</span>Ready to Re-Bill
+          </Badge>
+        )
+      default:
+        return null
+    }
   }
 
   const getRoutingString = (cityRegency: string | null | undefined, district: string | null | undefined) => {
@@ -671,7 +708,14 @@ export function DeliveriesPage() {
                           Reason: {delivery.cancelReason || "System/Manual Void"}
                         </p>
                       ) : (
-                        getInvoicedBadge(delivery.invoiced, delivery.isCanceled)
+                        <>
+                          {getInvoiceStateBadge(delivery.invoiceState, delivery.isCanceled)}
+                          {/* {delivery.invoiceState === "Billed" && delivery.invoiceNumber && (
+                            <p className="text-[11px] font-medium text-brand-blue/70 max-w-45 truncate" title={delivery.invoiceNumber}>
+                              {delivery.invoiceNumber}
+                            </p>
+                          )} */}
+                        </>
                       )}
                     </div>
                   </TableCell>
