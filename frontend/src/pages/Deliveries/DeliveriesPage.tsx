@@ -298,21 +298,7 @@ export function DeliveriesPage() {
     )
   }
 
-  const getInvoicedBadge = (invoiced: boolean, isCanceled?: boolean) => {
-    if (isCanceled) return null // Hide invoicing metadata if shipment is dead void
-    if (invoiced) {
-      return (
-        <Badge variant="outline" className="border-brand-blue/30 text-brand-blue/70">
-          Invoiced
-        </Badge>
-      )
-    }
-    return (
-      <Badge variant="outline" className="border-dashed border-slate-300 text-slate-400">
-        Uninvoiced
-      </Badge>
-    )
-  }
+  
 
   // 🆕 Task 5: Invoice State Badge with High-Density Display
   const getInvoiceStateBadge = (invoiceState: string | undefined, isCanceled?: boolean) => {

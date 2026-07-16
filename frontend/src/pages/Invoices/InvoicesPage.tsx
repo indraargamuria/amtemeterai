@@ -97,6 +97,21 @@ export function InvoicesPage() {
     }).format(amount)
   }
 
+  // const formatForeignCurrency = (amount: number, currency: string) => {
+  //   if (!currency || currency === "IDR") {
+  //     return formatCurrency(amount)
+  //   }
+  //   try {
+  //     return new Intl.NumberFormat("en-US", {
+  //       style: "currency",
+  //       currency: currency,
+  //       minimumFractionDigits: 2,
+  //       maximumFractionDigits: 2
+  //     }).format(amount / 100)
+  //   } catch {
+  //     return `${currency} ${(amount / 100).toFixed(2)}`
+  //   }
+  // }
   const formatForeignCurrency = (amount: number, currency: string) => {
     if (!currency || currency === "IDR") {
       return formatCurrency(amount)
@@ -107,9 +122,9 @@ export function InvoicesPage() {
         currency: currency,
         minimumFractionDigits: 2,
         maximumFractionDigits: 2
-      }).format(amount / 100)
+      }).format(amount)
     } catch {
-      return `${currency} ${(amount / 100).toFixed(2)}`
+      return `${currency} ${amount.toFixed(2)}`
     }
   }
 

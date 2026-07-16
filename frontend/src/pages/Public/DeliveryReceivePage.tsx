@@ -426,7 +426,7 @@ const LineItemRow = memo(({
   calc,
   isExpanded,
   deliveryReceived,
-  isInvoiced,
+  // isInvoiced,
   isSubmitting,
   isSubmitted,
   onToggleExpansion,
@@ -641,7 +641,7 @@ const SingleBatchRow = memo(({
   line,
   lineState,
   calc,
-  isInvoiced,
+  // isInvoiced,
   isSubmitting,
   onInputChange,
 }: SingleBatchRowProps) => {
@@ -925,7 +925,7 @@ const ChildRow = memo(({
   childLine,
   lineState,
   calc,
-  isInvoiced,
+  // isInvoiced,
   isSubmitting,
   onInputChange,
 }: ChildRowProps) => {
@@ -1487,7 +1487,7 @@ interface ItemGroupRowProps {
 const ItemGroupRow = memo(({
   group,
   isExpanded,
-  isInvoiced,
+  // isInvoiced,
   isSubmitting,
   linesMap,
   onToggleExpansion,
