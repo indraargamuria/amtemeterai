@@ -660,10 +660,10 @@ public class DeliveriesController : ControllerBase
 
         if (data == null) return NotFound();
 
-        if (data.Invoiced)
-        {
-            return BadRequest("This delivery record is locked because it has already been invoiced.");
-        }
+        // if (data.Invoiced)
+        // {
+        //     return BadRequest("This delivery record is locked because it has already been invoiced.");
+        // }
 
         data.ReceiverName = dto.ReceiverName;
         data.ReceiverNotes = dto.ReceiverNotes;

@@ -546,7 +546,7 @@ const LineItemRow = memo(({
                 onChange={(e) => handleFieldChange("delivered", e.target.value)}
                 onFocus={() => handleFocus("delivered")}
                 onBlur={() => handleBlur("delivered")}
-                disabled={isInvoiced || isSubmitted || isSubmitting}
+                disabled={isSubmitted || isSubmitting}
                 className="h-10 text-sm border-slate-300 focus:border-[#1d2351] focus:ring-[#1d2351]"
               />
             </div>
@@ -560,7 +560,7 @@ const LineItemRow = memo(({
                 onChange={(e) => handleFieldChange("returned", e.target.value)}
                 onFocus={() => handleFocus("returned")}
                 onBlur={() => handleBlur("returned")}
-                disabled={isInvoiced || isSubmitted || isSubmitting}
+                disabled={isSubmitted || isSubmitting}
                 className="h-10 text-sm border-slate-300 focus:border-[#1d2351] focus:ring-[#1d2351]"
               />
             </div>
@@ -574,7 +574,7 @@ const LineItemRow = memo(({
                 onChange={(e) => handleFieldChange("rejected", e.target.value)}
                 onFocus={() => handleFocus("rejected")}
                 onBlur={() => handleBlur("rejected")}
-                disabled={isInvoiced || isSubmitted || isSubmitting}
+                disabled={isSubmitted || isSubmitting}
                 className="h-10 text-sm border-slate-300 focus:border-[#1d2351] focus:ring-[#1d2351]"
               />
             </div>
@@ -585,7 +585,7 @@ const LineItemRow = memo(({
               type="text"
               value={localValues.lineComment}
               onChange={(e) => handleFieldChange("lineComment", e.target.value)}
-              disabled={isInvoiced || isSubmitted || isSubmitting}
+              disabled={isSubmitted || isSubmitting}
               placeholder="Add any notes about this item..."
               className="h-10 text-sm border-slate-300 focus:border-[#1d2351] focus:ring-[#1d2351]"
             />
@@ -859,7 +859,7 @@ const SingleBatchRow = memo(({
                 onFocus={() => handleFocus("delivered")}
                 onBlur={() => handleBlur("delivered")}
                 onChange={(e) => handleFieldChange("delivered", e.target.value)}
-                disabled={isInvoiced || isSubmitting}
+                disabled={isSubmitting}
                 className="h-7 w-full text-xs border-slate-300 focus:border-[#1d2351] focus:ring-[#1d2351] px-2"
               />
             </div>
@@ -875,7 +875,7 @@ const SingleBatchRow = memo(({
                 onFocus={() => handleFocus("rejected")}
                 onBlur={() => handleBlur("rejected")}
                 onChange={(e) => handleFieldChange("rejected", e.target.value)}
-                disabled={isInvoiced || isSubmitting}
+                disabled={isSubmitting}
                 className="h-7 w-full text-xs border-slate-300 focus:border-[#1d2351] focus:ring-[#1d2351] px-2"
               />
             </div>
@@ -891,7 +891,7 @@ const SingleBatchRow = memo(({
                 onFocus={() => handleFocus("returned")}
                 onBlur={() => handleBlur("returned")}
                 onChange={(e) => handleFieldChange("returned", e.target.value)}
-                disabled={isInvoiced || isSubmitting}
+                disabled={isSubmitting}
                 className="h-7 w-full text-xs border-slate-300 focus:border-[#1d2351] focus:ring-[#1d2351] px-2"
               />
             </div>
@@ -903,7 +903,7 @@ const SingleBatchRow = memo(({
                 type="text"
                 value={localValues.lineComment}
                 onChange={(e) => handleFieldChange("lineComment", e.target.value)}
-                disabled={isInvoiced || isSubmitting}
+                disabled={isSubmitting}
                 placeholder="Add notes..."
                 className="h-7 w-full text-xs border-slate-300 focus:border-[#1d2351] focus:ring-[#1d2351] px-2"
               />
@@ -1022,7 +1022,7 @@ const ChildRow = memo(({
               onFocus={() => handleFocus("delivered")}
               onBlur={() => handleBlur("delivered")}
               onChange={(e) => handleFieldChange("delivered", e.target.value)}
-              disabled={isInvoiced || isSubmitting}
+              disabled={isSubmitting}
               className="h-7 w-full text-xs border-slate-300 focus:border-[#1d2351] focus:ring-[#1d2351] px-2"
             />
           </div>
@@ -1038,7 +1038,7 @@ const ChildRow = memo(({
               onFocus={() => handleFocus("rejected")}
               onBlur={() => handleBlur("rejected")}
               onChange={(e) => handleFieldChange("rejected", e.target.value)}
-              disabled={isInvoiced || isSubmitting}
+              disabled={isSubmitting}
               className="h-7 w-full text-xs border-slate-300 focus:border-[#1d2351] focus:ring-[#1d2351] px-2"
             />
           </div>
@@ -1054,7 +1054,7 @@ const ChildRow = memo(({
               onFocus={() => handleFocus("returned")}
               onBlur={() => handleBlur("returned")}
               onChange={(e) => handleFieldChange("returned", e.target.value)}
-              disabled={isInvoiced || isSubmitting}
+              disabled={isSubmitting}
               className="h-7 w-full text-xs border-slate-300 focus:border-[#1d2351] focus:ring-[#1d2351] px-2"
             />
           </div>
@@ -1066,7 +1066,7 @@ const ChildRow = memo(({
               type="text"
               value={localValues.lineComment}
               onChange={(e) => handleFieldChange("lineComment", e.target.value)}
-              disabled={isInvoiced || isSubmitting}
+              disabled={isSubmitting}
               placeholder="Add notes..."
               className="h-7 w-full text-xs border-slate-300 focus:border-[#1d2351] focus:ring-[#1d2351] px-2"
             />
@@ -1721,7 +1721,7 @@ const ItemGroupRow = memo(({
                             min="0"
                             value={lineState.delivered}
                             onChange={(e) => onInputChange(line.deliveryLineNumber, 'delivered', e.target.value)}
-                            disabled={isInvoiced || isSubmitting}
+                            disabled={isSubmitting}
                             className="h-7 w-16 text-xs border-slate-300 focus:border-[#1d2351] focus:ring-[#1d2351] px-2"
                           />
                         </div>
@@ -1733,7 +1733,7 @@ const ItemGroupRow = memo(({
                             min="0"
                             value={lineState.rejected}
                             onChange={(e) => onInputChange(line.deliveryLineNumber, 'rejected', e.target.value)}
-                            disabled={isInvoiced || isSubmitting}
+                            disabled={isSubmitting}
                             className="h-7 w-16 text-xs border-slate-300 focus:border-[#1d2351] focus:ring-[#1d2351] px-2"
                           />
                         </div>
@@ -1745,7 +1745,7 @@ const ItemGroupRow = memo(({
                             min="0"
                             value={lineState.returned}
                             onChange={(e) => onInputChange(line.deliveryLineNumber, 'returned', e.target.value)}
-                            disabled={isInvoiced || isSubmitting}
+                            disabled={isSubmitting}
                             className="h-7 w-16 text-xs border-slate-300 focus:border-[#1d2351] focus:ring-[#1d2351] px-2"
                           />
                         </div>
@@ -1760,7 +1760,7 @@ const ItemGroupRow = memo(({
                       type="text"
                       value={lineState.lineComment}
                       onChange={(e) => onInputChange(line.deliveryLineNumber, 'lineComment', e.target.value)}
-                      disabled={isInvoiced || isSubmitting}
+                      disabled={isSubmitting}
                       placeholder="Add notes for this batch..."
                       className="h-7 text-xs border-slate-300 focus:border-[#1d2351] focus:ring-[#1d2351]"
                     />
@@ -2845,16 +2845,16 @@ export function DeliveryReceivePage() {
             <p className="text-xs text-slate-500 mt-0.5">Verify and document incoming delivery</p>
           </div>
           <Badge
-            variant={delivery.invoiced ? "warning" : (delivery.received ? "success" : "info")}
+            variant={delivery.isOpen == false ? "warning" : (delivery.received ? "success" : "info")}
             className="text-xs font-medium px-3 py-1"
           >
-            {delivery.invoiced ? "Locked" : (delivery.received ? "Completed" : "Pending")}
+            {delivery.isOpen == false ? "Locked" : (delivery.received ? "Completed" : "Pending")}
           </Badge>
         </div>
 
         {/* Blocked alert */}
         {delivery.invoiced && (
-          <div className="bg-blue-50 border border-blue-200 text-blue-800 p-4 rounded-md">
+          <div className="bg-blue-50 border text-xs border-blue-200 text-blue-800 p-4 rounded-md">
             This delivery order has been invoiced. You may still submit or modify structural receipts as needed.
           </div>
         )}
@@ -2937,7 +2937,7 @@ export function DeliveryReceivePage() {
                   id="receiverName"
                   value={receiverName}
                   onChange={(e) => setReceiverName(e.target.value)}
-                  disabled={delivery.invoiced || submitted || submitting || delivery.isOpen === false}
+                  disabled={delivery.isOpen == false || submitted || submitting}
                   placeholder="Enter your full name"
                   className="h-10 text-sm border-slate-300 focus:border-[#1d2351] focus:ring-[#1d2351]"
                   required
@@ -2968,7 +2968,7 @@ export function DeliveryReceivePage() {
                       }
                     }
                   }}
-                  disabled={delivery.invoiced || submitted || submitting || delivery.isOpen === false}
+                  disabled={delivery.isOpen == false || submitted || submitting}
                   className="h-10 text-sm border-slate-300 focus:border-[#1d2351] focus:ring-[#1d2351]"
                   required
                   max={new Date().toISOString().split('T')[0]}
@@ -2984,7 +2984,7 @@ export function DeliveryReceivePage() {
                 id="receiverNotes"
                 value={receiverNotes}
                 onChange={(e) => setReceiverNotes(e.target.value)}
-                disabled={delivery.invoiced || submitted || submitting}
+                disabled={delivery.isOpen == false || submitted || submitting}
                 placeholder="Any additional delivery notes..."
                 className="h-10 text-sm border-slate-300 focus:border-[#1d2351] focus:ring-[#1d2351]"
               />
@@ -2993,7 +2993,7 @@ export function DeliveryReceivePage() {
         </Card>
 
         {/* Quick Actions */}
-        {!delivery.invoiced && !submitted && (
+        {!delivery.isOpen == false && !submitted && (
           <div className="bg-[#1d2351]/5 border border-[#1d2351]/10 rounded-lg p-4 flex items-center justify-between gap-4">
             <div className="flex items-start gap-3">
               <div className="w-10 h-10 rounded-lg bg-[#1d2351]/10 flex items-center justify-center shrink-0">
@@ -3100,7 +3100,7 @@ export function DeliveryReceivePage() {
                           line={line}
                           lineState={lineState}
                           calc={calc}
-                          isInvoiced={delivery.invoiced}
+                          isInvoiced={delivery.isOpen == false}
                           isSubmitting={submitting}
                           onInputChange={handlers.onInputChange}
                         />
@@ -3117,7 +3117,7 @@ export function DeliveryReceivePage() {
                           children={children}
                           filteredChildren={filteredChildren}
                           isExpanded={isExpanded}
-                          isInvoiced={delivery.invoiced}
+                          isInvoiced={delivery.isOpen == false}
                           isSubmitting={submitting}
                           onToggleExpansion={() => toggleRowExpansion(parentLine.deliveryLineNumber)}
                           linesMap={linesMap}
@@ -3226,7 +3226,7 @@ export function DeliveryReceivePage() {
                   return (
                     <div key={p.storageKey} className="relative aspect-square rounded-lg overflow-hidden border border-slate-200 bg-slate-100 group">
                       <img src={p.downloadUrl} alt={p.fileName} className={`w-full h-full object-cover transition-all ${marked ? "opacity-30" : ""}`} />
-                      {!delivery.invoiced && !submitted && (
+                      {!delivery.isOpen == false && !submitted && (
                         <button
                           type="button"
                           onClick={() => toggleKeyToDelete(p.storageKey)}
@@ -3283,7 +3283,7 @@ export function DeliveryReceivePage() {
                 e.preventDefault()
               }}
               className="flex-1 h-12 text-sm font-semibold bg-[#1d2351] hover:bg-[#2a3266] text-white shadow-lg shadow-[#1d2351]/20"
-              disabled={delivery.invoiced || submitting || !receiverName.trim() || delivery.isOpen === false}
+              disabled={delivery.isOpen == false || submitting || !receiverName.trim()}
             >
               {submitting ? "Posting..." : "Post Goods Receipt"}
             </Button>
