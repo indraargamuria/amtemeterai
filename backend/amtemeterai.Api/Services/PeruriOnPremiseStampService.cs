@@ -66,6 +66,8 @@ public interface IPeruriOnPremiseStampService
 /// </summary>
 public class PeruriOnPremiseStampService : IPeruriOnPremiseStampService
 {
+    private static readonly SemaphoreSlim _keyStampSemaphore = new SemaphoreSlim(1, 1);
+
     private readonly PeruriOptions _options;
     private readonly IPeruriSessionService _sessionService;
     private readonly IHttpClientFactory _httpClientFactory;
@@ -359,86 +361,96 @@ public class PeruriOnPremiseStampService : IPeruriOnPremiseStampService
             // =================================================================
             // PHASE 6: EXECUTE LOCAL KEYSTAMP CONTAINER SIGNING
             // =================================================================
-            _logger.LogInformation("PHASE 4: Invoking KeyStamp Docker adapter");
+            _logger.LogInformation("PHASE 6: Waiting for KeyStamp execution slot for Invoice {InvoiceNumber}...", invoiceNumber);
 
-            var signingClient = _httpClientFactory.CreateClient();
-            signingClient.Timeout = TimeSpan.FromSeconds(15);
-
-            // Dynamically resolve Peruri adapter base URL based on environment
-            string peruriBaseUrl;
-            if (_webEnv.IsDevelopment())
+            await _keyStampSemaphore.WaitAsync();
+            try
             {
-                // Local development environment lookup targeting host machine exposed ports
-                peruriBaseUrl = "http://localhost:9999";
-                _logger.LogInformation("Running in local development mode. Routing KeyStamp endpoint to localhost:9999");
-            }
-            else
-            {
-                // Containerized network landscape utilizing internal bridge network DNS
-                peruriBaseUrl = _options.KeyStamp;
-                _logger.LogInformation("Running in containerized mode. Routing KeyStamp endpoint to {TargetUrl}", peruriBaseUrl);
-            }
+                _logger.LogInformation("PHASE 6: Slot acquired. Invoking KeyStamp Docker adapter");
 
-            var signingUrl = $"{peruriBaseUrl.TrimEnd('/')}/adapter/pdfsigning/rest/docSigningZ";
+                var signingClient = _httpClientFactory.CreateClient();
+                signingClient.Timeout = TimeSpan.FromSeconds(60);
 
-            // Normalize paths for KeyStamp signing request
-            // Convert physical host paths to container-relative paths
-            string NormalizePathForAdapter(string physicalPath, string absRoot, string payRoot)
-            {
-                // Convert physical path back to relative from the root, then combine with container target root
-                string relativePart = Path.GetRelativePath(absRoot, physicalPath).Replace('\\', '/');
-                string result = $"{payRoot.TrimEnd('/')}/{relativePart.TrimStart('/')}".Replace('\\', '/');
-
-                // Strip the /app/ prefix to prevent double-prefixing
-                // KeyStamp adapter ALWAYS runs in a container and internally adds /app/ prefix
-                // So we ALWAYS send paths like "sharefolder/..." not "/app/sharefolder/..."
-                if (result.StartsWith("/app/"))
+                // Dynamically resolve Peruri adapter base URL based on environment
+                string peruriBaseUrl;
+                if (_webEnv.IsDevelopment())
                 {
-                    result = result.Substring(5); // Remove "/app/" prefix
+                    // Local development environment lookup targeting host machine exposed ports
+                    peruriBaseUrl = "http://localhost:9999";
+                    _logger.LogInformation("Running in local development mode. Routing KeyStamp endpoint to localhost:9999");
+                }
+                else
+                {
+                    // Containerized network landscape utilizing internal bridge network DNS
+                    peruriBaseUrl = _options.KeyStamp;
+                    _logger.LogInformation("Running in containerized mode. Routing KeyStamp endpoint to {TargetUrl}", peruriBaseUrl);
                 }
 
-                return result;
+                var signingUrl = $"{peruriBaseUrl.TrimEnd('/')}/adapter/pdfsigning/rest/docSigningZ";
+
+                // Normalize paths for KeyStamp signing request
+                // Convert physical host paths to container-relative paths
+                string NormalizePathForAdapter(string physicalPath, string absRoot, string payRoot)
+                {
+                    // Convert physical path back to relative from the root, then combine with container target root
+                    string relativePart = Path.GetRelativePath(absRoot, physicalPath).Replace('\\', '/');
+                    string result = $"{payRoot.TrimEnd('/')}/{relativePart.TrimStart('/')}".Replace('\\', '/');
+
+                    // Strip the /app/ prefix to prevent double-prefixing
+                    // KeyStamp adapter ALWAYS runs in a container and internally adds /app/ prefix
+                    // So we ALWAYS send paths like "sharefolder/..." not "/app/sharefolder/..."
+                    if (result.StartsWith("/app/"))
+                    {
+                        result = result.Substring(5); // Remove "/app/" prefix
+                    }
+
+                    return result;
+                }
+
+                var signingRequest = new KeyStampSigningRequestDto
+                {
+                    certificatelevel = "NOT_CERTIFIED",
+
+                    src = NormalizePathForAdapter(localPdfPath, absoluteRoot, payloadRoot),
+                    dest = NormalizePathForAdapter(localSignedPath, absoluteRoot, payloadRoot),
+                    spesimenPath = NormalizePathForAdapter(localQrPath, absoluteRoot, payloadRoot),
+
+                    refToken = sn,
+                    jwToken = jwtToken,
+                    visSignaturePage = request.StampPageNumber ?? 1,
+
+                    // Dynamic Interlock: Use saved coordinates if available, otherwise fall back to defaults
+                    visLLX = request.VisLLX ?? 428,
+                    visLLY = request.VisLLY ?? 215,
+                    visURX = request.VisURX ?? 482,
+                    visURY = request.VisURY ?? 269,
+
+                    profileName = "default",
+                    docpass = "",
+                    location = "Jakarta",
+                    reason = "Meterai Electronic Integration"
+                };
+
+                _logger.LogDebug("KeyStamp Request (Clean Paths): src={Src}, dest={Dest}, spesimenPath={SpesimenPath}",
+                    signingRequest.src, signingRequest.dest, signingRequest.spesimenPath);
+
+                var signingResponse = await signingClient.PostAsJsonAsync(signingUrl, signingRequest);
+                var signingResponseString = await signingResponse.Content.ReadAsStringAsync();
+
+                if (!signingResponse.IsSuccessStatusCode)
+                {
+                    _logger.LogError("KeyStamp signing failed with status {StatusCode}: {Error}", signingResponse.StatusCode, signingResponseString);
+                    result.Success = false;
+                    result.ErrorMessage = $"KeyStamp signing failed: {signingResponse.StatusCode}";
+                    return result;
+                }
+
+                _logger.LogInformation("PHASE 6 Complete: KeyStamp signing completed successfully");
             }
-
-            var signingRequest = new KeyStampSigningRequestDto
+            finally
             {
-                certificatelevel = "NOT_CERTIFIED",
-
-                src = NormalizePathForAdapter(localPdfPath, absoluteRoot, payloadRoot),
-                dest = NormalizePathForAdapter(localSignedPath, absoluteRoot, payloadRoot),
-                spesimenPath = NormalizePathForAdapter(localQrPath, absoluteRoot, payloadRoot),
-
-                refToken = sn,
-                jwToken = jwtToken,
-                visSignaturePage = request.StampPageNumber ?? 1,
-
-                // Dynamic Interlock: Use saved coordinates if available, otherwise fall back to defaults
-                visLLX = request.VisLLX ?? 428,
-                visLLY = request.VisLLY ?? 215,
-                visURX = request.VisURX ?? 482,
-                visURY = request.VisURY ?? 269,
-
-                profileName = "default",
-                docpass = "",
-                location = "Jakarta",
-                reason = "Meterai Electronic Integration"
-            };
-
-            _logger.LogDebug("KeyStamp Request (Clean Paths): src={Src}, dest={Dest}, spesimenPath={SpesimenPath}",
-                signingRequest.src, signingRequest.dest, signingRequest.spesimenPath);
-
-            var signingResponse = await signingClient.PostAsJsonAsync(signingUrl, signingRequest);
-            var signingResponseString = await signingResponse.Content.ReadAsStringAsync();
-
-            if (!signingResponse.IsSuccessStatusCode)
-            {
-                _logger.LogError("KeyStamp signing failed with status {StatusCode}: {Error}", signingResponse.StatusCode, signingResponseString);
-                result.Success = false;
-                result.ErrorMessage = $"KeyStamp signing failed: {signingResponse.StatusCode}";
-                return result;
+                _keyStampSemaphore.Release();
             }
-
-            _logger.LogInformation("PHASE 4 Complete: KeyStamp signing completed successfully");
 
             // =================================================================
             // PHASE 7: READ BACK SIGNED PDF
