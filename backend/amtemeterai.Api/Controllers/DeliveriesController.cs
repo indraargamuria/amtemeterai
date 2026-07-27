@@ -1410,35 +1410,38 @@ public class DeliveriesController : ControllerBase
                 });
             }
 
-            // === Step 2: Idempotency Check - Local Database Invoice Lookup ===
-            // Check if an invoice already exists for this delivery (re-sync scenario)
-            var existingInvoice = await _db.Invoices
-                .FirstOrDefaultAsync(i => i.DeliveryHeaderId == delivery.DeliveryID);
+            // === Step 2: Active Invoice Idempotency Check - Local Database Invoice Lookup ===
+            // Check if an ACTIVE (non-voided, non-canceled) invoice already exists for this delivery
+            // Voided/canceled invoices should not block re-billing when delivery is in ReadyToRebill status
+            var activeInvoice = await _db.Invoices
+                .FirstOrDefaultAsync(i => i.DeliveryHeaderId == delivery.DeliveryID
+                                       && i.Status != Invoice.InvoiceStatus.Canceled
+                                       && i.Status != Invoice.InvoiceStatus.Voided);
 
-            if (existingInvoice != null)
+            if (activeInvoice != null)
             {
-                // Case B: Re-sync / Record Already Exists
-                // Return existing invoice data without calling SAP API
+                // Case B: Re-sync / Active Record Already Exists
+                // Return existing active invoice data without calling SAP API
                 _logger.LogInformation(
-                    "Invoice {InvoiceNumber} already exists for delivery {DeliveryNumber}. Returning existing record.",
-                    existingInvoice.InvoiceNumber,
+                    "Active invoice {InvoiceNumber} already exists for delivery {DeliveryNumber}. Returning existing record.",
+                    activeInvoice.InvoiceNumber,
                     deliveryNumber);
 
                 return Ok(new DeliverySettlementResponseDto
                 {
                     Success = true,
                     Message = "Invoice already created previously",
-                    InvoiceNumber = existingInvoice.InvoiceNumber,
+                    InvoiceNumber = activeInvoice.InvoiceNumber,
 #pragma warning disable CS0618 // Type or member is obsolete
-                    InvoiceAmount = existingInvoice.InvoiceAmount,
+                    InvoiceAmount = activeInvoice.InvoiceAmount,
 #pragma warning restore CS0618
-                    BillingDate = existingInvoice.InvoicedDate,
+                    BillingDate = activeInvoice.InvoicedDate,
                     DeliveryNumber = deliveryNumber
                 });
             }
 
-            // === Step 3: Outbound Request - Call SAP billing endpoint ===
-            // Only reached if existingInvoice == null (new billing scenario)
+            // === Step 3: Outbound Request - Call SAP billing endpoint with Retry Policy ===
+            // Only reached if activeInvoice == null (new billing scenario)
             _logger.LogInformation(
                 "Calling SAP billing endpoint for delivery {DeliveryNumber}",
                 deliveryNumber);
@@ -1448,38 +1451,178 @@ public class DeliveriesController : ControllerBase
                 DeliveryNumber = deliveryNumber
             };
 
-            // Use a clean client instance to avoid base address issues
-            var sapClient = _httpClientFactory.CreateClient("SapClient");
-            var sapUrl = $"{_sapOptions.BaseUrl.TrimEnd('/')}/sap/bc/zr_createinv?sap-client={_sapOptions.Client}";
+            // Retry loop to handle SAP DB commit latency
+            // SAP requires time to commit transaction data to DB tables (VBRK/VBRP)
+            // Immediate fetch after invoice creation can return 404 or empty data on first attempt
+            int maxRetries = 3;
+            int delayMs = 1500;
+            SapBillingResponseDto sapBillingData = null;
 
-            var sapResponse = await sapClient.PostAsJsonAsync(sapUrl, sapRequest);
-
-            // === Step 4: Error Handling - Check SAP response ===
-            if (!sapResponse.IsSuccessStatusCode)
+            for (int attempt = 1; attempt <= maxRetries; attempt++)
             {
-                var errorContent = await sapResponse.Content.ReadAsStringAsync();
-                _logger.LogError(
-                    "SAP billing request failed with status {StatusCode}: {ErrorContent}",
-                    sapResponse.StatusCode,
-                    errorContent);
+                _logger.LogInformation(
+                    "SAP billing attempt {Attempt}/{MaxRetries} for delivery {DeliveryNumber}",
+                    attempt,
+                    maxRetries,
+                    deliveryNumber);
 
-                return StatusCode(
-                    (int)sapResponse.StatusCode,
-                    $"SAP server returned error: {sapResponse.StatusCode} - {errorContent}");
+                try
+                {
+                    // Use a clean client instance to avoid base address issues
+                    var sapClient = _httpClientFactory.CreateClient("SapClient");
+                    var sapUrl = $"{_sapOptions.BaseUrl.TrimEnd('/')}/sap/bc/zr_createinv?sap-client={_sapOptions.Client}";
+
+                    var sapResponse = await sapClient.PostAsJsonAsync(sapUrl, sapRequest);
+
+                    // Check if SAP response indicates success
+                    if (sapResponse.IsSuccessStatusCode)
+                    {
+                        var candidateData = await sapResponse.Content.ReadFromJsonAsync<SapBillingResponseDto>();
+
+                        // Validate that we got complete data back
+                        if (candidateData != null &&
+                            !string.IsNullOrEmpty(candidateData.SapInvoiceNumber) &&
+                            candidateData.AmountLocal > 0)
+                        {
+                            sapBillingData = candidateData;
+                            _logger.LogInformation(
+                                "SAP billing successful on attempt {Attempt}. Invoice {SapInvoiceNumber} - Foreign: {AmountForeign} {Currency}, Local: {AmountLocal}",
+                                attempt,
+                                sapBillingData.SapInvoiceNumber,
+                                sapBillingData.AmountForeign,
+                                sapBillingData.Currency,
+                                sapBillingData.AmountLocal);
+                            break; // Success, exit retry loop
+                        }
+                        else
+                        {
+                            _logger.LogWarning(
+                                "SAP billing attempt {Attempt} returned incomplete data. SAP invoice may not be committed yet.",
+                                attempt);
+                        }
+                    }
+                    else
+                    {
+                        var errorContent = await sapResponse.Content.ReadAsStringAsync();
+                        _logger.LogWarning(
+                            "SAP billing request failed on attempt {Attempt} with status {StatusCode}: {ErrorContent}",
+                            attempt,
+                            sapResponse.StatusCode,
+                            errorContent);
+                    }
+
+                    // If this is not the last attempt, wait before retrying
+                    if (attempt < maxRetries)
+                    {
+                        _logger.LogInformation("Waiting {DelayMs}ms before next SAP billing attempt...", delayMs);
+                        await Task.Delay(delayMs);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex,
+                        "Exception during SAP billing attempt {Attempt}/{MaxRetries}: {Message}",
+                        attempt,
+                        maxRetries,
+                        ex.Message);
+
+                    if (attempt < maxRetries)
+                    {
+                        await Task.Delay(delayMs);
+                    }
+                }
             }
 
-            var sapBillingData = await sapResponse.Content.ReadFromJsonAsync<SapBillingResponseDto>();
+            // === Step 4: Validate SAP Response After All Retries ===
             if (sapBillingData == null)
             {
-                return StatusCode(500, "Failed to deserialize SAP billing response.");
+                _logger.LogError(
+                    "SAP billing failed after {MaxRetries} attempts for delivery {DeliveryNumber}",
+                    maxRetries,
+                    deliveryNumber);
+
+                await LogActivity(
+                    "SapInvoiceCreationTimedOut",
+                    deliveryNumber,
+                    $"SAP invoice creation timed out after {maxRetries} retries. Invoice may have been created in SAP but sync timed out.",
+                    "Error");
+
+                return StatusCode(500, new
+                {
+                    success = false,
+                    message = "Invoice creation in SAP timed out after multiple attempts. The invoice may have been created in SAP, but fetching details failed. Please refresh or try syncing again.",
+                    deliveryNumber = deliveryNumber,
+                    attemptsMade = maxRetries
+                });
             }
 
-            _logger.LogInformation(
-                "Received SAP invoice {SapInvoiceNumber} - Foreign: {AmountForeign} {Currency}, Local: {AmountLocal}",
-                sapBillingData.SapInvoiceNumber,
-                sapBillingData.AmountForeign,
-                sapBillingData.Currency,
-                sapBillingData.AmountLocal);
+            // === Step 4.5: Handle Duplicate Invoice Number Scenario ===
+            // Check if SAP returned an invoice number that already exists in our local database
+            // IMPORTANT: Query local DB FIRST, ignore SAP's message string to prevent false-positives
+            // Only block based on actual local database state, not SAP's response message text
+            var existingInvoice = await _db.Invoices
+                .FirstOrDefaultAsync(i => i.InvoiceNumber == sapBillingData.SapInvoiceNumber);
+
+            if (existingInvoice != null)
+            {
+                bool isVoidedOrCanceled = existingInvoice.Status == Invoice.InvoiceStatus.Voided ||
+                                           existingInvoice.Status == Invoice.InvoiceStatus.Canceled;
+
+                // Condition 2: Invoice exists locally but was Voided/Canceled
+                // This means the delivery was unlocked/released for re-billing in OpexNOW,
+                // but SAP is still returning the old voided invoice number (no new BC billing generated yet)
+                if (isVoidedOrCanceled)
+                {
+                    _logger.LogWarning(
+                        "Sync blocked for Delivery {DeliveryNumber}: SAP returned voided invoice {InvoiceNumber}. New billing must be generated in SAP first.",
+                        deliveryNumber,
+                        sapBillingData.SapInvoiceNumber);
+
+                    await LogActivity(
+                        "SyncBlockedVoidedInvoice",
+                        deliveryNumber,
+                        $"Sync blocked for delivery {deliveryNumber}: SAP returned voided invoice {sapBillingData.SapInvoiceNumber}. Please generate new billing in SAP first.",
+                        "Warning");
+
+                    return BadRequest(new
+                    {
+                        success = false,
+                        message = "No new BC Billing document found in SAP. Please create the BC Billing in SAP first before syncing.",
+                        deliveryNumber = deliveryNumber,
+                        sapInvoiceNumber = sapBillingData.SapInvoiceNumber,
+                        localInvoiceStatus = existingInvoice.Status.ToString()
+                    });
+                }
+
+                // Condition 1: Invoice exists locally and is Active
+                // The invoice was already synced properly - inform the user
+                _logger.LogInformation(
+                    "Invoice already synced for Delivery {DeliveryNumber}: Invoice {InvoiceNumber} exists with active status.",
+                    deliveryNumber,
+                    sapBillingData.SapInvoiceNumber);
+
+                await LogActivity(
+                    "InvoiceAlreadySynced",
+                    deliveryNumber,
+                    $"Invoice {sapBillingData.SapInvoiceNumber} already synced for delivery {deliveryNumber}.",
+                    "Info");
+
+                return Ok(new DeliverySettlementResponseDto
+                {
+                    Success = true,
+                    Message = "Invoice already synced.",
+                    InvoiceNumber = existingInvoice.InvoiceNumber,
+#pragma warning disable CS0618 // Type or member is obsolete
+                    InvoiceAmount = existingInvoice.InvoiceAmount,
+#pragma warning restore CS0618
+                    BillingDate = existingInvoice.InvoicedDate,
+                    DeliveryNumber = deliveryNumber
+                });
+            }
+
+            // Branch 1: Invoice does NOT exist in local DB (existingInvoice == null)
+            // Proceed directly to create and insert the new Invoice entity
+            // Do NOT block based on sapResponse.Message - ignore SAP's message text completely
 
             // === Step 5: Database Updates (Transactional) ===
             using var transaction = await _db.Database.BeginTransactionAsync();
