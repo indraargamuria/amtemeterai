@@ -95,7 +95,9 @@ builder.Services.AddHttpClient();
 builder.Services.AddScoped<IPeriuriPdsService, PeriuriPdsService>();
 
 // 2026-06-09 - Register Peruri On-Premise Stamping Services
-builder.Services.AddScoped<IPeruriSessionService, PeruriSessionService>();
+// PeruriSessionService is registered as Singleton to maintain thread-safe in-memory token cache
+// across HTTP requests using Double-Checked Locking with SemaphoreSlim
+builder.Services.AddSingleton<IPeruriSessionService, PeruriSessionService>();
 builder.Services.AddScoped<IPeruriOnPremiseStampService, PeruriOnPremiseStampService>();
 
 // Register PDF Anchor Service for dynamic e-Meterai coordinate extraction

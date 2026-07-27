@@ -1,7 +1,6 @@
 using amtemeterai.Api.Config;
 using amtemeterai.Api.Dtos;
 using Microsoft.Extensions.Options;
-using System.Collections.Concurrent;
 
 namespace amtemeterai.Api.Services;
 
@@ -24,14 +23,18 @@ public interface IPeruriSessionService
 }
 
 /// <summary>
-/// Implementation of Peruri session management service
+/// Implementation of Peruri session management service with thread-safe token caching
+/// Uses Double-Checked Locking pattern with SemaphoreSlim for thread safety
 /// </summary>
 public class PeruriSessionService : IPeruriSessionService
 {
     private readonly PeruriOptions _options;
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly ILogger<PeruriSessionService> _logger;
-    private readonly ConcurrentDictionary<string, CachedToken> _tokenCache;
+
+    // Thread-safe in-memory token cache (singleton scope)
+    private CachedToken? _cachedToken;
+    private readonly SemaphoreSlim _tokenLock = new SemaphoreSlim(1, 1);
 
     private class CachedToken
     {
@@ -48,32 +51,48 @@ public class PeruriSessionService : IPeruriSessionService
         _options = options.Value;
         _httpClientFactory = httpClientFactory;
         _logger = logger;
-        _tokenCache = new ConcurrentDictionary<string, CachedToken>();
     }
 
+    /// <summary>
+    /// Gets a valid JWT bearer token for Peruri API calls
+    /// Uses Double-Checked Locking pattern to ensure thread safety while minimizing lock contention
+    /// </summary>
     public async Task<string> GetAuthTokenAsync()
     {
-        var cacheKey = "peruri_jwt_token";
-
-        // Check if we have a cached token
-        if (_tokenCache.TryGetValue(cacheKey, out var cachedToken))
+        // First check: Fast path - if we have a valid cached token, return immediately without lock
+        // This avoids lock contention for the common case where the token is still valid
+        if (_cachedToken != null && _cachedToken.ExpiresAt > DateTime.UtcNow.AddMinutes(_options.TokenExpiryBufferMinutes))
         {
-            // Check if token is still valid (with buffer)
-            if (cachedToken.ExpiresAt > DateTime.UtcNow.AddMinutes(_options.TokenExpiryBufferMinutes))
-            {
-                _logger.LogDebug("Using cached Peruri token (expires at {ExpiresAt})", cachedToken.ExpiresAt);
-                return cachedToken.Token;
-            }
-
-            _logger.LogInformation("Cached Peruri token expired or expiring soon, refreshing...");
+            _logger.LogDebug("Using cached Peruri token (expires at {ExpiresAt})", _cachedToken.ExpiresAt);
+            return _cachedToken.Token;
         }
 
-        return await RefreshTokenAsync();
+        // Token is expired or missing - acquire lock for thread-safe refresh
+        await _tokenLock.WaitAsync();
+        try
+        {
+            // Second check: Double-Checked Locking pattern
+            // Another thread might have already refreshed the token while we were waiting for the lock
+            if (_cachedToken != null && _cachedToken.ExpiresAt > DateTime.UtcNow.AddMinutes(_options.TokenExpiryBufferMinutes))
+            {
+                _logger.LogDebug("Using cached Peruri token after lock wait (expires at {ExpiresAt})", _cachedToken.ExpiresAt);
+                return _cachedToken.Token;
+            }
+
+            // Still expired or missing - this thread will refresh the token
+            _logger.LogInformation("Cached Peruri token expired or missing, refreshing...");
+            return await RefreshTokenAsync();
+        }
+        finally
+        {
+            _tokenLock.Release();
+        }
     }
 
     public async Task<string> RefreshTokenAsync()
     {
-        var cacheKey = "peruri_jwt_token";
+        // Note: This method should be called while holding the lock (_tokenLock)
+        // The caller is responsible for acquiring and releasing the semaphore
 
         _logger.LogInformation("Refreshing Peruri authentication token from {BackendStg}", _options.BackendStg);
 
@@ -149,15 +168,13 @@ public class PeruriSessionService : IPeruriSessionService
             // Note: The current Peruri API response doesn't include expiry time
             DateTime expiresAt = DateTime.UtcNow.AddHours(1);
 
-            // Cache the token
-            var newCachedToken = new CachedToken
+            // Update the singleton cache (thread-safe since we hold the lock)
+            _cachedToken = new CachedToken
             {
                 Token = token,
                 ExpiresAt = expiresAt,
                 RetrievedAt = DateTime.UtcNow
             };
-
-            _tokenCache.AddOrUpdate(cacheKey, newCachedToken, (key, old) => newCachedToken);
 
             _logger.LogInformation("Peruri token refreshed successfully. Expires at {ExpiresAt} (in {Minutes} minutes). User: {User}",
                 expiresAt, (expiresAt - DateTime.UtcNow).TotalMinutes, loginResponse.result?.data?.login?.user?.email ?? "unknown");

@@ -459,8 +459,8 @@ public class InvoicesController : ControllerBase
             Status = (int)invoice.Status,
             StatusText = GetStatusText(invoice.Status),
             DeliveryHeaderId = invoice.DeliveryHeaderId,
-            // 🚀 FIX FOR WARNING LINE 211: Use Null-forgiving operator since context was fetched using Eager Loading .Include()
-            DeliveryNumber = invoice.DeliveryHeader!.DeliveryNumber,
+            // Handle standalone invoices where DeliveryHeader is null
+            DeliveryNumber = invoice.DeliveryHeader?.DeliveryNumber,
             SerialNumber = invoice.SerialNumber,
             StampingStatus = (int)invoice.StampingStatus,
             StampingStatusText = GetStampingStatusText(invoice.StampingStatus),
@@ -560,6 +560,64 @@ public class InvoicesController : ControllerBase
             invoice.CustomerNumber);
 
         return CreatedAtAction(nameof(GetInvoiceById), new { id = invoice.InvoiceID }, response);
+    }
+
+    /// <summary>
+    /// Create a standalone invoice without associating it with a Delivery Order.
+    /// Expects a raw JSON body payload. File uploading must be done via a separate endpoint.
+    /// </summary>
+    [HttpPost("without-delivery")]
+    public async Task<ActionResult<InvoiceResponseDto>> CreateInvoiceWithoutDelivery([FromBody] CreateInvoiceWithoutDeliveryDto dto)
+    {
+        if (string.IsNullOrWhiteSpace(dto.InvoiceNumber))
+            return BadRequest("Invoice number is required.");
+
+        if (string.IsNullOrWhiteSpace(dto.CustomerNumber))
+            return BadRequest("Customer number is required.");
+
+        // 1. Ensure invoice number is unique (only block if active, not voided/canceled)
+        var existingInvoice = await _db.Invoices
+            .FirstOrDefaultAsync(i => i.InvoiceNumber == dto.InvoiceNumber);
+
+        if (existingInvoice != null)
+        {
+            // If active, return Conflict
+            if (existingInvoice.Status != Invoice.InvoiceStatus.Voided &&
+                existingInvoice.Status != Invoice.InvoiceStatus.Canceled)
+            {
+                return Conflict($"Invoice with number '{dto.InvoiceNumber}' already exists.");
+            }
+        }
+
+        // 2. Initialize Invoice entity with Null DeliveryHeaderId
+        var invoice = new Invoice
+        {
+            InvoiceNumber = dto.InvoiceNumber,
+            CustomerNumber = dto.CustomerNumber,
+            AmountForeign = dto.AmountForeign,
+            AmountLocal = dto.AmountLocal,
+#pragma warning disable CS0618 // Type or member is obsolete
+            // Legacy field sync
+            InvoiceAmount = dto.AmountLocal,
+#pragma warning restore CS0618
+            Currency = dto.Currency,
+            ComplianceCategory = dto.ComplianceCategory,
+            InvoicedDate = dto.InvoicedDate,
+            Status = Invoice.InvoiceStatus.Draft,
+            DeliveryHeaderId = null, // Strictly null for standalone invoices
+            StampingStatus = Invoice.InvoiceStampingStatus.NotStamped
+        };
+
+        _db.Invoices.Add(invoice);
+        await _db.SaveChangesAsync();
+
+        _logger.LogInformation(
+            "Standalone Invoice {InvoiceNumber} created without delivery for Customer {CustomerNumber}.",
+            invoice.InvoiceNumber,
+            invoice.CustomerNumber);
+
+        // 3. Return formatted response using GetInvoiceById endpoint
+        return await GetInvoiceById(invoice.InvoiceID);
     }
 
     /// <summary>
