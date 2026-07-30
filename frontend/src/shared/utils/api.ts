@@ -142,6 +142,7 @@ export interface Invoice {
   hasPrintoutDocument: boolean
   unstampedDocumentUrl?: string
   stampedDocumentUrl?: string
+  deliveryPrintoutUrl?: string
   createdAt: string
 }
 

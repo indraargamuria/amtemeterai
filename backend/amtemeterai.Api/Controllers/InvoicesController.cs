@@ -388,7 +388,17 @@ public class InvoicesController : ControllerBase
                                 d.StorageKey.Contains("/stamped/"))
                     .OrderByDescending(d => d.UploadedAt)
                     .Select(d => d.StorageKey)
-                    .FirstOrDefault()
+                    .FirstOrDefault(),
+
+                // Pull the delivery printout storage key if invoice is linked to a delivery
+                DeliveryPrintoutStorageKey = i.DeliveryHeaderId.HasValue
+                    ? _db.Documents
+                        .Where(d => d.DeliveryID == i.DeliveryHeaderId.Value &&
+                                    d.Type == DocumentType.DeliveryPrintOut)
+                        .OrderByDescending(d => d.UploadedAt)
+                        .Select(d => d.StorageKey)
+                        .FirstOrDefault()
+                    : null
             })
             .ToListAsync();
 
@@ -422,7 +432,10 @@ public class InvoicesController : ControllerBase
                 ? $"{baseApiUrl.TrimEnd('/')}/api/deliveries/files/download?key={Uri.EscapeDataString(i.StampedStorageKey)}"
                 : null,
 
-            CreatedAt = i.InvoicedDate
+            CreatedAt = i.InvoicedDate,
+            DeliveryPrintoutUrl = !string.IsNullOrEmpty(i.DeliveryPrintoutStorageKey)
+                ? $"{baseApiUrl.TrimEnd('/')}/api/deliveries/files/download?key={Uri.EscapeDataString(i.DeliveryPrintoutStorageKey)}"
+                : null
         }).ToList();
 
         return Ok(invoices);
@@ -474,7 +487,14 @@ public class InvoicesController : ControllerBase
             StampedDocumentUrl = invoice.StampedDocumentId.HasValue
                 ? $"{baseApiUrl.TrimEnd('/')}/api/deliveries/files/download?key={Uri.EscapeDataString(invoice.StampedDocument?.StorageKey ?? string.Empty)}"
                 : null,
-            CreatedAt = invoice.InvoicedDate
+            CreatedAt = invoice.InvoicedDate,
+            DeliveryPrintoutUrl = invoice.DeliveryHeaderId.HasValue
+                ? _db.Documents
+                    .Where(d => d.DeliveryID == invoice.DeliveryHeaderId.Value && d.Type == DocumentType.DeliveryPrintOut)
+                    .OrderByDescending(d => d.UploadedAt)
+                    .Select(d => (string?)$"{baseApiUrl.TrimEnd('/')}/api/deliveries/files/download?key={Uri.EscapeDataString(d.StorageKey)}")
+                    .FirstOrDefault()
+                : null
         };
 
         return Ok(response);

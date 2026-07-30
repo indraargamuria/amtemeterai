@@ -28,4 +28,5 @@ public class InvoiceResponseDto
     public string? UnstampedDocumentUrl { get; set; }
     public string? StampedDocumentUrl { get; set; }
     public DateTime CreatedAt { get; set; }
+    public string? DeliveryPrintoutUrl { get; set; }
 }

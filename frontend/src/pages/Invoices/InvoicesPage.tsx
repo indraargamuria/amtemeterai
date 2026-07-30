@@ -5,7 +5,7 @@ import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from ".
 import { Badge } from "../../shared/components/ui/Badge"
 import { getInvoices, type Invoice } from "../../shared/utils/api"
 import { cn } from "../../shared/utils/cn"
-import { FileText, Download, Stamp, AlertCircle, Filter, X } from "lucide-react"
+import { FileText, Download, Stamp, AlertCircle, Filter, X, File, ChevronDown, FileText as FileTextIcon } from "lucide-react"
 import { utils as xlsxUtils, writeFile } from "xlsx"
 
 export function InvoicesPage() {
@@ -13,6 +13,7 @@ export function InvoicesPage() {
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState("")
   const [currentPage, setCurrentPage] = useState(1)
+  const [openDropdownId, setOpenDropdownId] = useState<number | null>(null)
 
   // Filter states
   const [complianceFilter, setComplianceFilter] = useState<"all" | "bc" | "nonbc">("all")
@@ -82,6 +83,13 @@ export function InvoicesPage() {
   useEffect(() => {
     setCurrentPage(1)
   }, [searchQuery, complianceFilter, statusFilter])
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = () => setOpenDropdownId(null)
+    document.addEventListener("click", handleClickOutside)
+    return () => document.removeEventListener("click", handleClickOutside)
+  }, [])
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString)
@@ -194,6 +202,7 @@ export function InvoicesPage() {
   const handleExportToExcel = () => {
     interface ExcelExportRow {
       "Invoice Number": string
+      "DO Number": string
       "Billing Date": string
       "Customer Name": string
       "Currency": string
@@ -205,6 +214,7 @@ export function InvoicesPage() {
 
     const exportData: ExcelExportRow[] = filteredInvoices.map((inv) => ({
       "Invoice Number": inv.invoiceNumber,
+      "DO Number": inv.deliveryNumber || "-",
       "Billing Date": formatDate(inv.invoicedDate),
       "Customer Name": inv.customerName || "-",
       "Currency": inv.currency || "IDR",
@@ -218,6 +228,7 @@ export function InvoicesPage() {
 
     const worksheet = xlsxUtils.json_to_sheet(exportData)
     worksheet["!cols"] = [
+      { wch: 20 },
       { wch: 20 },
       { wch: 15 },
       { wch: 30 },
@@ -399,14 +410,13 @@ export function InvoicesPage() {
                   <TableHead className="font-semibold text-brand-blue text-xs uppercase tracking-wider py-2 px-3 text-right whitespace-nowrap">Amount</TableHead>
                   <TableHead className="font-semibold text-brand-blue text-xs uppercase tracking-wider py-2 px-3 whitespace-nowrap">Type</TableHead>
                   <TableHead className="font-semibold text-brand-blue text-xs uppercase tracking-wider py-2 px-3 whitespace-nowrap">Status</TableHead>
-                  <TableHead className="font-semibold text-brand-blue text-xs uppercase tracking-wider py-2 px-3 whitespace-nowrap">Stamp</TableHead>
                   <TableHead className="font-semibold text-brand-blue text-xs uppercase tracking-wider py-2 px-3 text-right whitespace-nowrap">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={8} className="text-center text-brand-blue/50 py-16">
+                    <TableCell colSpan={7} className="text-center text-brand-blue/50 py-16">
                       <div className="flex items-center justify-center gap-2">
                         <div className="w-4 h-4 border-2 border-brand-blue/20 border-t-brand-blue/80 rounded-full animate-spin" />
                         Loading invoices...
@@ -415,7 +425,7 @@ export function InvoicesPage() {
                   </TableRow>
                 ) : filteredInvoices.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={8} className="text-center text-brand-blue/50 py-16">
+                    <TableCell colSpan={7} className="text-center text-brand-blue/50 py-16">
                       {invoices.length === 0 ? "No invoices found" : "No invoices match your filters"}
                     </TableCell>
                   </TableRow>
@@ -425,11 +435,18 @@ export function InvoicesPage() {
                       key={invoice.invoiceID}
                       className="hover:bg-brand-blue/[0.02] transition-colors"
                     >
-                      {/* Invoice Number */}
+                      {/* Invoice Number with DO Number below */}
                       <TableCell className="py-2 px-3 whitespace-nowrap">
-                        <span className="font-mono text-sm font-semibold text-brand-blue tracking-tight">
-                          {invoice.invoiceNumber}
-                        </span>
+                        <div>
+                          <span className="font-mono text-sm font-semibold text-brand-blue tracking-tight">
+                            {invoice.invoiceNumber}
+                          </span>
+                          {invoice.deliveryNumber && (
+                            <div className="font-mono text-xs text-brand-blue/60 mt-0.5">
+                              DO: {invoice.deliveryNumber}
+                            </div>
+                          )}
+                        </div>
                       </TableCell>
 
                       {/* Customer */}
@@ -485,68 +502,96 @@ export function InvoicesPage() {
                         )}
                       </TableCell>
 
-                      {/* Status */}
+                      {/* Status & Stamp Combined */}
                       <TableCell className="py-2 px-3 whitespace-nowrap">
-                        <Badge
-                          variant={getStatusVariant(invoice.statusText)}
-                          className="text-xs font-medium px-2 py-0.5"
-                        >
-                          {invoice.statusText}
-                        </Badge>
-                      </TableCell>
-
-                      {/* Stamping Status */}
-                      <TableCell className="py-2 px-3 whitespace-nowrap">
-                        <Badge
-                          variant={getStampingStatusVariant(invoice.stampingStatusText)}
-                          className="text-xs font-medium px-2 py-0.5"
-                        >
-                          {invoice.stampingStatusText === "Pending" && (
-                            <span className="inline-block w-1.5 h-1.5 bg-amber-500 rounded-full mr-1.5 animate-pulse" />
-                          )}
-                          {invoice.stampingStatusText === "Failed" && (
-                            <AlertCircle className="w-3 h-3 mr-0.5 inline" />
-                          )}
-                          {invoice.stampingStatusText}
-                        </Badge>
+                        <div className="flex flex-col gap-1">
+                          <Badge
+                            variant={getStatusVariant(invoice.statusText)}
+                            className="text-xs font-medium px-2 py-0.5 w-fit"
+                          >
+                            {invoice.statusText}
+                          </Badge>
+                          <Badge
+                            variant={getStampingStatusVariant(invoice.stampingStatusText)}
+                            className="text-xs font-medium px-2 py-0.5 w-fit"
+                          >
+                            {invoice.stampingStatusText === "Pending" && (
+                              <span className="inline-block w-1.5 h-1.5 bg-amber-500 rounded-full mr-1.5 animate-pulse" />
+                            )}
+                            {invoice.stampingStatusText === "Failed" && (
+                              <AlertCircle className="w-3 h-3 mr-0.5 inline" />
+                            )}
+                            {invoice.stampingStatusText}
+                          </Badge>
+                        </div>
                       </TableCell>
 
                       {/* Actions */}
                       <TableCell className="py-2 px-3 whitespace-nowrap">
                         <div className="flex items-center justify-end gap-1.5">
-                          {/* Download Unstamped */}
+                          {/* Invoice Dropdown */}
+                          <div className="relative">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setOpenDropdownId(openDropdownId === invoice.invoiceID ? null : invoice.invoiceID)
+                              }}
+                              disabled={!invoice.unstampedDocumentUrl && !invoice.stampedDocumentUrl}
+                              title="Download invoice documents"
+                              className="h-7 px-2 text-xs text-brand-blue/70 hover:text-brand-blue hover:bg-brand-blue/5 disabled:text-brand-blue/30 disabled:hover:bg-transparent"
+                            >
+                              <FileTextIcon className="w-3 h-3 mr-1" />
+                              Invoice
+                              {(invoice.unstampedDocumentUrl || invoice.stampedDocumentUrl) && (
+                                <ChevronDown className="w-3 h-3 ml-1" />
+                              )}
+                            </Button>
+                            {openDropdownId === invoice.invoiceID && (
+                              <div
+                                className="absolute right-0 top-full mt-1 bg-white rounded-md shadow-lg border border-brand-blue/10 py-1 z-10 min-w-[120px]"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                {invoice.unstampedDocumentUrl && (
+                                  <button
+                                    onClick={() => {
+                                      handleDownload(invoice.unstampedDocumentUrl)
+                                      setOpenDropdownId(null)
+                                    }}
+                                    className="w-full text-left px-3 py-1.5 text-xs text-brand-blue/70 hover:bg-brand-blue/5 hover:text-brand-blue flex items-center gap-2"
+                                  >
+                                    <Download className="w-3 h-3" />
+                                    Raw Invoice
+                                  </button>
+                                )}
+                                {invoice.stampedDocumentUrl && invoice.stampingStatusText === "Stamped" && (
+                                  <button
+                                    onClick={() => {
+                                      handleDownload(invoice.stampedDocumentUrl)
+                                      setOpenDropdownId(null)
+                                    }}
+                                    className="w-full text-left px-3 py-1.5 text-xs text-emerald-700 hover:bg-emerald-500/10 flex items-center gap-2"
+                                  >
+                                    <Download className="w-3 h-3" />
+                                    Stamped PDF
+                                  </button>
+                                )}
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Download Delivery Order (DO) */}
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => handleDownload(invoice.unstampedDocumentUrl)}
-                            disabled={!invoice.unstampedDocumentUrl}
-                            title="Download unstamped document"
+                            onClick={() => handleDownload(invoice.deliveryPrintoutUrl)}
+                            disabled={!invoice.deliveryPrintoutUrl}
+                            title="Download delivery order document"
                             className="h-7 px-2 text-xs text-brand-blue/70 hover:text-brand-blue hover:bg-brand-blue/5 disabled:text-brand-blue/30 disabled:hover:bg-transparent"
                           >
-                            <Download className="w-3 h-3 mr-1" />
-                            Raw
-                          </Button>
-
-                          {/* Download Stamped */}
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleDownload(invoice.stampedDocumentUrl)}
-                            disabled={invoice.stampingStatusText !== "Stamped" || !invoice.stampedDocumentUrl}
-                            title={
-                              invoice.stampingStatusText === "Stamped"
-                                ? "Download stamped document"
-                                : "Document not stamped yet"
-                            }
-                            className={cn(
-                              "h-7 px-2 text-xs",
-                              invoice.stampingStatusText === "Stamped"
-                                ? "text-emerald-700 hover:bg-emerald-500/10"
-                                : "text-brand-blue/40"
-                            )}
-                          >
-                            <Download className="w-3 h-3 mr-1" />
-                            PDF
+                            <File className="w-3 h-3 mr-1" />
+                            DO
                           </Button>
                         </div>
                       </TableCell>
