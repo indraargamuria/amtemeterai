@@ -103,6 +103,12 @@ builder.Services.AddScoped<IPeruriOnPremiseStampService, PeruriOnPremiseStampSer
 // Register PDF Anchor Service for dynamic e-Meterai coordinate extraction
 builder.Services.AddScoped<IPdfAnchorService, PdfAnchorService>();
 
+// Register BC Invoice Sync Service for background job processing
+builder.Services.AddScoped<BcInvoiceSyncService>();
+
+// Register Billing Background Service for automatic BC invoice sync
+builder.Services.AddHostedService<BillingBackgroundService>();
+
 // Register the named HttpClient that your DeliveriesController uses to talk to SAP
 builder.Services.AddHttpClient("SapClient", (serviceProvider, client) =>
 {

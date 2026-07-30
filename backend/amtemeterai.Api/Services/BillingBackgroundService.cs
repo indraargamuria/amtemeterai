@@ -6,10 +6,14 @@ using amtemeterai.Api.Config;
 using amtemeterai.Api.Data;
 using amtemeterai.Api.Models;
 using Microsoft.Extensions.Options;
-using System.Text.Json;
 
 namespace amtemeterai.Api.Services;
 
+/// <summary>
+/// Background service that automatically syncs BC invoices from SAP every 3 minutes.
+/// Checks for deliveries with BillingStatus = Unbilled (1) and DeliveryType = BC (1)
+/// and calls the invoice creation service to sync billing data.
+/// </summary>
 public class BillingBackgroundService : BackgroundService
 {
     private readonly IServiceProvider _serviceProvider;
@@ -28,10 +32,7 @@ public class BillingBackgroundService : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        _logger.LogInformation("Billing Background Service is starting. Delay: {Delay} minutes, Check Interval: {Interval} minutes", _options.DelayMinutes, _options.CheckIntervalMinutes);
-
-        var delayMinutes = _options.DelayMinutes;
-        var checkIntervalMinutes = _options.CheckIntervalMinutes;
+        _logger.LogInformation("Billing Background Service is starting. Check Interval: {Interval} minutes", _options.CheckIntervalMinutes);
 
         while (!stoppingToken.IsCancellationRequested)
         {
@@ -40,63 +41,101 @@ public class BillingBackgroundService : BackgroundService
                 using var scope = _serviceProvider.CreateScope();
                 var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
-                await ProcessPendingBillingAsync(db, delayMinutes);
+                await ProcessPendingBillingAsync(db);
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error in Billing Background Service");
             }
 
-            // Wait for the configured interval before next check
-            await Task.Delay(TimeSpan.FromMinutes(checkIntervalMinutes), stoppingToken);
+            // Wait for the configured interval before next check (3 minutes)
+            await Task.Delay(TimeSpan.FromMinutes(_options.CheckIntervalMinutes), stoppingToken);
         }
 
         _logger.LogInformation("Billing Background Service is stopping.");
     }
 
-    private async Task ProcessPendingBillingAsync(AppDbContext db, int delayMinutes)
+    private async Task ProcessPendingBillingAsync(AppDbContext db)
     {
-        var cutoffTime = DateTime.UtcNow.AddMinutes(-delayMinutes);
-
         // Find deliveries that:
-        // 1. Have been received (Status is FullyReceived or PartialReceived)
-        // 2. Were received before the cutoff time
-        // 3. Are not yet invoiced
+        // 1. Have BillingStatus = Unbilled (1)
+        // 2. Have DeliveryType = BC (1)
+        // 3. Have been received (Status is FullyReceived or PartialReceived)
         var pendingDeliveries = await db.DeliveryHeaders
-            .Include(d => d.Lines)
-            .Include(d => d.Customer)
             .Where(d =>
-                (d.Status == DeliveryHeader.ReceiverStatus.FullyReceived ||
-                 d.Status == DeliveryHeader.ReceiverStatus.PartialReceived) &&
-                d.Received &&
-                !d.Invoiced &&
-                d.DeliveryDate < cutoffTime)
+                d.BillingStatus == DeliveryHeader.DeliveryBillingStatus.Unbilled &&
+                d.Type == DeliveryHeader.DeliveryType.BC &&
+                d.Status.HasValue &&
+                (d.Status.Value == DeliveryHeader.ReceiverStatus.FullyReceived ||
+                 d.Status.Value == DeliveryHeader.ReceiverStatus.PartialReceived))
+            .Select(d => new { d.DeliveryNumber, d.DeliveryID })
             .ToListAsync();
 
         if (!pendingDeliveries.Any())
         {
-            _logger.LogDebug("No pending deliveries found for billing sync.");
+            _logger.LogDebug("No pending BC deliveries found for billing sync.");
             return;
         }
 
-        _logger.LogInformation("Found {Count} pending deliveries for billing sync.", pendingDeliveries.Count);
+        _logger.LogInformation("Found {Count} pending BC deliveries for billing sync.", pendingDeliveries.Count);
 
+        // Process each delivery
         foreach (var delivery in pendingDeliveries)
         {
             try
             {
-                await ProcessDeliveryBillingAsync(db, delivery);
+                _logger.LogInformation("Processing invoice sync for BC delivery {DeliveryNumber}", delivery.DeliveryNumber);
+
+                // Create a new scope for each delivery to get fresh service instance
+                using var scope = _serviceProvider.CreateScope();
+                var bcInvoiceSyncService = scope.ServiceProvider.GetRequiredService<BcInvoiceSyncService>();
+
+                // Call the invoice creation service
+                var result = await bcInvoiceSyncService.CreateSapInvoiceAsync(delivery.DeliveryNumber);
+
+                if (result != null && result.Success)
+                {
+                    _logger.LogInformation("Successfully synced invoice for delivery {DeliveryNumber}", delivery.DeliveryNumber);
+
+                    // Log success activity
+                    var activityLog = new ActivityLog
+                    {
+                        EventType = "BcInvoiceSyncSuccess",
+                        ReferenceID = delivery.DeliveryNumber,
+                        Message = $"BC invoice {result.InvoiceNumber} successfully synced from SAP for delivery {delivery.DeliveryNumber}",
+                        Severity = "Success"
+                    };
+                    db.ActivityLogs.Add(activityLog);
+                }
+                else if (result != null && !result.Success)
+                {
+                    _logger.LogWarning("Invoice sync skipped for delivery {DeliveryNumber}: {Message}", delivery.DeliveryNumber, result.Message);
+
+                    // Log warning activity
+                    var activityLog = new ActivityLog
+                    {
+                        EventType = "BcInvoiceSyncSkipped",
+                        ReferenceID = delivery.DeliveryNumber,
+                        Message = $"Invoice sync skipped: {result.Message}",
+                        Severity = "Warning"
+                    };
+                    db.ActivityLogs.Add(activityLog);
+                }
+                else
+                {
+                    _logger.LogWarning("Null or failed response when syncing invoice for delivery {DeliveryNumber}", delivery.DeliveryNumber);
+                }
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Failed to process billing for delivery {DeliveryNumber}", delivery.DeliveryNumber);
+                _logger.LogError(ex, "Failed to sync invoice for BC delivery {DeliveryNumber}", delivery.DeliveryNumber);
 
-                // Log activity
+                // Log error activity
                 var activityLog = new ActivityLog
                 {
-                    EventType = "BillingSyncFailed",
+                    EventType = "BcInvoiceSyncFailed",
                     ReferenceID = delivery.DeliveryNumber,
-                    Message = $"Failed to sync billing to SAP: {ex.Message}",
+                    Message = $"Failed to sync BC invoice: {ex.Message}",
                     Severity = "Error"
                 };
                 db.ActivityLogs.Add(activityLog);
@@ -104,95 +143,5 @@ public class BillingBackgroundService : BackgroundService
         }
 
         await db.SaveChangesAsync();
-    }
-
-    private async Task ProcessDeliveryBillingAsync(AppDbContext db, DeliveryHeader delivery)
-    {
-        _logger.LogInformation("Processing billing for delivery {DeliveryNumber}", delivery.DeliveryNumber);
-
-        // Build SAP billing payload
-        var sapBillingPayload = new
-        {
-            CustomerCode = delivery.Customer?.CustomerCode ?? string.Empty,
-            DeliveryNumber = delivery.DeliveryNumber,
-            DeliveryDate = delivery.DeliveryDate.ToString("yyyy-MM-dd"),
-            ReceiverStatus = delivery.Status == DeliveryHeader.ReceiverStatus.FullyReceived ? "1" : "2",
-            Lines = delivery.Lines.Select(l => new
-            {
-                DeliveryLineNumber = l.DeliveryLineNumber,
-                DeliveryItemCode = l.DeliveryItemCode,
-                DeliveryItemDescription = l.DeliveryItemDescription,
-                PackQuantityDelivered = l.PackQuantityDelivered,
-                PackQuantityReturned = l.PackQuantityReturned,
-                PackQuantityRejected = l.PackQuantityRejected
-            }).ToList()
-        };
-
-        // In a real implementation, you would call SAP API here
-        // For now, we'll simulate the response
-        var sapSuccess = await CallSapBillingApiAsync(sapBillingPayload);
-
-        if (sapSuccess)
-        {
-            // Calculate total invoice amount from lines
-            decimal totalAmount = delivery.Lines.Sum(l => l.PackQuantityDelivered * 1000); // Simplified calculation
-
-            // Create invoice record
-            var invoiceNumber = $"INV-{DateTime.UtcNow:yyyyMMdd}-{delivery.DeliveryID:D6}";
-
-            var invoice = new Invoice
-            {
-                InvoiceNumber = invoiceNumber,
-                CustomerNumber = delivery.Customer?.CustomerCode ?? string.Empty,
-#pragma warning disable CS0618 // Type or member is obsolete
-                InvoiceAmount = totalAmount,
-#pragma warning restore CS0618
-                AmountLocal = totalAmount,
-                AmountForeign = 0,
-                InvoicedDate = DateTime.UtcNow,
-                Status = Invoice.InvoiceStatus.Draft,
-                DeliveryHeaderId = delivery.DeliveryID,
-                
-                //  FIXED: Reference the correct type signature name here
-                StampingStatus = Invoice.InvoiceStampingStatus.NotStamped
-            };
-
-            db.Invoices.Add(invoice);
-
-            // Mark delivery as invoiced
-            delivery.Invoiced = true;
-
-            _logger.LogInformation(
-                "Successfully created invoice {InvoiceNumber} for delivery {DeliveryNumber}",
-                invoiceNumber,
-                delivery.DeliveryNumber);
-
-            // Log activity
-            var activityLog = new ActivityLog
-            {
-                EventType = "BillingSyncSuccess",
-                ReferenceID = delivery.DeliveryNumber,
-                Message = $"Invoice {invoiceNumber} created and synced to SAP.",
-                Severity = "Info"
-            };
-            db.ActivityLogs.Add(activityLog);
-        }
-        else
-        {
-            _logger.LogWarning("SAP billing sync failed for delivery {DeliveryNumber}", delivery.DeliveryNumber);
-        }
-    }
-
-    private async Task<bool> CallSapBillingApiAsync(object payload)
-    {
-        // In production, this would call the actual SAP billing API
-        // For now, we simulate a successful response
-
-        _logger.LogDebug("SAP Billing Payload: {Payload}", JsonSerializer.Serialize(payload));
-
-        // Simulate network delay
-        await Task.Delay(100);
-
-        return true; // Simulate success
     }
 }
