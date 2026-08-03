@@ -54,7 +54,11 @@ export function InvoicesPage() {
     if (statusFilter !== "all") {
       filtered = filtered.filter((inv) => {
         const statusLower = inv.statusText.toLowerCase().replace(/\s+/g, "")
-        return statusLower === statusFilter
+        if (statusFilter === "syncedtosap") return statusLower === "syncedtosap"
+        if (statusFilter === "stamped") return statusLower === "stamped" || inv.stampingStatusText === "Stamped"
+        if (statusFilter === "draft") return statusLower === "draft"
+        if (statusFilter === "voided") return statusLower === "voided"
+        return true
       })
     }
 
@@ -137,10 +141,10 @@ export function InvoicesPage() {
     }
   }
 
-  const getComplianceBadgeVariant = (category?: string): "default" | "success" | "warning" | "accent" | "outline" => {
-    if (category === "BC") return "success"
-    if (category === "NonBC") return "default"
-    if (category === "OTHER") return "outline"
+  const getComplianceBadgeVariant = (category?: string): "default" | "success" | "warning" | "accent" | "outline" | "bc" | "nonbc" | "other" => {
+    if (category === "BC") return "bc"
+    if (category === "NonBC") return "nonbc"
+    if (category === "OTHER") return "other"
     return "outline"
   }
 
@@ -156,7 +160,7 @@ export function InvoicesPage() {
       case "Draft": return "default"
       case "Stamped": return "success"
       case "Sync Failed": return "accent"
-      case "Synced to SAP": return "success"
+      case "Synced to SAP": return "warning"
       case "Canceled": return "outline"
       case "Voided": return "accent"
       default: return "default"
@@ -165,7 +169,7 @@ export function InvoicesPage() {
 
   const getStampingStatusVariant = (statusText: string): "default" | "success" | "warning" | "accent" | "outline" => {
     switch (statusText) {
-      case "Not Stamped": return "default"
+      case "Not Stamped": return "outline"
       case "Pending": return "warning"
       case "Stamped": return "success"
       case "Failed": return "accent"
