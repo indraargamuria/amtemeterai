@@ -620,6 +620,9 @@ public class InvoicesController : ControllerBase
                 $"Allowed values: {string.Join(", ", ValidComplianceCategories)}.");
         }
 
+        // For standalone invoices (without delivery), compliance category is always OTHER
+        var complianceCategory = "OTHER";
+
         // Resolve base / down pay / nett amounts
         // New rule: Nett Amount = BaseAmount + DownPayAmount
         // When BaseAmount is 0, derive it from Amount: BaseAmount = Amount - DownPayAmount
@@ -664,7 +667,7 @@ public class InvoicesController : ControllerBase
             InvoiceAmount = nettAmountLocal,
 #pragma warning restore CS0618
             Currency = dto.Currency,
-            ComplianceCategory = dto.ComplianceCategory,
+            ComplianceCategory = complianceCategory,
             InvoicedDate = dto.InvoicedDate,
             Status = Invoice.InvoiceStatus.Draft,
             DeliveryHeaderId = null, // Strictly null for standalone invoices
