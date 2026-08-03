@@ -11,7 +11,9 @@
       "Bash(find:*)",
       "Bash(ls:*)",
       "Bash(dotnet add package:*)",
-      "Bash(docker exec:*)"
+      "Bash(docker exec:*)",
+      "Bash(if not exist \"D:\\\\As a Solution Architect\\\\amtemeterai\\\\docs\" mkdir \"D:\\\\As a Solution Architect\\\\amtemeterai\\\\docs\")",
+      "Bash(cd:*)"
     ]
   }
 }

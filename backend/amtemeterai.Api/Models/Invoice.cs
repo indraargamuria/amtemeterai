@@ -32,16 +32,67 @@ public class Invoice
     public decimal InvoiceAmount { get; set; }
 
     /// <summary>
-    /// Foreign currency amount (e.g., USD) from SAP ERP
+    /// Foreign currency NETT amount (e.g., USD) from SAP ERP
+    /// Computed as BaseAmountForeign - DownPayAmountForeign
     /// Precision: 18 digits, 2 decimal places
     /// </summary>
     public decimal AmountForeign { get; set; }
 
     /// <summary>
-    /// Local currency amount (e.g., IDR) from SAP ERP
+    /// Local currency NETT amount (e.g., IDR) from SAP ERP
+    /// Computed as BaseAmountLocal - DownPayAmountLocal
     /// Precision: 18 digits, 2 decimal places
     /// </summary>
     public decimal AmountLocal { get; set; }
+
+    /// <summary>
+    /// Foreign currency base (gross) amount before any down payment deduction
+    /// Defaults to AmountForeign when DownPayAmountForeign is 0
+    /// Precision: 18 digits, 2 decimal places
+    /// </summary>
+    public decimal BaseAmountForeign { get; set; }
+
+    /// <summary>
+    /// Local currency base (gross) amount before any down payment deduction
+    /// Defaults to AmountLocal when DownPayAmountLocal is 0
+    /// Precision: 18 digits, 2 decimal places
+    /// </summary>
+    public decimal BaseAmountLocal { get; set; }
+
+    /// <summary>
+    /// Foreign currency down payment amount
+    /// Nett Amount = BaseAmountForeign - DownPayAmountForeign
+    /// Precision: 18 digits, 2 decimal places
+    /// </summary>
+    public decimal DownPayAmountForeign { get; set; }
+
+    /// <summary>
+    /// Local currency down payment amount
+    /// Nett Amount = BaseAmountLocal - DownPayAmountLocal
+    /// Precision: 18 digits, 2 decimal places
+    /// </summary>
+    public decimal DownPayAmountLocal { get; set; }
+
+    /// <summary>
+    /// Applies a down payment and recalculates the nett amounts.
+    /// When the base amount was never captured (legacy rows), the current
+    /// nett amount is adopted as the base before applying the down payment.
+    /// </summary>
+    public void ApplyDownPay(decimal downPayLocal, decimal downPayForeign)
+    {
+        if (BaseAmountLocal <= 0) BaseAmountLocal = AmountLocal;
+        if (BaseAmountForeign <= 0) BaseAmountForeign = AmountForeign;
+
+        DownPayAmountLocal = downPayLocal;
+        DownPayAmountForeign = downPayForeign;
+
+        AmountLocal = BaseAmountLocal - downPayLocal;
+        AmountForeign = BaseAmountForeign - downPayForeign;
+
+#pragma warning disable CS0618 // Type or member is obsolete
+        InvoiceAmount = AmountLocal;
+#pragma warning restore CS0618
+    }
 
     /// <summary>
     /// Currency code (ISO 4217)

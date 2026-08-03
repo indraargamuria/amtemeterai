@@ -18,6 +18,10 @@ namespace amtemeterai.Api.Controllers;
 [Authorize]
 public class InvoicesController : ControllerBase
 {
+    // Valid compliance categories accepted by the invoice creation API.
+    // SAP sync produces "BC" / "NonBC"; standalone invoices may also use "OTHER".
+    private static readonly string[] ValidComplianceCategories = ["BC", "NonBC", "OTHER"];
+
     private readonly AppDbContext _db;
     private readonly AppOptions _appOptions;
     private readonly IStorageService _storageService;
@@ -357,6 +361,10 @@ public class InvoicesController : ControllerBase
                 // New dual-currency fields
                 AmountForeign = i.AmountForeign,
                 AmountLocal = i.AmountLocal,
+                BaseAmountForeign = i.BaseAmountForeign,
+                BaseAmountLocal = i.BaseAmountLocal,
+                DownPayAmountForeign = i.DownPayAmountForeign,
+                DownPayAmountLocal = i.DownPayAmountLocal,
                 Currency = i.Currency,
                 ComplianceCategory = i.ComplianceCategory,
                 InvoicedDate = i.InvoicedDate,
@@ -412,6 +420,10 @@ public class InvoicesController : ControllerBase
             InvoiceAmount = i.InvoiceAmount,
             AmountForeign = i.AmountForeign,
             AmountLocal = i.AmountLocal,
+            BaseAmountForeign = i.BaseAmountForeign,
+            BaseAmountLocal = i.BaseAmountLocal,
+            DownPayAmountForeign = i.DownPayAmountForeign,
+            DownPayAmountLocal = i.DownPayAmountLocal,
             Currency = i.Currency,
             ComplianceCategory = i.ComplianceCategory,
             InvoicedDate = i.InvoicedDate,
@@ -466,6 +478,10 @@ public class InvoicesController : ControllerBase
             // New dual-currency fields
             AmountForeign = invoice.AmountForeign,
             AmountLocal = invoice.AmountLocal,
+            BaseAmountForeign = invoice.BaseAmountForeign,
+            BaseAmountLocal = invoice.BaseAmountLocal,
+            DownPayAmountForeign = invoice.DownPayAmountForeign,
+            DownPayAmountLocal = invoice.DownPayAmountLocal,
             Currency = invoice.Currency,
             ComplianceCategory = invoice.ComplianceCategory,
             InvoicedDate = invoice.InvoicedDate,
@@ -595,6 +611,31 @@ public class InvoicesController : ControllerBase
         if (string.IsNullOrWhiteSpace(dto.CustomerNumber))
             return BadRequest("Customer number is required.");
 
+        // Validate compliance category against allowed values (BC, NonBC, OTHER)
+        if (!string.IsNullOrWhiteSpace(dto.ComplianceCategory) &&
+            !ValidComplianceCategories.Contains(dto.ComplianceCategory, StringComparer.OrdinalIgnoreCase))
+        {
+            return BadRequest(
+                $"Compliance category '{dto.ComplianceCategory}' is not valid. " +
+                $"Allowed values: {string.Join(", ", ValidComplianceCategories)}.");
+        }
+
+        // Resolve base / down pay / nett amounts
+        // Default rule: when DownPay is 0, BaseAmount matches the nett Amount.
+        var baseAmountLocal = dto.BaseAmountLocal > 0
+            ? dto.BaseAmountLocal
+            : dto.AmountLocal + dto.DownPayAmountLocal;
+        var baseAmountForeign = dto.BaseAmountForeign > 0
+            ? dto.BaseAmountForeign
+            : dto.AmountForeign + dto.DownPayAmountForeign;
+        var downPayAmountLocal = dto.DownPayAmountLocal;
+        var downPayAmountForeign = dto.DownPayAmountForeign;
+        var nettAmountLocal = baseAmountLocal - downPayAmountLocal;
+        var nettAmountForeign = baseAmountForeign - downPayAmountForeign;
+
+        if (nettAmountLocal < 0 || nettAmountForeign < 0)
+            return BadRequest("Down payment cannot exceed the base amount.");
+
         // 1. Ensure invoice number is unique (only block if active, not voided/canceled)
         var existingInvoice = await _db.Invoices
             .FirstOrDefaultAsync(i => i.InvoiceNumber == dto.InvoiceNumber);
@@ -614,11 +655,15 @@ public class InvoicesController : ControllerBase
         {
             InvoiceNumber = dto.InvoiceNumber,
             CustomerNumber = dto.CustomerNumber,
-            AmountForeign = dto.AmountForeign,
-            AmountLocal = dto.AmountLocal,
+            AmountForeign = nettAmountForeign,
+            AmountLocal = nettAmountLocal,
+            BaseAmountForeign = baseAmountForeign,
+            BaseAmountLocal = baseAmountLocal,
+            DownPayAmountForeign = downPayAmountForeign,
+            DownPayAmountLocal = downPayAmountLocal,
 #pragma warning disable CS0618 // Type or member is obsolete
             // Legacy field sync
-            InvoiceAmount = dto.AmountLocal,
+            InvoiceAmount = nettAmountLocal,
 #pragma warning restore CS0618
             Currency = dto.Currency,
             ComplianceCategory = dto.ComplianceCategory,
@@ -637,6 +682,48 @@ public class InvoicesController : ControllerBase
             invoice.CustomerNumber);
 
         // 3. Return formatted response using GetInvoiceById endpoint
+        return await GetInvoiceById(invoice.InvoiceID);
+    }
+
+    /// <summary>
+    /// Update the DownPay (Local and Foreign) for an invoice.
+    /// The nett AmountLocal / AmountForeign are automatically recalculated
+    /// as BaseAmount - DownPayAmount for each currency.
+    /// </summary>
+    [HttpPut("{id:int}/downpay")]
+    public async Task<ActionResult<InvoiceResponseDto>> UpdateInvoiceDownPay(
+        int id,
+        [FromBody] UpdateInvoiceDownPayDto dto)
+    {
+        var invoice = await _db.Invoices
+            .Include(i => i.DeliveryHeader)
+            .FirstOrDefaultAsync(i => i.InvoiceID == id);
+
+        if (invoice == null)
+            return NotFound($"Invoice with ID {id} not found.");
+
+        // Adopt the current nett amount as the base when it was never captured (legacy rows)
+        if (invoice.BaseAmountLocal <= 0) invoice.BaseAmountLocal = invoice.AmountLocal;
+        if (invoice.BaseAmountForeign <= 0) invoice.BaseAmountForeign = invoice.AmountForeign;
+
+        if (dto.DownPayAmountLocal > invoice.BaseAmountLocal)
+            return BadRequest($"Down payment (local) {dto.DownPayAmountLocal} cannot exceed base amount {invoice.BaseAmountLocal}.");
+
+        if (dto.DownPayAmountForeign > invoice.BaseAmountForeign)
+            return BadRequest($"Down payment (foreign) {dto.DownPayAmountForeign} cannot exceed base amount {invoice.BaseAmountForeign}.");
+
+        invoice.ApplyDownPay(dto.DownPayAmountLocal, dto.DownPayAmountForeign);
+        await _db.SaveChangesAsync();
+
+        _logger.LogInformation(
+            "Invoice {InvoiceNumber} down payment updated. Local: {DownPayLocal}, Foreign: {DownPayForeign}. " +
+            "Nett recalculated to Local: {NettLocal}, Foreign: {NettForeign}.",
+            invoice.InvoiceNumber,
+            invoice.DownPayAmountLocal,
+            invoice.DownPayAmountForeign,
+            invoice.AmountLocal,
+            invoice.AmountForeign);
+
         return await GetInvoiceById(invoice.InvoiceID);
     }
 

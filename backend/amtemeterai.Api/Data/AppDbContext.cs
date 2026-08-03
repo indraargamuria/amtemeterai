@@ -114,6 +114,24 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
             .Property(x => x.AmountLocal)
             .HasPrecision(18, 2);
 
+        // Base (gross) amount fields with precision configuration
+        modelBuilder.Entity<Invoice>()
+            .Property(x => x.BaseAmountForeign)
+            .HasPrecision(18, 2);
+
+        modelBuilder.Entity<Invoice>()
+            .Property(x => x.BaseAmountLocal)
+            .HasPrecision(18, 2);
+
+        // Down payment amount fields with precision configuration
+        modelBuilder.Entity<Invoice>()
+            .Property(x => x.DownPayAmountForeign)
+            .HasPrecision(18, 2);
+
+        modelBuilder.Entity<Invoice>()
+            .Property(x => x.DownPayAmountLocal)
+            .HasPrecision(18, 2);
+
         // Currency code configuration
         modelBuilder.Entity<Invoice>()
             .Property(x => x.Currency)

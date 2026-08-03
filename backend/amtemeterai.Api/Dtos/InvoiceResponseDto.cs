@@ -11,8 +11,13 @@ public class InvoiceResponseDto
     public decimal InvoiceAmount { get; set; }
 
     // New dual-currency fields
+    // AmountForeign / AmountLocal represent the NETT amount (Base - DownPay)
     public decimal AmountForeign { get; set; }
     public decimal AmountLocal { get; set; }
+    public decimal BaseAmountForeign { get; set; }
+    public decimal BaseAmountLocal { get; set; }
+    public decimal DownPayAmountForeign { get; set; }
+    public decimal DownPayAmountLocal { get; set; }
     public string Currency { get; set; } = string.Empty;
     public string? ComplianceCategory { get; set; }
 

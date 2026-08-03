@@ -12,5 +12,5 @@ public class BillingSyncOptions
     /// Check interval in minutes between billing sync cycles
     /// Default: 3 minutes
     /// </summary>
-    public int CheckIntervalMinutes { get; set; } = 1;
+    public int CheckIntervalMinutes { get; set; } = 5;
 }

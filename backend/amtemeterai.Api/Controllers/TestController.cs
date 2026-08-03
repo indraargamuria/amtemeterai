@@ -191,6 +191,7 @@ public class TestController : ControllerBase
                 delivery.Invoiced = true;
 
                 // Create invoice record from SAP billing data
+                // Base amount defaults to the nett amount when no down payment is present (DownPay = 0)
                 var invoice = new Invoice
                 {
                     InvoiceNumber = sapBillingData.SapInvoiceNumber,
@@ -202,6 +203,10 @@ public class TestController : ControllerBase
                     // New dual-currency fields
                     AmountForeign = sapBillingData.AmountForeign,
                     AmountLocal = sapBillingData.AmountLocal,
+                    BaseAmountForeign = sapBillingData.AmountForeign,
+                    BaseAmountLocal = sapBillingData.AmountLocal,
+                    DownPayAmountForeign = 0,
+                    DownPayAmountLocal = 0,
                     Currency = sapBillingData.Currency,
                     ComplianceCategory = sapBillingData.ComplianceCategory,
                     InvoicedDate = sapBillingData.BillingDate,
