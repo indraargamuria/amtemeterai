@@ -73,12 +73,21 @@ public class ErpCustomerSource : ICustomerSource
                     {
                         if (string.IsNullOrWhiteSpace(item.CustomerNo)) continue;
 
+                        // Parse leadtime as integer if present
+                        int? leadTimeDays = null;
+                        if (!string.IsNullOrWhiteSpace(item.LeadTime) && int.TryParse(item.LeadTime, out var lt))
+                        {
+                            leadTimeDays = lt;
+                        }
+
                         mappedList.Add(new CustomerDto
                         {
                             CustomerCode = item.CustomerNo.Trim(),
                             CustomerName = string.IsNullOrWhiteSpace(item.CustomerName) ? "Unknown SAP Customer" : item.CustomerName.Trim(),
                             CustomerEmail = string.IsNullOrWhiteSpace(item.Email) ? null : item.Email.Trim(),
-                            CustomerPin = string.IsNullOrWhiteSpace(item.PinCode) ? null : item.PinCode.Trim()
+                            CustomerPin = string.IsNullOrWhiteSpace(item.PinCode) ? null : item.PinCode.Trim(),
+                            Region = string.IsNullOrWhiteSpace(item.Region) ? null : item.Region.Trim(),
+                            LeadTimeDays = leadTimeDays
                         });
                     }
                 }
@@ -101,15 +110,26 @@ public class ErpCustomerSource : ICustomerSource
                             string? customerName = element.TryGetProperty("customer_name", out var nameProp) ? nameProp.GetString() : null;
                             string? email = element.TryGetProperty("email", out var emailProp) ? emailProp.GetString() : null;
                             string? pinCode = element.TryGetProperty("pin_code", out var pinProp) ? pinProp.GetString() : null;
+                            string? region = element.TryGetProperty("region", out var regionProp) ? regionProp.GetString() : null;
+                            string? leadTime = element.TryGetProperty("leadtime", out var leadTimeProp) ? leadTimeProp.GetString() : null;
 
                             if (string.IsNullOrWhiteSpace(customerNo)) continue;
+
+                            // Parse leadtime as integer if present
+                            int? leadTimeDays = null;
+                            if (!string.IsNullOrWhiteSpace(leadTime) && int.TryParse(leadTime, out var lt))
+                            {
+                                leadTimeDays = lt;
+                            }
 
                             mappedList.Add(new CustomerDto
                             {
                                 CustomerCode = customerNo.Trim(),
                                 CustomerName = string.IsNullOrWhiteSpace(customerName) ? "Unknown SAP Customer" : customerName.Trim(),
                                 CustomerEmail = string.IsNullOrWhiteSpace(email) ? null : email.Trim(),
-                                CustomerPin = string.IsNullOrWhiteSpace(pinCode) ? null : pinCode.Trim()
+                                CustomerPin = string.IsNullOrWhiteSpace(pinCode) ? null : pinCode.Trim(),
+                                Region = string.IsNullOrWhiteSpace(region) ? null : region.Trim(),
+                                LeadTimeDays = leadTimeDays
                             });
                         }
                         catch (Exception itemEx)
@@ -141,7 +161,7 @@ public class ErpCustomerSource : ICustomerSource
 
         // This expression searches for content strings sitting between functional JSON formatting layouts:
         // Ex: "customer_name": "PT. "MAJU" JAYA", -> converts to: "customer_name": "PT. \"MAJU\" JAYA",
-        string pattern = @"""(customer_name|customer_no|email|pin_code)""\s*:\s*""(.*?)""\s*(?=[,}\]])";
+        string pattern = @"""(customer_name|customer_no|email|pin_code|region|leadtime)""\s*:\s*""(.*?)""\s*(?=[,}\]])";
 
         return Regex.Replace(rawJson, pattern, match =>
         {
@@ -174,4 +194,10 @@ public record SapCustomerItem
 
     [JsonPropertyName("pin_code")]
     public string? PinCode { get; init; }
+
+    [JsonPropertyName("region")]
+    public string? Region { get; init; }
+
+    [JsonPropertyName("leadtime")]
+    public string? LeadTime { get; init; }
 }

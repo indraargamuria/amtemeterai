@@ -11,4 +11,6 @@ public record CustomerDto
     public string CustomerName { get; init; } = null!;
     public string? CustomerEmail { get; init; }
     public string? CustomerPin { get; init; }
+    public string? Region { get; init; }
+    public int? LeadTimeDays { get; init; }
 }

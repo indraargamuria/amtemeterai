@@ -52,7 +52,9 @@ public class CustomersController : ControllerBase
                 CustomerCode = c.CustomerCode,
                 CustomerName = c.CustomerName,
                 CustomerEmail = c.CustomerEmail,
-                CustomerPin = c.CustomerPin
+                CustomerPin = c.CustomerPin,
+                Region = c.Region,
+                LeadTimeDays = c.LeadTimeDays
             })
             .ToListAsync();
 

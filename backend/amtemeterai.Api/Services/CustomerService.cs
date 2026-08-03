@@ -31,7 +31,9 @@ public class CustomerService
                     CustomerCode = c.CustomerCode,
                     CustomerName = c.CustomerName,
                     CustomerEmail = c.CustomerEmail,
-                    CustomerPin = c.CustomerPin ?? "123456"
+                    CustomerPin = c.CustomerPin ?? "123456",
+                    Region = c.Region,
+                    LeadTimeDays = c.LeadTimeDays
                 });
                 inserted++;
             }
@@ -40,22 +42,39 @@ public class CustomerService
                 // Evaluate explicit dirty changes flags across non-key columns
                 bool isDirty = false;
 
+                // Update CustomerName if changed
                 if (existing.CustomerName != c.CustomerName)
                 {
                     existing.CustomerName = c.CustomerName;
                     isDirty = true;
                 }
 
+                // Update CustomerEmail if changed (allow null to clear)
                 if (existing.CustomerEmail != c.CustomerEmail)
                 {
                     existing.CustomerEmail = c.CustomerEmail;
                     isDirty = true;
                 }
 
-                // Only evaluate if incoming value is targeted for modification updates
-                if (!string.IsNullOrEmpty(c.CustomerPin) && existing.CustomerPin != c.CustomerPin)
+                // Update CustomerPin if changed (allow null to clear, default to "123456")
+                string newPin = c.CustomerPin ?? "123456";
+                if (existing.CustomerPin != newPin)
                 {
-                    existing.CustomerPin = c.CustomerPin;
+                    existing.CustomerPin = newPin;
+                    isDirty = true;
+                }
+
+                // Update Region if changed (allow null to clear)
+                if (existing.Region != c.Region)
+                {
+                    existing.Region = c.Region;
+                    isDirty = true;
+                }
+
+                // Update LeadTimeDays if changed (allow null to clear)
+                if (existing.LeadTimeDays != c.LeadTimeDays)
+                {
+                    existing.LeadTimeDays = c.LeadTimeDays;
                     isDirty = true;
                 }
 

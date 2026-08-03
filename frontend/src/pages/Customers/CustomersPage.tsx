@@ -22,9 +22,11 @@ interface Customer {
   customerName: string
   customerEmail: string | null
   customerPin: string | null // 🚀 Added to match backend contract mapping
+  region: string | null // 🚀 Region code from SAP (short text, less than 20 characters)
+  leadTimeDays: number | null // 🚀 Lead time in days from SAP
 }
 
-type SortField = "customerCode" | "customerName" | "customerEmail" | "customerPin"
+type SortField = "customerCode" | "customerName" | "customerEmail" | "customerPin" | "region" | "leadTimeDays"
 type SortOrder = "asc" | "desc"
 
 export function CustomersPage() {
@@ -121,7 +123,8 @@ export function CustomersPage() {
           c.customerCode.toLowerCase().includes(query) ||
           c.customerName.toLowerCase().includes(query) ||
           (c.customerEmail?.toLowerCase().includes(query) ?? false) ||
-          (c.customerPin?.toLowerCase().includes(query) ?? false) // 🚀 Allows search by PIN
+          (c.customerPin?.toLowerCase().includes(query) ?? false) || // 🚀 Allows search by PIN
+          (c.region?.toLowerCase().includes(query) ?? false) // 🚀 Allows search by region
       )
     }
 
@@ -245,39 +248,50 @@ export function CustomersPage() {
                 className="font-medium text-brand-blue/50 uppercase text-xs tracking-wider cursor-pointer hover:text-brand-blue/70 transition-colors"
                 onClick={() => handleSort("customerCode")}
               >
-                Customer Code {getSortIcon("customerCode")}
+                Code {getSortIcon("customerCode")}
               </TableHead>
               <TableHead
                 className="font-medium text-brand-blue/50 uppercase text-xs tracking-wider cursor-pointer hover:text-brand-blue/70 transition-colors"
                 onClick={() => handleSort("customerName")}
               >
-                Customer Name {getSortIcon("customerName")}
+                Name {getSortIcon("customerName")}
               </TableHead>
               <TableHead
                 className="font-medium text-brand-blue/50 uppercase text-xs tracking-wider cursor-pointer hover:text-brand-blue/70 transition-colors"
                 onClick={() => handleSort("customerEmail")}
               >
-                Email Address {getSortIcon("customerEmail")}
+                Email {getSortIcon("customerEmail")}
               </TableHead>
-              {/* 🚀 New Customer PIN Column */}
+              <TableHead
+                className="font-medium text-brand-blue/50 uppercase text-xs tracking-wider cursor-pointer hover:text-brand-blue/70 transition-colors"
+                onClick={() => handleSort("region")}
+              >
+                Region {getSortIcon("region")}
+              </TableHead>
+              <TableHead
+                className="font-medium text-brand-blue/50 uppercase text-xs tracking-wider cursor-pointer hover:text-brand-blue/70 transition-colors text-right"
+                onClick={() => handleSort("leadTimeDays")}
+              >
+                Lead Time {getSortIcon("leadTimeDays")}
+              </TableHead>
               <TableHead
                 className="font-medium text-brand-blue/50 uppercase text-xs tracking-wider cursor-pointer hover:text-brand-blue/70 transition-colors"
                 onClick={() => handleSort("customerPin")}
               >
-                System PIN {getSortIcon("customerPin")}
+                PIN {getSortIcon("customerPin")}
               </TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={4} className="text-center text-brand-blue/60 py-12">
+                <TableCell colSpan={6} className="text-center text-brand-blue/60 py-12">
                   Loading customers...
                 </TableCell>
               </TableRow>
             ) : filteredAndSortedCustomers.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={4} className="text-center text-brand-blue/60 py-12">
+                <TableCell colSpan={6} className="text-center text-brand-blue/60 py-12">
                   {customers.length === 0
                     ? "No customers found"
                     : "No customers match your filter criteria"}
@@ -309,12 +323,37 @@ export function CustomersPage() {
                       </span>
                     ) : (
                       <Badge variant="outline" className="border-dashed border-slate-300 text-slate-400">
-                        No Email Configured
+                        No Email
                       </Badge>
                     )}
                   </TableCell>
 
-                  {/* 🚀 New Customer PIN Layout with styled fallbacks */}
+                  {/* Region Column */}
+                  <TableCell className="py-4">
+                    {customer.region ? (
+                      <span className="text-sm text-brand-blue/70 bg-brand-blue/5 px-2 py-1 rounded">
+                        {customer.region}
+                      </span>
+                    ) : (
+                      <span className="text-slate-400 italic text-sm">—</span>
+                    )}
+                  </TableCell>
+
+                  {/* Lead Time Days Column */}
+                  <TableCell className="py-4 text-right">
+                    {customer.leadTimeDays != null ? (
+                      <span className="inline-flex items-center gap-1">
+                        <span className="text-sm font-semibold text-brand-blue">
+                          {customer.leadTimeDays}
+                        </span>
+                        <span className="text-xs text-brand-blue/50">days</span>
+                      </span>
+                    ) : (
+                      <span className="text-slate-400 italic text-sm">—</span>
+                    )}
+                  </TableCell>
+
+                  {/* Customer PIN Layout with styled fallbacks */}
                   <TableCell className="py-4 font-mono text-xs">
                     {customer.customerPin ? (
                       <span className="bg-slate-100/80 px-2 py-1 rounded text-slate-600 border border-slate-200/40">
