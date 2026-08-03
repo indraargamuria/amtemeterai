@@ -251,18 +251,22 @@ public class BcInvoiceSyncService
                 }
 
                 // Create invoice record with dual-currency support
-                // Base amount defaults to the nett amount when no down payment is present (DownPay = 0)
+                // New logic: Nett Amount = BaseAmount + DownPayAmount
+                // SAP sends: amountLocal as base, downPayment as additional amount
+                var downPayLocal = sapBillingData.DownPayment;
+                var downPayForeign = 0m; // Down payment is currently based on local currency only
+
                 var invoice = new Invoice
                 {
                     InvoiceNumber = sapBillingData.SapInvoiceNumber,
                     CustomerNumber = sapBillingData.CustomerNumber,
-                    InvoiceAmount = sapBillingData.AmountLocal, // Legacy field for compatibility
-                    AmountForeign = sapBillingData.AmountForeign,
-                    AmountLocal = sapBillingData.AmountLocal,
+                    InvoiceAmount = sapBillingData.AmountLocal + downPayLocal, // Legacy field for compatibility
+                    AmountForeign = sapBillingData.AmountForeign + downPayForeign,
+                    AmountLocal = sapBillingData.AmountLocal + downPayLocal,
                     BaseAmountForeign = sapBillingData.AmountForeign,
                     BaseAmountLocal = sapBillingData.AmountLocal,
-                    DownPayAmountForeign = 0,
-                    DownPayAmountLocal = 0,
+                    DownPayAmountForeign = downPayForeign,
+                    DownPayAmountLocal = downPayLocal,
                     Currency = sapBillingData.Currency,
                     ComplianceCategory = sapBillingData.ComplianceCategory,
                     InvoicedDate = sapBillingData.BillingDate,

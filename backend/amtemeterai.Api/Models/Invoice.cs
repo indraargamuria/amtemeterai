@@ -33,48 +33,47 @@ public class Invoice
 
     /// <summary>
     /// Foreign currency NETT amount (e.g., USD) from SAP ERP
-    /// Computed as BaseAmountForeign - DownPayAmountForeign
+    /// Computed as BaseAmountForeign + DownPayAmountForeign
     /// Precision: 18 digits, 2 decimal places
     /// </summary>
     public decimal AmountForeign { get; set; }
 
     /// <summary>
     /// Local currency NETT amount (e.g., IDR) from SAP ERP
-    /// Computed as BaseAmountLocal - DownPayAmountLocal
+    /// Computed as BaseAmountLocal + DownPayAmountLocal
     /// Precision: 18 digits, 2 decimal places
     /// </summary>
     public decimal AmountLocal { get; set; }
 
     /// <summary>
-    /// Foreign currency base (gross) amount before any down payment deduction
-    /// Defaults to AmountForeign when DownPayAmountForeign is 0
+    /// Foreign currency base (gross) amount from SAP ERP
     /// Precision: 18 digits, 2 decimal places
     /// </summary>
     public decimal BaseAmountForeign { get; set; }
 
     /// <summary>
-    /// Local currency base (gross) amount before any down payment deduction
-    /// Defaults to AmountLocal when DownPayAmountLocal is 0
+    /// Local currency base (gross) amount from SAP ERP
     /// Precision: 18 digits, 2 decimal places
     /// </summary>
     public decimal BaseAmountLocal { get; set; }
 
     /// <summary>
     /// Foreign currency down payment amount
-    /// Nett Amount = BaseAmountForeign - DownPayAmountForeign
+    /// Nett Amount = BaseAmountForeign + DownPayAmountForeign
     /// Precision: 18 digits, 2 decimal places
     /// </summary>
     public decimal DownPayAmountForeign { get; set; }
 
     /// <summary>
     /// Local currency down payment amount
-    /// Nett Amount = BaseAmountLocal - DownPayAmountLocal
+    /// Nett Amount = BaseAmountLocal + DownPayAmountLocal
     /// Precision: 18 digits, 2 decimal places
     /// </summary>
     public decimal DownPayAmountLocal { get; set; }
 
     /// <summary>
     /// Applies a down payment and recalculates the nett amounts.
+    /// Nett Amount = BaseAmount + DownPayAmount
     /// When the base amount was never captured (legacy rows), the current
     /// nett amount is adopted as the base before applying the down payment.
     /// </summary>
@@ -86,8 +85,8 @@ public class Invoice
         DownPayAmountLocal = downPayLocal;
         DownPayAmountForeign = downPayForeign;
 
-        AmountLocal = BaseAmountLocal - downPayLocal;
-        AmountForeign = BaseAmountForeign - downPayForeign;
+        AmountLocal = BaseAmountLocal + downPayLocal;
+        AmountForeign = BaseAmountForeign + downPayForeign;
 
 #pragma warning disable CS0618 // Type or member is obsolete
         InvoiceAmount = AmountLocal;

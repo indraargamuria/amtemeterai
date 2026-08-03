@@ -621,20 +621,18 @@ public class InvoicesController : ControllerBase
         }
 
         // Resolve base / down pay / nett amounts
-        // Default rule: when DownPay is 0, BaseAmount matches the nett Amount.
+        // New rule: Nett Amount = BaseAmount + DownPayAmount
+        // When BaseAmount is 0, derive it from Amount: BaseAmount = Amount - DownPayAmount
         var baseAmountLocal = dto.BaseAmountLocal > 0
             ? dto.BaseAmountLocal
-            : dto.AmountLocal + dto.DownPayAmountLocal;
+            : dto.AmountLocal - dto.DownPayAmountLocal;
         var baseAmountForeign = dto.BaseAmountForeign > 0
             ? dto.BaseAmountForeign
-            : dto.AmountForeign + dto.DownPayAmountForeign;
+            : dto.AmountForeign - dto.DownPayAmountForeign;
         var downPayAmountLocal = dto.DownPayAmountLocal;
         var downPayAmountForeign = dto.DownPayAmountForeign;
-        var nettAmountLocal = baseAmountLocal - downPayAmountLocal;
-        var nettAmountForeign = baseAmountForeign - downPayAmountForeign;
-
-        if (nettAmountLocal < 0 || nettAmountForeign < 0)
-            return BadRequest("Down payment cannot exceed the base amount.");
+        var nettAmountLocal = baseAmountLocal + downPayAmountLocal;
+        var nettAmountForeign = baseAmountForeign + downPayAmountForeign;
 
         // 1. Ensure invoice number is unique (only block if active, not voided/canceled)
         var existingInvoice = await _db.Invoices
@@ -688,7 +686,8 @@ public class InvoicesController : ControllerBase
     /// <summary>
     /// Update the DownPay (Local and Foreign) for an invoice.
     /// The nett AmountLocal / AmountForeign are automatically recalculated
-    /// as BaseAmount - DownPayAmount for each currency.
+    /// as BaseAmount + DownPayAmount for each currency.
+    /// Validation for foreign currency is skipped if BaseAmountForeign is zero.
     /// </summary>
     [HttpPut("{id:int}/downpay")]
     public async Task<ActionResult<InvoiceResponseDto>> UpdateInvoiceDownPay(
@@ -706,11 +705,12 @@ public class InvoicesController : ControllerBase
         if (invoice.BaseAmountLocal <= 0) invoice.BaseAmountLocal = invoice.AmountLocal;
         if (invoice.BaseAmountForeign <= 0) invoice.BaseAmountForeign = invoice.AmountForeign;
 
-        if (dto.DownPayAmountLocal > invoice.BaseAmountLocal)
-            return BadRequest($"Down payment (local) {dto.DownPayAmountLocal} cannot exceed base amount {invoice.BaseAmountLocal}.");
+        // Validation: skip foreign currency validation if BaseAmountForeign is zero
+        if (dto.DownPayAmountLocal < 0)
+            return BadRequest("Down payment (local) cannot be negative.");
 
-        if (dto.DownPayAmountForeign > invoice.BaseAmountForeign)
-            return BadRequest($"Down payment (foreign) {dto.DownPayAmountForeign} cannot exceed base amount {invoice.BaseAmountForeign}.");
+        if (invoice.BaseAmountForeign > 0 && dto.DownPayAmountForeign < 0)
+            return BadRequest("Down payment (foreign) cannot be negative when foreign currency is enabled.");
 
         invoice.ApplyDownPay(dto.DownPayAmountLocal, dto.DownPayAmountForeign);
         await _db.SaveChangesAsync();

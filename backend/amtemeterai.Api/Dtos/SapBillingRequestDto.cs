@@ -41,9 +41,23 @@ public class SapBillingResponseDto
 
     /// <summary>
     /// Local currency amount (e.g., IDR)
+    /// This is the base amount from SAP
     /// </summary>
     [JsonPropertyName("amountLocal")]
     public decimal AmountLocal { get; set; }
+
+    /// <summary>
+    /// Down payment amount from SAP
+    /// Used to calculate the nett amount: nett = base + downpay
+    /// </summary>
+    [JsonPropertyName("downPayment")]
+    public decimal DownPayment { get; set; }
+
+    /// <summary>
+    /// Down payment tax amount from SAP
+    /// </summary>
+    [JsonPropertyName("dpTax")]
+    public decimal DpTax { get; set; }
 
     /// <summary>
     /// Currency code (e.g., "USD", "IDR")
