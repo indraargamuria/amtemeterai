@@ -1,11 +1,14 @@
 import { useState, useEffect, useRef, useMemo, useCallback, memo, startTransition, useDeferredValue } from "react"
 import { useParams } from "react-router-dom"
+import { useTranslation } from "react-i18next"
 import { Button } from "../../shared/components/ui/Button"
 import { Badge } from "../../shared/components/ui/Badge"
 import { Card, CardContent, CardHeader, CardTitle } from "../../shared/components/ui/Card"
 import { Input } from "../../shared/components/ui/Input"
 import { Label } from "../../shared/components/ui/Label"
 import { Camera, Upload, CheckCircle, AlertTriangle, ChevronDown, ChevronUp, Package, Lock, FileText, MapPin, Search } from "lucide-react"
+import { LanguageSwitcher } from "../../shared/components/ui/LanguageSwitcher"
+import { cn } from "../../shared/utils/cn"
 
 // ============================================================================
 // TYPE DEFINITIONS
@@ -369,7 +372,7 @@ const buildLineItemTree = (lines: DeliveryLine[]): DisplayableLineItem[] => {
 // HELPER FUNCTIONS
 // ============================================================================
 
-const formatDate = (ds: string) => new Date(ds).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" })
+const formatDate = (ds: string, locale?: string) => new Date(ds).toLocaleDateString(locale === "id" ? "id-ID" : "en-US", { year: "numeric", month: "short", day: "numeric" })
 
 const calculateLineData = (lineState: LineFormState, packQuantity: number, deliveryReceived: boolean): LineCalculation => {
   const delivered = parseFloat(lineState.delivered) || 0
@@ -432,6 +435,7 @@ const LineItemRow = memo(({
   onToggleExpansion,
   onInputChange,
 }: LineItemRowProps) => {
+  const { t } = useTranslation()
   // Local state for uncontrolled inputs - prevents parent re-renders on typing
   const [localValues, setLocalValues] = useState({
     delivered: lineState.delivered,
@@ -489,23 +493,23 @@ const LineItemRow = memo(({
             <span className="text-sm font-medium text-slate-900 truncate">{line.deliveryItemDescription}</span>
             {calc.isModified && (
               <Badge className="bg-red-100 text-red-700 border-none text-[10px] px-1.5 h-5 font-semibold">
-                Modified
+                {t('deliveryReceive.modified')}
               </Badge>
             )}
           </div>
           <div className="flex items-center gap-3 text-xs text-slate-500">
-            <span>Quantity: <strong className="text-slate-700">{line.packQuantity} {transformUOM(line.packUOM)}</strong></span>
+            <span>{t('deliveryReceive.quantity')}: <strong className="text-slate-700">{line.packQuantity} {transformUOM(line.packUOM)}</strong></span>
             {line.batchNumber && (
               <>
                 <span>•</span>
-                <span>Batch: <strong className="text-slate-700">{line.batchNumber}</strong></span>
+                <span>{t('deliveryReceive.batchNumber')}: <strong className="text-slate-700">{line.batchNumber}</strong></span>
               </>
             )}
             {calc.isModified && (
               <>
                 <span>•</span>
                 <span className="text-red-600 font-medium">
-                  Actual: <strong>{calc.actualTotal} {line.packUOM}</strong>
+                  {t('deliveryReceive.actual')}: <strong>{calc.actualTotal} {line.packUOM}</strong>
                 </span>
               </>
             )}
@@ -537,7 +541,7 @@ const LineItemRow = memo(({
         <div className="px-4 pb-4 pt-2 bg-slate-50/50 border-t border-slate-100 animate-in slide-in-from-top-1">
           <div className="grid grid-cols-3 gap-3 sm:gap-4">
             <div className="space-y-1.5">
-              <Label className="text-xs font-medium text-slate-600">Received</Label>
+              <Label className="text-xs font-medium text-slate-600">{t('deliveryReceive.received')}</Label>
               <Input
                 type="number"
                 step="0.01"
@@ -551,7 +555,7 @@ const LineItemRow = memo(({
               />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs font-medium text-slate-600">Returned</Label>
+              <Label className="text-xs font-medium text-slate-600">{t('deliveryReceive.returned')}</Label>
               <Input
                 type="number"
                 step="0.01"
@@ -565,7 +569,7 @@ const LineItemRow = memo(({
               />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs font-medium text-slate-600">Rejected</Label>
+              <Label className="text-xs font-medium text-slate-600">{t('deliveryReceive.rejected')}</Label>
               <Input
                 type="number"
                 step="0.01"
@@ -580,13 +584,13 @@ const LineItemRow = memo(({
             </div>
           </div>
           <div className="mt-3 space-y-1.5">
-            <Label className="text-xs font-medium text-slate-600">Notes</Label>
+            <Label className="text-xs font-medium text-slate-600">{t('deliveryReceive.notes')}</Label>
             <Input
               type="text"
               value={localValues.lineComment}
               onChange={(e) => handleFieldChange("lineComment", e.target.value)}
               disabled={isSubmitted || isSubmitting}
-              placeholder="Add any notes about this item..."
+              placeholder={t('deliveryReceive.addNotesPlaceholder')}
               className="h-10 text-sm border-slate-300 focus:border-[#1d2351] focus:ring-[#1d2351]"
             />
           </div>
@@ -609,6 +613,8 @@ interface SingleBatchRowProps {
   calc: LineCalculation
   isInvoiced: boolean
   isSubmitting: boolean
+  showReturnReject: boolean
+  t: (key: string, options?: Record<string, unknown>) => string
   onInputChange: (field: keyof LineFormState, value: string) => void
 }
 
@@ -620,6 +626,8 @@ interface SplitBatchParentRowProps {
   isExpanded: boolean
   isInvoiced: boolean
   isSubmitting: boolean
+  showReturnReject: boolean
+  t: (key: string, options?: Record<string, unknown>) => string
   onToggleExpansion: () => void
   linesMap: Map<string, LineFormState>
   onInputChange: (lineNumber: string, field: keyof LineFormState, value: string) => void
@@ -632,6 +640,8 @@ interface ChildRowProps {
   calc: LineCalculation
   isInvoiced: boolean
   isSubmitting: boolean
+  showReturnReject: boolean
+  t: (key: string, options?: Record<string, unknown>) => string
   onInputChange: (field: keyof LineFormState, value: string) => void
 }
 
@@ -643,6 +653,8 @@ const SingleBatchRow = memo(({
   calc,
   // isInvoiced,
   isSubmitting,
+  showReturnReject,
+  t,
   onInputChange,
 }: SingleBatchRowProps) => {
   const [localValues, setLocalValues] = useState({
@@ -694,14 +706,14 @@ const SingleBatchRow = memo(({
     const targetQty = line.packQuantity
 
     if (totalActual === 0) {
-      return { status: 'pending', label: 'Pending', color: 'bg-slate-50 border-slate-200 text-slate-500' }
+      return { status: 'pending', color: 'bg-slate-50 border-slate-200 text-slate-500' }
     }
 
     if (totalActual === targetQty && returned === 0 && rejected === 0) {
-      return { status: 'accepted', label: 'Accepted', color: 'bg-emerald-50 border-emerald-200 text-emerald-700' }
+      return { status: 'accepted', color: 'bg-emerald-50 border-emerald-200 text-emerald-700' }
     }
 
-    return { status: 'discrepancy', label: 'Discrepancy', color: 'bg-amber-50 border-amber-200 text-amber-700' }
+    return { status: 'discrepancy', color: 'bg-amber-50 border-amber-200 text-amber-700' }
   }, [localValues, line.packQuantity])
 
   const varianceInfo = useMemo(() => {
@@ -717,11 +729,11 @@ const SingleBatchRow = memo(({
     const variancePercent = Math.abs(rawVariance).toFixed(1)
 
     if (rawVariance === 0) {
-      return { text: `0.0% Variance`, className: 'bg-emerald-50 text-emerald-700 border-emerald-100' }
+      return { kind: 'zero', percent: variancePercent, className: 'bg-emerald-50 text-emerald-700 border-emerald-100' }
     } else if (totalActual < targetQty) {
-      return { text: `-${variancePercent}% Short`, className: 'bg-amber-50 text-amber-700 border-amber-200' }
+      return { kind: 'short', percent: variancePercent, className: 'bg-amber-50 text-amber-700 border-amber-200' }
     } else {
-      return { text: `+${variancePercent}% Surplus`, className: 'bg-blue-50 text-blue-700 border-blue-200' }
+      return { kind: 'surplus', percent: variancePercent, className: 'bg-blue-50 text-blue-700 border-blue-200' }
     }
   }, [localValues, line.packQuantity])
 
@@ -748,7 +760,7 @@ const SingleBatchRow = memo(({
               {/* First Row: Line Number + Item Description only */}
               <div className="flex items-center gap-2 mb-1.5 flex-wrap">
                 <span className="text-xs font-bold text-[#1d2351] bg-blue-5 px-2 py-1 rounded-md shrink-0">
-                  Line #{line.deliveryLineNumber}
+                  {t('deliveryReceive.lineNumber', { number: line.deliveryLineNumber })}
                 </span>
                 <span className="text-sm font-semibold text-slate-900">{line.deliveryItemDescription}</span>
               </div>
@@ -756,29 +768,33 @@ const SingleBatchRow = memo(({
               {/* Second Row: Order/PO Info + Batch Indicator + Status Badges */}
               <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs">
                 <span className="text-slate-500">
-                  Order: <strong className="text-slate-700">{line.orderNumber || '-'}</strong>
+                  {t('deliveryReceive.orderNumber')}: <strong className="text-slate-700">{line.orderNumber || '-'}</strong>
                 </span>
                 <span className="text-slate-500">
-                  PO: <strong className="text-slate-700">{line.buyerPONumber || '-'}</strong>
+                  {t('deliveryReceive.poNumber')}: <strong className="text-slate-700">{line.buyerPONumber || '-'}</strong>
                 </span>
                 <span className="text-slate-500">
-                  UOM: <strong className="text-slate-700">{transformUOM(line.packUOM)}</strong>
+                  {t('deliveryReceive.uom')}: <strong className="text-slate-700">{transformUOM(line.packUOM)}</strong>
                 </span>
                 {line.batchNumber && (
                   <span className="text-slate-500">
-                    Batch: <strong className="text-slate-700">{line.batchNumber}</strong>
+                    {t('deliveryReceive.batchNumber')}: <strong className="text-slate-700">{line.batchNumber}</strong>
                   </span>
                 )}
                 {/* Badges on same row */}
                 <Badge className="bg-emerald-100 text-emerald-700 text-[10px] px-2 py-0.5 border border-emerald-200">
-                  1 Batch
+                  {t('deliveryReceive.batchCount', { count: 1 })}
                 </Badge>
                 <Badge className={`text-[10px] px-2 py-0.5 border ${statusInfo.color}`}>
-                  {statusInfo.label}
+                  {t(`deliveryReceive.${statusInfo.status}`)}
                 </Badge>
                 {varianceInfo && totalActual > 0 && (
                   <Badge className={`text-[10px] px-2 py-0.5 border ${varianceInfo.className}`}>
-                    {varianceInfo.text}
+                    {varianceInfo.kind === 'zero'
+                      ? t('deliveryReceive.varianceZero', { percent: varianceInfo.percent })
+                      : varianceInfo.kind === 'short'
+                      ? t('deliveryReceive.varianceShort', { percent: varianceInfo.percent })
+                      : t('deliveryReceive.varianceSurplus', { percent: varianceInfo.percent })}
                   </Badge>
                 )}
               </div>
@@ -787,19 +803,19 @@ const SingleBatchRow = memo(({
             {/* Right Side: Totals Display - SAME layout as SplitBatchParentRow */}
             <div className="flex items-center gap-3 shrink-0 ml-4">
               <div className="text-right">
-                <div className="text-[10px] text-slate-500 uppercase font-medium">Quantity</div>
+                <div className="text-[10px] text-slate-500 uppercase font-medium">{t('deliveryReceive.quantity')}</div>
                 <div className="text-sm font-bold text-slate-900">{targetQty}</div>
               </div>
               <div className="text-right">
-                <div className="text-[10px] text-slate-500 uppercase font-medium">Received</div>
+                <div className="text-[10px] text-slate-500 uppercase font-medium">{t('deliveryReceive.received')}</div>
                 <div className="text-sm font-bold text-emerald-600">{delivered}</div>
               </div>
               <div className="text-right">
-                <div className="text-[10px] text-slate-500 uppercase font-medium">Rejected</div>
+                <div className="text-[10px] text-slate-500 uppercase font-medium">{t('deliveryReceive.rejected')}</div>
                 <div className="text-sm font-bold text-red-600">{rejected}</div>
               </div>
               <div className="text-right">
-                <div className="text-[10px] text-slate-500 uppercase font-medium">Returned</div>
+                <div className="text-[10px] text-slate-500 uppercase font-medium">{t('deliveryReceive.returned')}</div>
                 <div className="text-sm font-bold text-amber-600">{returned}</div>
               </div>
             </div>
@@ -827,7 +843,7 @@ const SingleBatchRow = memo(({
               </span>
               {calc.isModified && (
                 <Badge className="bg-red-100 text-red-700 border-none text-[9px] px-1.5 h-4 font-semibold shrink-0">
-                  Modified
+                  {t('deliveryReceive.modified')}
                 </Badge>
               )}
             </div>
@@ -835,11 +851,11 @@ const SingleBatchRow = memo(({
             {/* Bottom Line: Batch Number + Intended Quantity */}
             <div className="flex items-center gap-2 text-[11px] text-slate-500">
               {line.batchNumber && (
-                <span className="font-mono text-slate-600 whitespace-nowrap">Batch: {line.batchNumber}</span>
+                <span className="font-mono text-slate-600 whitespace-nowrap">{t('deliveryReceive.batchNumber')}: {line.batchNumber}</span>
               )}
               <span className="text-slate-300 shrink-0">|</span>
               <span className="font-medium text-slate-700 whitespace-nowrap">
-                Qty: {line.packQuantity}
+                {t('deliveryReceive.qty', { value: line.packQuantity })}
               </span>
             </div>
           </div>
@@ -850,7 +866,7 @@ const SingleBatchRow = memo(({
 
             {/* Received Input - fixed width w-16 */}
             <div className="shrink-0 w-16">
-              <Label className="text-[10px] font-medium text-slate-500 uppercase block mb-0.5">Received</Label>
+              <Label className="text-[10px] font-medium text-slate-500 uppercase block mb-0.5">{t('deliveryReceive.received')}</Label>
               <Input
                 type="number"
                 step="0.01"
@@ -865,46 +881,50 @@ const SingleBatchRow = memo(({
             </div>
 
             {/* Rejected Input - fixed width w-16 */}
-            <div className="shrink-0 w-16">
-              <Label className="text-[10px] font-medium text-slate-500 uppercase block mb-0.5">Rejected</Label>
-              <Input
-                type="number"
-                step="0.01"
-                min="0"
-                value={localValues.rejected}
-                onFocus={() => handleFocus("rejected")}
-                onBlur={() => handleBlur("rejected")}
-                onChange={(e) => handleFieldChange("rejected", e.target.value)}
-                disabled={isSubmitting}
-                className="h-7 w-full text-xs border-slate-300 focus:border-[#1d2351] focus:ring-[#1d2351] px-2"
-              />
-            </div>
+            {showReturnReject && (
+              <div className="shrink-0 w-16">
+                <Label className="text-[10px] font-medium text-slate-500 uppercase block mb-0.5">{t('deliveryReceive.rejected')}</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={localValues.rejected}
+                  onFocus={() => handleFocus("rejected")}
+                  onBlur={() => handleBlur("rejected")}
+                  onChange={(e) => handleFieldChange("rejected", e.target.value)}
+                  disabled={isSubmitting}
+                  className="h-7 w-full text-xs border-slate-300 focus:border-[#1d2351] focus:ring-[#1d2351] px-2"
+                />
+              </div>
+            )}
 
             {/* Returned Input - fixed width w-16 */}
-            <div className="shrink-0 w-16">
-              <Label className="text-[10px] font-medium text-slate-500 uppercase block mb-0.5">Returned</Label>
-              <Input
-                type="number"
-                step="0.01"
-                min="0"
-                value={localValues.returned}
-                onFocus={() => handleFocus("returned")}
-                onBlur={() => handleBlur("returned")}
-                onChange={(e) => handleFieldChange("returned", e.target.value)}
-                disabled={isSubmitting}
-                className="h-7 w-full text-xs border-slate-300 focus:border-[#1d2351] focus:ring-[#1d2351] px-2"
-              />
-            </div>
+            {showReturnReject && (
+              <div className="shrink-0 w-16">
+                <Label className="text-[10px] font-medium text-slate-500 uppercase block mb-0.5">{t('deliveryReceive.returned')}</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={localValues.returned}
+                  onFocus={() => handleFocus("returned")}
+                  onBlur={() => handleBlur("returned")}
+                  onChange={(e) => handleFieldChange("returned", e.target.value)}
+                  disabled={isSubmitting}
+                  className="h-7 w-full text-xs border-slate-300 focus:border-[#1d2351] focus:ring-[#1d2351] px-2"
+                />
+              </div>
+            )}
 
             {/* Notes Input - flexible fill with flex-1 */}
             <div className="flex-1 min-w-[120px]">
-              <Label className="text-[10px] font-medium text-slate-500 uppercase block mb-0.5">Notes</Label>
+              <Label className="text-[10px] font-medium text-slate-500 uppercase block mb-0.5">{t('deliveryReceive.notes')}</Label>
               <Input
                 type="text"
                 value={localValues.lineComment}
                 onChange={(e) => handleFieldChange("lineComment", e.target.value)}
                 disabled={isSubmitting}
-                placeholder="Add notes..."
+                placeholder={t('deliveryReceive.addNotesPlaceholder')}
                 className="h-7 w-full text-xs border-slate-300 focus:border-[#1d2351] focus:ring-[#1d2351] px-2"
               />
             </div>
@@ -927,6 +947,8 @@ const ChildRow = memo(({
   calc,
   // isInvoiced,
   isSubmitting,
+  showReturnReject,
+  t,
   onInputChange,
 }: ChildRowProps) => {
   const [localValues, setLocalValues] = useState({
@@ -987,22 +1009,22 @@ const ChildRow = memo(({
             </span>
             {/* Batch indicator - shows this is a split-batch child */}
             <span className="text-[9px] font-medium text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded shrink-0">
-              Batch
+              {t('deliveryReceive.batchNumber')}
             </span>
             {calc.isModified && (
               <Badge className="bg-red-100 text-red-700 border-none text-[9px] px-1.5 h-4 font-semibold shrink-0">
-                Modified
+                {t('deliveryReceive.modified')}
               </Badge>
             )}
           </div>
           {/* Bottom Line: Batch Number + Intended Quantity */}
           <div className="flex items-center gap-2 text-[11px] text-slate-500">
             {childLine.batchNumber && (
-              <span className="font-mono text-slate-600 whitespace-nowrap">Batch: {childLine.batchNumber}</span>
+              <span className="font-mono text-slate-600 whitespace-nowrap">{t('deliveryReceive.batchNumber')}: {childLine.batchNumber}</span>
             )}
             <span className="text-slate-300 shrink-0">|</span>
             <span className="font-medium text-slate-700 whitespace-nowrap">
-              Qty: {childLine.packQuantity}
+              {t('deliveryReceive.qty', { value: childLine.packQuantity })}
             </span>
           </div>
         </div>
@@ -1013,7 +1035,7 @@ const ChildRow = memo(({
 
           {/* Received Input - fixed width w-16 */}
           <div className="shrink-0 w-16">
-            <Label className="text-[10px] font-medium text-slate-500 uppercase block mb-0.5">Received</Label>
+            <Label className="text-[10px] font-medium text-slate-500 uppercase block mb-0.5">{t('deliveryReceive.received')}</Label>
             <Input
               type="number"
               step="0.01"
@@ -1028,46 +1050,50 @@ const ChildRow = memo(({
           </div>
 
           {/* Rejected Input - fixed width w-16 */}
-          <div className="shrink-0 w-16">
-            <Label className="text-[10px] font-medium text-slate-500 uppercase block mb-0.5">Rejected</Label>
-            <Input
-              type="number"
-              step="0.01"
-              min="0"
-              value={localValues.rejected}
-              onFocus={() => handleFocus("rejected")}
-              onBlur={() => handleBlur("rejected")}
-              onChange={(e) => handleFieldChange("rejected", e.target.value)}
-              disabled={isSubmitting}
-              className="h-7 w-full text-xs border-slate-300 focus:border-[#1d2351] focus:ring-[#1d2351] px-2"
-            />
-          </div>
+          {showReturnReject && (
+            <div className="shrink-0 w-16">
+              <Label className="text-[10px] font-medium text-slate-500 uppercase block mb-0.5">{t('deliveryReceive.rejected')}</Label>
+              <Input
+                type="number"
+                step="0.01"
+                min="0"
+                value={localValues.rejected}
+                onFocus={() => handleFocus("rejected")}
+                onBlur={() => handleBlur("rejected")}
+                onChange={(e) => handleFieldChange("rejected", e.target.value)}
+                disabled={isSubmitting}
+                className="h-7 w-full text-xs border-slate-300 focus:border-[#1d2351] focus:ring-[#1d2351] px-2"
+              />
+            </div>
+          )}
 
           {/* Returned Input - fixed width w-16 */}
-          <div className="shrink-0 w-16">
-            <Label className="text-[10px] font-medium text-slate-500 uppercase block mb-0.5">Returned</Label>
-            <Input
-              type="number"
-              step="0.01"
-              min="0"
-              value={localValues.returned}
-              onFocus={() => handleFocus("returned")}
-              onBlur={() => handleBlur("returned")}
-              onChange={(e) => handleFieldChange("returned", e.target.value)}
-              disabled={isSubmitting}
-              className="h-7 w-full text-xs border-slate-300 focus:border-[#1d2351] focus:ring-[#1d2351] px-2"
-            />
-          </div>
+          {showReturnReject && (
+            <div className="shrink-0 w-16">
+              <Label className="text-[10px] font-medium text-slate-500 uppercase block mb-0.5">{t('deliveryReceive.returned')}</Label>
+              <Input
+                type="number"
+                step="0.01"
+                min="0"
+                value={localValues.returned}
+                onFocus={() => handleFocus("returned")}
+                onBlur={() => handleBlur("returned")}
+                onChange={(e) => handleFieldChange("returned", e.target.value)}
+                disabled={isSubmitting}
+                className="h-7 w-full text-xs border-slate-300 focus:border-[#1d2351] focus:ring-[#1d2351] px-2"
+              />
+            </div>
+          )}
 
           {/* Notes Input - flexible fill with flex-1 */}
           <div className="flex-1 min-w-[120px]">
-            <Label className="text-[10px] font-medium text-slate-500 uppercase block mb-0.5">Notes</Label>
+            <Label className="text-[10px] font-medium text-slate-500 uppercase block mb-0.5">{t('deliveryReceive.notes')}</Label>
             <Input
               type="text"
               value={localValues.lineComment}
               onChange={(e) => handleFieldChange("lineComment", e.target.value)}
               disabled={isSubmitting}
-              placeholder="Add notes..."
+              placeholder={t('deliveryReceive.addNotesPlaceholder')}
               className="h-7 w-full text-xs border-slate-300 focus:border-[#1d2351] focus:ring-[#1d2351] px-2"
             />
           </div>
@@ -1087,6 +1113,8 @@ const SplitBatchParentRow = memo(({
   isExpanded,
   isInvoiced,
   isSubmitting,
+  showReturnReject,
+  t,
   onToggleExpansion,
   linesMap,
   onInputChange,
@@ -1121,14 +1149,14 @@ const SplitBatchParentRow = memo(({
     const totalScheduled = children.reduce((sum, child) => sum + child.packQuantity, 0)
 
     if (totalActual === 0) {
-      return { status: 'pending', label: 'Pending', color: 'bg-slate-50 border-slate-200 text-slate-500' }
+      return { status: 'pending', color: 'bg-slate-50 border-slate-200 text-slate-500' }
     }
 
     if (totalActual === totalScheduled && currentAggregated.returned === 0 && currentAggregated.rejected === 0) {
-      return { status: 'accepted', label: 'Accepted', color: 'bg-emerald-50 border-emerald-200 text-emerald-700' }
+      return { status: 'accepted', color: 'bg-emerald-50 border-emerald-200 text-emerald-700' }
     }
 
-    return { status: 'discrepancy', label: 'Discrepancy', color: 'bg-amber-50 border-amber-200 text-amber-700' }
+    return { status: 'discrepancy', color: 'bg-amber-50 border-amber-200 text-amber-700' }
   }, [currentAggregated, children])
 
   const varianceInfo = useMemo(() => {
@@ -1141,11 +1169,11 @@ const SplitBatchParentRow = memo(({
     const variancePercent = Math.abs(rawVariance).toFixed(1)
 
     if (rawVariance === 0) {
-      return { text: `0.0% Variance`, className: 'bg-emerald-50 text-emerald-700 border-emerald-100' }
+      return { kind: 'zero', percent: variancePercent, className: 'bg-emerald-50 text-emerald-700 border-emerald-100' }
     } else if (totalActual < totalScheduled) {
-      return { text: `-${variancePercent}% Short`, className: 'bg-amber-50 text-amber-700 border-amber-200' }
+      return { kind: 'short', percent: variancePercent, className: 'bg-amber-50 text-amber-700 border-amber-200' }
     } else {
-      return { text: `+${variancePercent}% Surplus`, className: 'bg-blue-50 text-blue-700 border-blue-200' }
+      return { kind: 'surplus', percent: variancePercent, className: 'bg-blue-50 text-blue-700 border-blue-200' }
     }
   }, [currentAggregated, children])
 
@@ -1174,7 +1202,7 @@ const SplitBatchParentRow = memo(({
               {/* First Row: Line Number + Item Description only */}
               <div className="flex items-center gap-2 mb-1.5 flex-wrap">
                 <span className="text-xs font-bold text-[#1d2351] bg-blue-5 px-2 py-1 rounded-md shrink-0">
-                  Line #{parentLine.deliveryLineNumber}
+                  {t('deliveryReceive.lineNumber', { number: parentLine.deliveryLineNumber })}
                 </span>
                 <span className="text-sm font-semibold text-slate-900">{parentLine.deliveryItemDescription}</span>
               </div>
@@ -1182,27 +1210,31 @@ const SplitBatchParentRow = memo(({
               {/* Second Row: Order/PO Info + Batch Indicator + Status Badges */}
               <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs">
                 <span className="text-slate-500">
-                  Order: <strong className="text-slate-700">{parentLine.orderNumber || '-'}</strong>
+                  {t('deliveryReceive.orderNumber')}: <strong className="text-slate-700">{parentLine.orderNumber || '-'}</strong>
                 </span>
                 <span className="text-slate-500">
-                  PO: <strong className="text-slate-700">{parentLine.buyerPONumber || '-'}</strong>
+                  {t('deliveryReceive.poNumber')}: <strong className="text-slate-700">{parentLine.buyerPONumber || '-'}</strong>
                 </span>
                 <span className="text-slate-500">
-                  UOM: <strong className="text-slate-700">{transformUOM(parentLine.packUOM)}</strong>
+                  {t('deliveryReceive.uom')}: <strong className="text-slate-700">{transformUOM(parentLine.packUOM)}</strong>
                 </span>
                 <span className="text-slate-500">
-                  Batches: <strong className="text-slate-700">{children.length}</strong>
+                  {t('deliveryReceive.batchesLabel', { number: children.length })}
                 </span>
                 {/* Badges on same row */}
                 <Badge className="bg-[#1d2351] text-white text-[10px] px-2 py-0.5 border-none">
-                  {children.length} {children.length === 1 ? 'Batch' : 'Batches'}
+                  {t('deliveryReceive.batchCount', { count: children.length })}
                 </Badge>
                 <Badge className={`text-[10px] px-2 py-0.5 border ${statusInfo.color}`}>
-                  {statusInfo.label}
+                  {t(`deliveryReceive.${statusInfo.status}`)}
                 </Badge>
                 {varianceInfo && totalActual > 0 && (
                   <Badge className={`text-[10px] px-2 py-0.5 border ${varianceInfo.className}`}>
-                    {varianceInfo.text}
+                    {varianceInfo.kind === 'zero'
+                      ? t('deliveryReceive.varianceZero', { percent: varianceInfo.percent })
+                      : varianceInfo.kind === 'short'
+                      ? t('deliveryReceive.varianceShort', { percent: varianceInfo.percent })
+                      : t('deliveryReceive.varianceSurplus', { percent: varianceInfo.percent })}
                   </Badge>
                 )}
               </div>
@@ -1211,19 +1243,19 @@ const SplitBatchParentRow = memo(({
             {/* Right Side: Aggregated Totals Display - SAME layout as SingleBatchRow */}
             <div className="flex items-center gap-3 shrink-0 ml-4">
               <div className="text-right">
-                <div className="text-[10px] text-slate-500 uppercase font-medium">Quantity</div>
+                <div className="text-[10px] text-slate-500 uppercase font-medium">{t('deliveryReceive.quantity')}</div>
                 <div className="text-sm font-bold text-slate-900">{totalScheduled}</div>
               </div>
               <div className="text-right">
-                <div className="text-[10px] text-slate-500 uppercase font-medium">Received</div>
+                <div className="text-[10px] text-slate-500 uppercase font-medium">{t('deliveryReceive.received')}</div>
                 <div className="text-sm font-bold text-emerald-600">{currentAggregated.delivered.toFixed(2)}</div>
               </div>
               <div className="text-right">
-                <div className="text-[10px] text-slate-500 uppercase font-medium">Rejected</div>
+                <div className="text-[10px] text-slate-500 uppercase font-medium">{t('deliveryReceive.rejected')}</div>
                 <div className="text-sm font-bold text-red-600">{currentAggregated.rejected.toFixed(2)}</div>
               </div>
               <div className="text-right">
-                <div className="text-[10px] text-slate-500 uppercase font-medium">Returned</div>
+                <div className="text-[10px] text-slate-500 uppercase font-medium">{t('deliveryReceive.returned')}</div>
                 <div className="text-sm font-bold text-amber-600">{currentAggregated.returned.toFixed(2)}</div>
               </div>
             </div>
@@ -1257,6 +1289,8 @@ const SplitBatchParentRow = memo(({
                 calc={childCalc}
                 isInvoiced={isInvoiced}
                 isSubmitting={isSubmitting}
+                showReturnReject={showReturnReject}
+                t={t}
                 onInputChange={(field, value) => onInputChange(child.deliveryLineNumber, field, value)}
               />
             )
@@ -1270,17 +1304,18 @@ const SplitBatchParentRow = memo(({
 SplitBatchParentRow.displayName = "SplitBatchParentRow"
 
 const ToastNotification = memo(({ show, type, onClose, title, message }: ToastNotificationProps) => {
+  const { t } = useTranslation()
   if (!show) return null
 
   const defaultTitles = {
-    success: "Success",
-    error: "Action Required",
-    info: "Information"
+    success: t('common.success'),
+    error: t('common.actionRequired'),
+    info: t('common.information')
   }
 
   const defaultMessages = {
-    success: "Your changes have been saved.",
-    error: "Please correct the highlighted issues.",
+    success: t('common.changesSaved'),
+    error: t('common.correctIssues'),
     info: ""
   }
 
@@ -1338,6 +1373,7 @@ const ToastNotification = memo(({ show, type, onClose, title, message }: ToastNo
 ToastNotification.displayName = "ToastNotification"
 
 const ApplyAllReminder = memo(({ show, onClose }: ApplyAllReminderProps) => {
+  const { t } = useTranslation()
   if (!show) return null
 
   return (
@@ -1347,9 +1383,9 @@ const ApplyAllReminder = memo(({ show, onClose }: ApplyAllReminderProps) => {
           <CheckCircle className="w-4 h-4 text-blue-600" />
         </div>
         <div className="flex-1">
-          <h4 className="text-sm font-semibold text-slate-900">"Apply to All" Ready</h4>
+          <h4 className="text-sm font-semibold text-slate-900">{t('deliveryReceive.applyToAllReady')}</h4>
           <p className="text-xs text-slate-500 mt-0.5">
-            All items set to scheduled quantities. Click <strong>"Post Goods Receipt"</strong> at the bottom to confirm and submit.
+            {t('deliveryReceive.applyToAllReadyMessage')}
           </p>
         </div>
         <button onClick={onClose} className="text-slate-400 hover:text-slate-600 shrink-0 text-lg leading-none">
@@ -1363,6 +1399,7 @@ const ApplyAllReminder = memo(({ show, onClose }: ApplyAllReminderProps) => {
 ApplyAllReminder.displayName = "ApplyAllReminder"
 
 const VarianceModal = memo(({ show, variances, onClose, onConfirm }: VarianceModalProps) => {
+  const { t } = useTranslation()
   if (!show) return null
 
   return (
@@ -1372,8 +1409,8 @@ const VarianceModal = memo(({ show, variances, onClose, onConfirm }: VarianceMod
           <AlertTriangle className="w-4 h-4 text-amber-700" />
         </div>
         <div className="flex-1">
-          <h4 className="text-sm font-semibold text-slate-900">Quantity Discrepancies</h4>
-          <p className="text-xs text-slate-500 mt-0.5">The following items have quantity mismatches</p>
+          <h4 className="text-sm font-semibold text-slate-900">{t('deliveryReceive.quantityDiscrepancies')}</h4>
+          <p className="text-xs text-slate-500 mt-0.5">{t('deliveryReceive.followingItemsMismatches')}</p>
           <div className="mt-3 max-h-[160px] overflow-y-auto divide-y divide-slate-100">
             {variances?.map((v) => (
               <div key={v.lineNumber} className="py-2 flex items-start gap-2">
@@ -1385,9 +1422,9 @@ const VarianceModal = memo(({ show, variances, onClose, onConfirm }: VarianceMod
                   <div className="flex items-center gap-2 mt-0.5 text-xs text-slate-500">
                     <span>{v.itemCode}</span>
                     <span className="text-slate-300">|</span>
-                    <span>Scheduled: <strong>{v.scheduled}</strong></span>
+                    <span>{t('deliveryReceive.scheduled')}: <strong>{v.scheduled}</strong></span>
                     <span className="text-slate-300">|</span>
-                    <span>Actual: <strong>{v.actualTotal}</strong></span>
+                    <span>{t('deliveryReceive.actual')}: <strong>{v.actualTotal}</strong></span>
                     <span className={`ml-auto font-bold ${v.variancePercent.startsWith('+') ? 'text-green-600' : 'text-red-600'}`}>
                       {v.variancePercent}
                     </span>
@@ -1403,14 +1440,14 @@ const VarianceModal = memo(({ show, variances, onClose, onConfirm }: VarianceMod
               className="flex-1 h-9 border-slate-300 text-slate-700 hover:bg-slate-50 text-xs"
               onClick={onClose}
             >
-              Review & Edit
+              {t('deliveryReceive.reviewEdit')}
             </Button>
             <Button
               type="button"
               className="flex-1 h-9 bg-[#1d2351] hover:bg-[#2a3266] text-white text-xs"
               onClick={onConfirm}
             >
-              Confirm & Post
+              {t('deliveryReceive.confirmPost')}
             </Button>
           </div>
         </div>
@@ -1425,6 +1462,7 @@ const VarianceModal = memo(({ show, variances, onClose, onConfirm }: VarianceMod
 VarianceModal.displayName = "VarianceModal"
 
 const GuardrailModal = memo(({ show, issuesCount, onClose, onConfirm }: GuardrailModalProps) => {
+  const { t } = useTranslation()
   if (!show) return null
 
   return (
@@ -1434,14 +1472,14 @@ const GuardrailModal = memo(({ show, issuesCount, onClose, onConfirm }: Guardrai
           <AlertTriangle className="w-4 h-4 text-red-600" />
         </div>
         <div className="flex-1">
-          <h4 className="text-sm font-semibold text-slate-900">Warning: Manual Changes Detected</h4>
-          <p className="text-xs text-slate-500 mt-0.5">You have entered manual discrepancies on {issuesCount} item(s)</p>
+          <h4 className="text-sm font-semibold text-slate-900">{t('deliveryReceive.warningManualChanges')}</h4>
+          <p className="text-xs text-slate-500 mt-0.5">{t('deliveryReceive.manualChangesMessage', { count: issuesCount })}</p>
           <div className="bg-amber-50 border border-amber-200 rounded-lg p-2.5 mt-2">
             <p className="text-xs text-amber-900">
-              Clicking <strong>"Apply to All"</strong> will overwrite all your manual entries and reset all items to their scheduled quantities.
+              {t('deliveryReceive.manualChangesWarning', { action: t('deliveryReceive.applyToAll') })}
             </p>
           </div>
-          <p className="text-xs text-slate-600 mt-2">Are you sure you want to proceed? This action cannot be undone.</p>
+          <p className="text-xs text-slate-600 mt-2">{t('deliveryReceive.confirmOverwriteWarning')}</p>
           <div className="flex gap-2 mt-3">
             <Button
               type="button"
@@ -1449,14 +1487,14 @@ const GuardrailModal = memo(({ show, issuesCount, onClose, onConfirm }: Guardrai
               className="flex-1 h-9 border-slate-300 text-slate-700 hover:bg-slate-50 text-xs"
               onClick={onClose}
             >
-              Keep Manual Changes
+              {t('deliveryReceive.keepManualChanges')}
             </Button>
             <Button
               type="button"
               className="flex-1 h-9 bg-red-600 hover:bg-red-700 text-white text-xs"
               onClick={onConfirm}
             >
-              Overwrite & Apply
+              {t('deliveryReceive.overwriteWithApplyAll')}
             </Button>
           </div>
         </div>
@@ -1471,6 +1509,39 @@ const GuardrailModal = memo(({ show, issuesCount, onClose, onConfirm }: Guardrai
 GuardrailModal.displayName = "GuardrailModal"
 
 // ============================================================================
+// VISIBILITY TOGGLE COMPONENT
+// ============================================================================
+
+interface VisibilityToggleProps {
+  enabled: boolean
+  onToggle: () => void
+  disabled?: boolean
+}
+
+const VisibilityToggle = memo(({ enabled, onToggle, disabled = false }: VisibilityToggleProps) => {
+  const { t } = useTranslation()
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      disabled={disabled}
+      className={cn(
+        "flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium transition-all duration-200",
+        enabled
+          ? "bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100"
+          : "bg-slate-50 text-slate-500 border border-slate-200 hover:bg-slate-100",
+        disabled && "opacity-50 cursor-not-allowed"
+      )}
+    >
+      <Package className="w-3.5 h-3.5" />
+      {enabled ? t('deliveryReceive.returnRejectEnabled') : t('deliveryReceive.receivedOnly')}
+    </button>
+  )
+})
+
+VisibilityToggle.displayName = "VisibilityToggle"
+
+// ============================================================================
 // ITEM GROUP ROW COMPONENT
 // ============================================================================
 
@@ -1479,6 +1550,8 @@ interface ItemGroupRowProps {
   isExpanded: boolean
   isInvoiced: boolean
   isSubmitting: boolean
+  showReturnReject: boolean
+  t: (key: string, options?: Record<string, unknown>) => string
   linesMap: Map<string, LineFormState>
   onToggleExpansion: () => void
   onInputChange: (lineNumber: string, field: keyof LineFormState, value: string) => void
@@ -1489,6 +1562,8 @@ const ItemGroupRow = memo(({
   isExpanded,
   // isInvoiced,
   isSubmitting,
+  showReturnReject,
+  t,
   linesMap,
   onToggleExpansion,
   onInputChange
@@ -1563,32 +1638,35 @@ const ItemGroupRow = memo(({
     if (rawVariance === 0) {
       // Perfect match
       return {
-        text: `0.0% Discrepancy`,
+        kind: 'zero',
+        percent: variancePercent,
         className: 'bg-emerald-50 text-emerald-700 border-emerald-100'
       }
     } else if (totalReceived < totalIntended) {
       // Short-delivery
       return {
-        text: `⚠️ -${variancePercent}% Short`,
+        kind: 'short',
+        percent: variancePercent,
         className: 'bg-amber-50 text-amber-700 border-amber-200'
       }
     } else {
       // Over-delivery
       return {
-        text: `📦 +${variancePercent}% Surplus`,
+        kind: 'surplus',
+        percent: variancePercent,
         className: 'bg-blue-50 text-blue-700 border-blue-200'
       }
     }
   }, [aggregatedValues.delivered, group.totals.scheduled])
 
   const statusConfig = {
-    accepted: { color: 'bg-emerald-50 border-emerald-200 text-emerald-700', label: 'Accepted' },
-    discrepancy: { color: 'bg-amber-50 border-amber-200 text-amber-700', label: 'Discrepancy' },
-    pending: { color: 'bg-slate-50 border-slate-200 text-slate-500', label: 'Pending' }
+    accepted: 'bg-emerald-50 border-emerald-200 text-emerald-700',
+    discrepancy: 'bg-amber-50 border-amber-200 text-amber-700',
+    pending: 'bg-slate-50 border-slate-200 text-slate-500'
   }
 
   const statusStyle = statusConfig[groupStatus]
-  const lineNoDisplay = `Line No. ${group.minLineNumber}`
+  const lineNoDisplay = t('deliveryReceive.lineNo', { number: group.minLineNumber })
 
   return (
     <div className="border-b border-slate-100 last:border-b-0">
@@ -1614,12 +1692,16 @@ const ItemGroupRow = memo(({
                   {lineNoDisplay}
                 </span>
                 <span className="text-sm font-semibold text-slate-900">{group.itemDescription}</span>
-                <Badge className={`text-[10px] px-2 py-0.5 border ${statusStyle.color}`}>
-                  {statusStyle.label}
+                <Badge className={`text-[10px] px-2 py-0.5 border ${statusStyle}`}>
+                  {t(`deliveryReceive.${groupStatus}`)}
                 </Badge>
                 {discrepancyBadge && (
                   <Badge className={`text-[10px] px-2 py-0.5 border ${discrepancyBadge.className}`}>
-                    {discrepancyBadge.text}
+                    {discrepancyBadge.kind === 'zero'
+                      ? t('deliveryReceive.discrepancyZero', { percent: discrepancyBadge.percent })
+                      : discrepancyBadge.kind === 'short'
+                      ? t('deliveryReceive.discrepancyShort', { percent: discrepancyBadge.percent })
+                      : t('deliveryReceive.discrepancySurplus', { percent: discrepancyBadge.percent })}
                   </Badge>
                 )}
               </div>
@@ -1627,13 +1709,13 @@ const ItemGroupRow = memo(({
               {/* Order/PO Info */}
               <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500">
                 {group.orderNumber && (
-                  <span>Order: <strong className="text-slate-700">{group.orderNumber}</strong></span>
+                  <span>{t('deliveryReceive.orderNumber')}: <strong className="text-slate-700">{group.orderNumber}</strong></span>
                 )}
                 {group.buyerPONumber && (
-                  <span>PO: <strong className="text-slate-700">{group.buyerPONumber}</strong></span>
+                  <span>{t('deliveryReceive.poNumber')}: <strong className="text-slate-700">{group.buyerPONumber}</strong></span>
                 )}
-                <span>UOM: <strong className="text-slate-700">{transformUOM(group.uom)}</strong></span>
-                <span>Batches: <strong className="text-slate-700">{group.lines.length}</strong></span>
+                <span>{t('deliveryReceive.uom')}: <strong className="text-slate-700">{transformUOM(group.uom)}</strong></span>
+                <span>{t('deliveryReceive.batchesLabel', { number: group.lines.length })}</span>
               </div>
             </div>
           </div>
@@ -1641,22 +1723,22 @@ const ItemGroupRow = memo(({
           {/* Four-Metric Financial/Inventory Audit Display (Read-Only) */}
           <div className="grid grid-cols-4 gap-2 mt-2">
             <div className="bg-slate-50 rounded border border-slate-200 p-2 space-y-1">
-              <div className="text-[10px] font-medium text-slate-500 uppercase">Quantity</div>
+              <div className="text-[10px] font-medium text-slate-500 uppercase">{t('deliveryReceive.quantity')}</div>
               <div className="text-sm font-bold text-slate-900">{group.totals.scheduled.toFixed(2)}</div>
               <div className="text-[10px] text-slate-400">{transformUOM(group.uom)}</div>
             </div>
             <div className="bg-slate-50 rounded border border-slate-200 p-2 space-y-1">
-              <div className="text-[10px] font-medium text-slate-500 uppercase">Total Received</div>
+              <div className="text-[10px] font-medium text-slate-500 uppercase">{t('deliveryReceive.totalReceived')}</div>
               <div className="text-sm font-bold text-emerald-700">{aggregatedValues.delivered.toFixed(2)}</div>
               <div className="text-[10px] text-slate-400">{transformUOM(group.uom)}</div>
             </div>
             <div className="bg-slate-50 rounded border border-slate-200 p-2 space-y-1">
-              <div className="text-[10px] font-medium text-slate-500 uppercase">Total Rejected</div>
+              <div className="text-[10px] font-medium text-slate-500 uppercase">{t('deliveryReceive.totalRejected')}</div>
               <div className="text-sm font-bold text-amber-700">{aggregatedValues.rejected.toFixed(2)}</div>
               <div className="text-[10px] text-slate-400">{transformUOM(group.uom)}</div>
             </div>
             <div className="bg-slate-50 rounded border border-slate-200 p-2 space-y-1">
-              <div className="text-[10px] font-medium text-slate-500 uppercase">Total Returned</div>
+              <div className="text-[10px] font-medium text-slate-500 uppercase">{t('deliveryReceive.totalReturned')}</div>
               <div className="text-sm font-bold text-red-700">{aggregatedValues.returned.toFixed(2)}</div>
               <div className="text-[10px] text-slate-400">{transformUOM(group.uom)}</div>
             </div>
@@ -1692,79 +1774,83 @@ const ItemGroupRow = memo(({
                       <div className="flex items-center gap-x-2 gap-y-1 text-xs text-slate-600 flex-wrap">
                         <span className="font-medium text-slate-900">{line.deliveryItemDescription}</span>
                         <span className="text-slate-300">|</span>
-                        <span>Qty: <strong className="text-slate-700">{line.packQuantity} {transformUOM(line.packUOM)}</strong></span>
+                        <span>{t('deliveryReceive.qty', { value: `${line.packQuantity} ${transformUOM(line.packUOM)}` })}</span>
                         <span className="text-slate-300">|</span>
-                        <span>Batch: <strong className="font-mono text-slate-700">{line.batchNumber}</strong></span>
+                        <span>{t('deliveryReceive.batchNumber')}: <strong className="font-mono text-slate-700">{line.batchNumber}</strong></span>
                         {group.orderNumber && (
                           <>
                             <span className="text-slate-300">|</span>
-                            <span>Order: <strong className="text-slate-700">{group.orderNumber}</strong></span>
+                            <span>{t('deliveryReceive.orderNumber')}: <strong className="text-slate-700">{group.orderNumber}</strong></span>
                           </>
                         )}
                         {group.buyerPONumber && (
                           <>
                             <span className="text-slate-300">|</span>
-                            <span>PO: <strong className="text-slate-700">{group.buyerPONumber}</strong></span>
+                            <span>{t('deliveryReceive.poNumber')}: <strong className="text-slate-700">{group.buyerPONumber}</strong></span>
                           </>
                         )}
                       </div>
                     </div>
 
                     {/* Right Side: Interactive Form Controls */}
-                    <div className="flex items-center gap-2 shrink-0">
-                      <div className="flex items-center gap-1">
-                        <div className="space-y-0">
-                          <Label className="text-[9px] font-medium text-slate-500 uppercase block mb-0.5">Received</Label>
-                          <Input
-                            type="number"
-                            step="0.01"
-                            min="0"
-                            value={lineState.delivered}
-                            onChange={(e) => onInputChange(line.deliveryLineNumber, 'delivered', e.target.value)}
-                            disabled={isSubmitting}
-                            className="h-7 w-16 text-xs border-slate-300 focus:border-[#1d2351] focus:ring-[#1d2351] px-2"
-                          />
-                        </div>
-                        <div className="space-y-0">
-                          <Label className="text-[9px] font-medium text-slate-500 uppercase block mb-0.5">Rejected</Label>
-                          <Input
-                            type="number"
-                            step="0.01"
-                            min="0"
-                            value={lineState.rejected}
-                            onChange={(e) => onInputChange(line.deliveryLineNumber, 'rejected', e.target.value)}
-                            disabled={isSubmitting}
-                            className="h-7 w-16 text-xs border-slate-300 focus:border-[#1d2351] focus:ring-[#1d2351] px-2"
-                          />
-                        </div>
-                        <div className="space-y-0">
-                          <Label className="text-[9px] font-medium text-slate-500 uppercase block mb-0.5">Returned</Label>
-                          <Input
-                            type="number"
-                            step="0.01"
-                            min="0"
-                            value={lineState.returned}
-                            onChange={(e) => onInputChange(line.deliveryLineNumber, 'returned', e.target.value)}
-                            disabled={isSubmitting}
-                            className="h-7 w-16 text-xs border-slate-300 focus:border-[#1d2351] focus:ring-[#1d2351] px-2"
-                          />
+                      <div className="flex items-center gap-2 shrink-0">
+                        <div className="flex items-center gap-1">
+                          <div className="space-y-0">
+                            <Label className="text-[9px] font-medium text-slate-500 uppercase block mb-0.5">{t('deliveryReceive.received')}</Label>
+                            <Input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              value={lineState.delivered}
+                              onChange={(e) => onInputChange(line.deliveryLineNumber, 'delivered', e.target.value)}
+                              disabled={isSubmitting}
+                              className="h-7 w-16 text-xs border-slate-300 focus:border-[#1d2351] focus:ring-[#1d2351] px-2"
+                            />
+                          </div>
+                          {showReturnReject && (
+                            <>
+                              <div className="space-y-0">
+                                <Label className="text-[9px] font-medium text-slate-500 uppercase block mb-0.5">{t('deliveryReceive.rejected')}</Label>
+                                <Input
+                                  type="number"
+                                  step="0.01"
+                                  min="0"
+                                  value={lineState.rejected}
+                                  onChange={(e) => onInputChange(line.deliveryLineNumber, 'rejected', e.target.value)}
+                                  disabled={isSubmitting}
+                                  className="h-7 w-16 text-xs border-slate-300 focus:border-[#1d2351] focus:ring-[#1d2351] px-2"
+                                />
+                              </div>
+                              <div className="space-y-0">
+                                <Label className="text-[9px] font-medium text-slate-500 uppercase block mb-0.5">{t('deliveryReceive.returned')}</Label>
+                                <Input
+                                  type="number"
+                                  step="0.01"
+                                  min="0"
+                                  value={lineState.returned}
+                                  onChange={(e) => onInputChange(line.deliveryLineNumber, 'returned', e.target.value)}
+                                  disabled={isSubmitting}
+                                  className="h-7 w-16 text-xs border-slate-300 focus:border-[#1d2351] focus:ring-[#1d2351] px-2"
+                                />
+                              </div>
+                            </>
+                          )}
                         </div>
                       </div>
                     </div>
-                  </div>
 
-                  {/* Notes Field for this batch - compact */}
-                  <div className="mt-2 flex items-center gap-2">
-                    <Label className="text-[10px] font-medium text-slate-500 uppercase shrink-0">Notes:</Label>
-                    <Input
-                      type="text"
-                      value={lineState.lineComment}
-                      onChange={(e) => onInputChange(line.deliveryLineNumber, 'lineComment', e.target.value)}
-                      disabled={isSubmitting}
-                      placeholder="Add notes for this batch..."
-                      className="h-7 text-xs border-slate-300 focus:border-[#1d2351] focus:ring-[#1d2351]"
-                    />
-                  </div>
+                    {/* Notes Field for this batch - compact */}
+                    <div className="mt-2 flex items-center gap-2">
+                      <Label className="text-[10px] font-medium text-slate-500 uppercase shrink-0">{t('deliveryReceive.notes')}:</Label>
+                      <Input
+                        type="text"
+                        value={lineState.lineComment}
+                        onChange={(e) => onInputChange(line.deliveryLineNumber, 'lineComment', e.target.value)}
+                        disabled={isSubmitting}
+                        placeholder={t('deliveryReceive.addBatchNotesPlaceholder')}
+                        className="h-7 text-xs border-slate-300 focus:border-[#1d2351] focus:ring-[#1d2351]"
+                      />
+                    </div>
                 </div>
               )
             })}
@@ -1792,19 +1878,20 @@ interface DashboardSummaryProps {
 }
 
 const DashboardSummary = memo(({ totalItems, totalBatches, summaries }: DashboardSummaryProps) => {
+  const { t } = useTranslation()
   return (
     <div className="bg-gradient-to-br from-[#1d2351] to-[#2a3266] rounded-xl p-5 shadow-lg shadow-[#1d2351]/20">
       <div className="grid grid-cols-4 gap-4 sm:gap-6">
         {/* Total Items */}
         <div className="text-center">
           <div className="text-3xl font-bold text-white mb-1">{totalItems}</div>
-          <div className="text-[10px] font-medium uppercase tracking-wider text-blue-200">Total Items</div>
+          <div className="text-[10px] font-medium uppercase tracking-wider text-blue-200">{t('deliveryReceive.totalItems')}</div>
         </div>
 
         {/* Total Batches */}
         <div className="text-center">
           <div className="text-3xl font-bold text-white mb-1">{totalBatches}</div>
-          <div className="text-[10px] font-medium uppercase tracking-wider text-blue-200">Total Batches</div>
+          <div className="text-[10px] font-medium uppercase tracking-wider text-blue-200">{t('deliveryReceive.totalBatches')}</div>
         </div>
 
         {/* Status Indicators */}
@@ -1812,19 +1899,19 @@ const DashboardSummary = memo(({ totalItems, totalBatches, summaries }: Dashboar
           {/* Accepted */}
           <div className="bg-emerald-500/20 rounded-lg p-3 text-center border border-emerald-400/30">
             <div className="text-2xl font-bold text-emerald-300">{summaries.accepted}</div>
-            <div className="text-[10px] font-medium uppercase tracking-wider text-emerald-200">Accepted</div>
+            <div className="text-[10px] font-medium uppercase tracking-wider text-emerald-200">{t('deliveryReceive.accepted')}</div>
           </div>
 
           {/* Discrepancy */}
           <div className="bg-amber-500/20 rounded-lg p-3 text-center border border-amber-400/30">
             <div className="text-2xl font-bold text-amber-300">{summaries.discrepancy}</div>
-            <div className="text-[10px] font-medium uppercase tracking-wider text-amber-200">Discrepancy</div>
+            <div className="text-[10px] font-medium uppercase tracking-wider text-amber-200">{t('deliveryReceive.discrepancy')}</div>
           </div>
 
           {/* Pending */}
           <div className="bg-slate-400/20 rounded-lg p-3 text-center border border-slate-300/30">
             <div className="text-2xl font-bold text-slate-300">{summaries.pending}</div>
-            <div className="text-[10px] font-medium uppercase tracking-wider text-slate-200">Pending</div>
+            <div className="text-[10px] font-medium uppercase tracking-wider text-slate-200">{t('deliveryReceive.pending')}</div>
           </div>
         </div>
       </div>
@@ -1840,6 +1927,20 @@ DashboardSummary.displayName = "DashboardSummary"
 
 export function DeliveryReceivePage() {
   const { token } = useParams<{ token: string }>()
+  const { t, i18n } = useTranslation()
+
+  // Resolve a stored message that may be an i18n key or a raw server-provided string
+  const resolveMessage = (value: string | null | undefined): string | undefined => {
+    if (!value) return undefined
+    const colonIdx = value.indexOf(":")
+    if (colonIdx > 0) {
+      const maybeKey = value.slice(0, colonIdx)
+      if (i18n.exists(maybeKey)) {
+        return t(maybeKey, { name: value.slice(colonIdx + 1) })
+      }
+    }
+    return i18n.exists(value) ? t(value) : value
+  }
   // const [isPending, startTransition] = useTransition()
 
   // Core state
@@ -1897,6 +1998,15 @@ export function DeliveryReceivePage() {
   const [pendingVariances, setPendingVariances] = useState<VarianceSummary[]>()
   const [showGuardrailModal, setShowGuardrailModal] = useState(false)
   const [showApplyAllReminder, setShowApplyAllReminder] = useState(false)
+
+  // Visibility toggle for Return/Reject inputs
+  // Default to false (Received Only), but auto-show if delivery has existing returned/rejected quantities
+  const [showReturnReject, setShowReturnReject] = useState(() => {
+    if (!delivery?.lines) return false
+    return delivery.lines.some(line =>
+      (line.packQuantityReturned ?? 0) > 0 || (line.packQuantityRejected ?? 0) > 0
+    )
+  })
 
   // Refs for stable callbacks
   const cameraInputRef = useRef<HTMLInputElement>(null)
@@ -2222,21 +2332,21 @@ export function DeliveryReceivePage() {
   useEffect(() => {
     const fetchDelivery = async () => {
       if (!token) {
-        setError("Invalid secure warehouse token parameter.")
+        setError("deliveryReceive.invalidToken")
         setLoading(false)
         return
       }
 
       try {
         const res = await fetch(`${API_URL}/api/deliveries/${token}`)
-        if (!res.ok) throw new Error("Delivery reference payload not resolved.")
+        if (!res.ok) throw new Error("deliveryReceive.payloadNotResolved")
         const data: DeliveryDetail = await res.json()
         setDelivery(data)
 
         setReceiverName(data.receiverName || "")
         setReceiverNotes(data.receiverNotes || "")
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to establish enterprise link.")
+        setError(err instanceof Error ? err.message : "deliveryReceive.fetchLinkFailed")
       } finally {
         setLoading(false)
       }
@@ -2457,8 +2567,14 @@ export function DeliveryReceivePage() {
           const associatedChildren = splitBatchMatch.children
 
           const totalDelivered = associatedChildren.reduce((sum, child) => sum + (parseFloat(linesMap.get(child.deliveryLineNumber)?.delivered || "") || 0), 0)
-          const totalRejected = associatedChildren.reduce((sum, child) => sum + (parseFloat(linesMap.get(child.deliveryLineNumber)?.rejected || "") || 0), 0)
-          const totalReturned = associatedChildren.reduce((sum, child) => sum + (parseFloat(linesMap.get(child.deliveryLineNumber)?.returned || "") || 0), 0)
+
+          // When showReturnReject is false, force rejected and returned to 0
+          const totalRejected = showReturnReject
+            ? associatedChildren.reduce((sum, child) => sum + (parseFloat(linesMap.get(child.deliveryLineNumber)?.rejected || "") || 0), 0)
+            : 0
+          const totalReturned = showReturnReject
+            ? associatedChildren.reduce((sum, child) => sum + (parseFloat(linesMap.get(child.deliveryLineNumber)?.returned || "") || 0), 0)
+            : 0
 
           return {
             deliveryLineNumber: line.deliveryLineNumber,
@@ -2472,11 +2588,19 @@ export function DeliveryReceivePage() {
         // CONDITION B: Standalone item (either a single-batch 3-digit line with no children, or an active child batch row)
         const currentDelivered = parseFloat(linesMap.get(line.deliveryLineNumber)?.delivered || "") || 0
 
+        // When showReturnReject is false, force rejected and returned to 0
+        const currentRejected = showReturnReject
+          ? (parseFloat(linesMap.get(line.deliveryLineNumber)?.rejected || "") || 0)
+          : 0
+        const currentReturned = showReturnReject
+          ? (parseFloat(linesMap.get(line.deliveryLineNumber)?.returned || "") || 0)
+          : 0
+
         return {
           deliveryLineNumber: line.deliveryLineNumber,
           packQuantityDelivered: currentDelivered,
-          packQuantityRejected: parseFloat(linesMap.get(line.deliveryLineNumber)?.rejected || "") || 0,
-          packQuantityReturned: parseFloat(linesMap.get(line.deliveryLineNumber)?.returned || "") || 0,
+          packQuantityRejected: currentRejected,
+          packQuantityReturned: currentReturned,
           lineComment: linesMap.get(line.deliveryLineNumber)?.lineComment || ""
         }
       })
@@ -2495,7 +2619,7 @@ export function DeliveryReceivePage() {
         body: formData,
       })
 
-      if (!res.ok) throw new Error("Posting operation failed on ERP interface.")
+      if (!res.ok) throw new Error("deliveryReceive.postErpFailed")
 
       setDelivery((prev) => {
         if (!prev) return null
@@ -2511,17 +2635,17 @@ export function DeliveryReceivePage() {
 
       setSubmitted(true)
       setToastType("success")
-      setToastTitle("Receipt Posted Successfully")
-      setToastMessage("Warehouse inventory registers have been updated.")
+      setToastTitle(t('deliveryReceive.receiptPostedSuccess'))
+      setToastMessage(t('deliveryReceive.inventoryUpdated'))
       setShowToast(true)
       setKeysToDelete([])
       setPhotoFiles([])
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to post physical goods receipt updates.")
+      setError(err instanceof Error ? err.message : "deliveryReceive.postUpdateFailed")
     } finally {
       setSubmitting(false)
     }
-  }, [delivery, token, receiverName, receiverNotes, receiveDate, latitude, longitude, photoFiles, keysToDelete, linesMap])
+  }, [delivery, token, receiverName, receiverNotes, receiveDate, latitude, longitude, photoFiles, keysToDelete, linesMap, showReturnReject])
 
   const handleValidationCheck = useCallback((e: React.FormEvent | null) => {
     if (e) e.preventDefault()
@@ -2545,7 +2669,7 @@ export function DeliveryReceivePage() {
     selected.setHours(0, 0, 0, 0)
 
     if (selected > today) {
-      setReceiveDateError("Receive date cannot be in the future")
+      setReceiveDateError("deliveryReceive.receiveDateFutureError")
       setToastType("error")
       setShowToast(true)
       return
@@ -2590,7 +2714,7 @@ export function DeliveryReceivePage() {
 
   const handleVerifyPin = useCallback(async () => {
     if (!token || !pinInput) {
-      setPinError("Verification code entry required.")
+      setPinError("deliveryReceive.pinRequired")
       return
     }
     setVerifying(true)
@@ -2607,10 +2731,10 @@ export function DeliveryReceivePage() {
         setIsVerified(true)
         sessionStorage.setItem(`verified-${token}`, "true")
       } else {
-        setPinError(res.status === 401 ? "Incorrect security verification PIN." : "Validation pathway failure.")
+        setPinError(res.status === 401 ? "deliveryReceive.incorrectPin" : "deliveryReceive.validationFailure")
       }
     } catch {
-      setPinError("Network error matching warehouse secure keys.")
+      setPinError("deliveryReceive.pinNetworkError")
     } finally {
       setVerifying(false)
     }
@@ -2632,10 +2756,10 @@ export function DeliveryReceivePage() {
       if (res.ok && data.success) {
         setSentToEmail(data.sentTo)
       } else {
-        setRequestError(data.message || "Unable to dispatch security token request.")
+        setRequestError(data.message || "deliveryReceive.dispatchError")
       }
     } catch {
-      setRequestError("Inbound network pathway exception.")
+      setRequestError("deliveryReceive.requestNetworkError")
     } finally {
       setIsSending(false)
     }
@@ -2648,11 +2772,11 @@ export function DeliveryReceivePage() {
 
     files.forEach((f) => {
       if (!["image/jpeg", "image/jpg", "image/png"].includes(f.type)) {
-        errors.push(`${f.name}: Invalid attachment format (JPEG/PNG only).`)
+        errors.push(`deliveryReceive.invalidPhotoFormat:${f.name}`)
         return
       }
       if (f.size > MAX_FILE_SIZE) {
-        errors.push(`${f.name}: Image exceeds 5MB memory footprint threshold.`)
+        errors.push(`deliveryReceive.photoTooLarge:${f.name}`)
         return
       }
       valid.push(f)
@@ -2704,7 +2828,7 @@ export function DeliveryReceivePage() {
       <div className="min-h-screen bg-white flex items-center justify-center p-4">
         <div className="text-center space-y-4">
           <div className="w-12 h-12 rounded-full border-2 border-[#1d2351]/10 border-t-[#1d2351] animate-spin mx-auto" />
-          <p className="text-xs font-mono tracking-widest text-slate-400 uppercase">Loading Delivery Data</p>
+          <p className="text-xs font-mono tracking-widest text-slate-400 uppercase">{t('deliveryReceive.loadingDeliveryData')}</p>
         </div>
       </div>
     )
@@ -2719,11 +2843,11 @@ export function DeliveryReceivePage() {
               <AlertTriangle className="w-7 h-7 text-red-600" />
             </div>
             <div className="space-y-2">
-              <h3 className="text-sm font-bold text-slate-900">Unable to Load Delivery</h3>
-              <p className="text-xs text-slate-500 max-w-[240px] mx-auto">{error || "The delivery reference could not be found or has expired."}</p>
+              <h3 className="text-sm font-bold text-slate-900">{t('deliveryReceive.loadErrorTitle')}</h3>
+              <p className="text-xs text-slate-500 max-w-[240px] mx-auto">{error ? resolveMessage(error) : t('deliveryReceive.loadErrorDesc')}</p>
             </div>
             <Button onClick={() => window.location.reload()} variant="outline" className="text-xs h-10 px-6">
-              Try Again
+              {t('common.retry')}
             </Button>
           </CardContent>
         </Card>
@@ -2746,14 +2870,14 @@ export function DeliveryReceivePage() {
               <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-[#1d2351] mb-4 shadow-lg shadow-[#1d2351]/20">
                 <Lock className="w-8 h-8 text-white" />
               </div>
-              <h1 className="text-xl font-bold text-[#1d2351] tracking-tight mb-1">Secure Delivery Access</h1>
-              <p className="text-sm text-slate-500">Enter your security PIN to verify this delivery</p>
+              <h1 className="text-xl font-bold text-[#1d2351] tracking-tight mb-1">{t('deliveryReceive.secureDeliveryAccess')}</h1>
+              <p className="text-sm text-slate-500">{t('deliveryReceive.pinPrompt')}</p>
             </div>
 
             <Card className="shadow-sm border border-slate-200/80 rounded-xl bg-white">
               <CardContent className="p-6 space-y-5">
                 <div className="space-y-2">
-                  <Label htmlFor="pin" className="text-xs font-semibold uppercase tracking-wider text-slate-500">Security PIN</Label>
+                  <Label htmlFor="pin" className="text-xs font-semibold uppercase tracking-wider text-slate-500">{t('deliveryReceive.securityPin')}</Label>
                   <Input
                     id="pin"
                     type="password"
@@ -2774,7 +2898,7 @@ export function DeliveryReceivePage() {
                 {pinError && (
                   <div className="p-3 rounded-lg bg-red-50 border border-red-100 flex items-start gap-2">
                     <AlertTriangle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
-                    <p className="text-xs text-red-700 font-medium">{pinError}</p>
+                    <p className="text-xs text-red-700 font-medium">{resolveMessage(pinError)}</p>
                   </div>
                 )}
 
@@ -2783,29 +2907,29 @@ export function DeliveryReceivePage() {
                   onClick={handleVerifyPin}
                   disabled={verifying || !pinInput || isSending}
                 >
-                  {verifying ? "Verifying..." : "Verify & Continue"}
+                  {verifying ? t('deliveryReceive.verifying') : t('deliveryReceive.verifyContinue')}
                 </Button>
 
                 <div className="pt-5 border-t border-slate-100">
                   {!sentToEmail ? (
                     <div className="space-y-3">
-                      <p className="text-xs text-slate-500 text-center">Don't have a PIN? Request one to be sent to your email.</p>
+                      <p className="text-xs text-slate-500 text-center">{t('deliveryReceive.requestPinPrompt')}</p>
                       <Button
                         variant="outline"
                         className="w-full h-10 border-slate-300 text-slate-700 hover:bg-slate-50"
                         onClick={handleRequestPin}
                         disabled={isSending || verifying}
                       >
-                        {isSending ? "Sending..." : "Request PIN via Email"}
+                        {isSending ? t('deliveryReceive.sending') : t('deliveryReceive.requestPinViaEmail')}
                       </Button>
-                      {requestError && <p className="text-xs text-red-600 text-center font-medium mt-2">{requestError}</p>}
+                      {requestError && <p className="text-xs text-red-600 text-center font-medium mt-2">{resolveMessage(requestError)}</p>}
                     </div>
                   ) : (
                     <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-lg text-center space-y-2">
                       <CheckCircle className="w-6 h-6 text-emerald-600 mx-auto" />
                       <div>
-                        <p className="text-xs font-semibold text-emerald-900">PIN Sent Successfully</p>
-                        <p className="text-xs text-emerald-700 mt-1">Check your email at:</p>
+                        <p className="text-xs font-semibold text-emerald-900">{t('deliveryReceive.pinSentSuccess')}</p>
+                        <p className="text-xs text-emerald-700 mt-1">{t('deliveryReceive.checkEmailAt')}</p>
                         <p className="text-sm font-mono font-bold text-emerald-800 mt-1">{sentToEmail}</p>
                       </div>
                       <button
@@ -2813,7 +2937,7 @@ export function DeliveryReceivePage() {
                         onClick={() => { setSentToEmail(null); setRequestError(null) }}
                         className="text-xs text-emerald-700 hover:text-emerald-900 underline font-medium"
                       >
-                        Request again
+                        {t('deliveryReceive.requestAgain')}
                       </button>
                     </div>
                   )}
@@ -2824,7 +2948,7 @@ export function DeliveryReceivePage() {
         </div>
 
         <div className="py-4 text-center">
-          <p className="text-xs text-slate-400">Enterprise Warehouse Management System</p>
+          <p className="text-xs text-slate-400">{t('deliveryReceive.footerLabel')}</p>
         </div>
       </div>
     )
@@ -2841,21 +2965,24 @@ export function DeliveryReceivePage() {
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-lg font-bold text-[#1d2351] tracking-tight">Goods Receipt</h1>
-            <p className="text-xs text-slate-500 mt-0.5">Verify and document incoming delivery</p>
+            <h1 className="text-lg font-bold text-[#1d2351] tracking-tight">{t('deliveryReceive.title')}</h1>
+            <p className="text-xs text-slate-500 mt-0.5">{t('deliveryReceive.subtitle')}</p>
           </div>
-          <Badge
-            variant={delivery.isOpen == false ? "warning" : (delivery.received ? "success" : "info")}
-            className="text-xs font-medium px-3 py-1"
-          >
-            {delivery.isOpen == false ? "Locked" : (delivery.received ? "Completed" : "Pending")}
-          </Badge>
+          <div className="flex items-center gap-2">
+            <LanguageSwitcher />
+            <Badge
+              variant={delivery.isOpen == false ? "warning" : (delivery.received ? "success" : "info")}
+              className="text-xs font-medium px-3 py-1"
+            >
+              {delivery.isOpen == false ? t('deliveryReceive.locked') : (delivery.received ? t('deliveryReceive.completed') : t('deliveryReceive.pending'))}
+            </Badge>
+          </div>
         </div>
 
         {/* Blocked alert */}
         {delivery.invoiced && (
           <div className="bg-blue-50 border text-xs border-blue-200 text-blue-800 p-4 rounded-md">
-            This delivery order has been invoiced. You may still submit or modify structural receipts as needed.
+            {t('deliveryReceive.thisDeliveryInvoiced')}
           </div>
         )}
 
@@ -2866,8 +2993,8 @@ export function DeliveryReceivePage() {
               <Lock className="w-4 h-4 text-slate-600" />
             </div>
             <div>
-              <h3 className="text-sm font-semibold text-slate-900">Delivery Closed</h3>
-              <p className="text-xs text-slate-600 mt-0.5">This delivery order has been closed and locked from further modifications.</p>
+              <h3 className="text-sm font-semibold text-slate-900">{t('deliveryReceive.deliveryClosed')}</h3>
+              <p className="text-xs text-slate-600 mt-0.5">{t('deliveryReceive.deliveryClosedMessage')}</p>
             </div>
           </div>
         )}
@@ -2877,23 +3004,23 @@ export function DeliveryReceivePage() {
           <CardHeader className="px-4 py-3 border-b border-slate-100">
             <CardTitle className="text-sm font-semibold text-slate-800 flex items-center gap-2">
               <FileText className="w-4 h-4 text-slate-800" />
-              Delivery Details
+               Delivery Details
             </CardTitle>
           </CardHeader>
           <CardContent className="p-4 space-y-4">
             {/* Optimized layout with 3 columns across all screen sizes */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="space-y-1">
-                <p className="text-xs font-medium uppercase tracking-wider text-slate-500">Delivery Number</p>
+                <p className="text-xs font-medium uppercase tracking-wider text-slate-500">{t('deliveryReceive.deliveryNumber')}</p>
                 <p className="text-sm font-semibold text-slate-900">{delivery.deliveryNumber}</p>
               </div>
               <div className="space-y-1">
-                <p className="text-xs font-medium uppercase tracking-wider text-slate-500">Customer Name</p>
+                <p className="text-xs font-medium uppercase tracking-wider text-slate-500">{t('deliveryReceive.customerName')}</p>
                 <p className="text-sm font-semibold text-slate-900">{delivery.customerName || "—"}</p>
               </div>
               <div className="space-y-1">
-                <p className="text-xs font-medium uppercase tracking-wider text-slate-500">Delivery Date</p>
-                <p className="text-sm font-semibold text-slate-900">{formatDate(delivery.deliveryDate)}</p>
+                <p className="text-xs font-medium uppercase tracking-wider text-slate-500">{t('deliveryReceive.deliveryDate')}</p>
+                <p className="text-sm font-semibold text-slate-900">{formatDate(delivery.deliveryDate, i18n.language)}</p>
               </div>
             </div>
 
@@ -2902,7 +3029,7 @@ export function DeliveryReceivePage() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 border-t border-slate-200">
                 {delivery.deliveryRemarks && (
                   <div className="space-y-2">
-                    <p className="text-xs font-medium uppercase tracking-wider text-slate-500">Shipping Notes</p>
+                    <p className="text-xs font-medium uppercase tracking-wider text-slate-500">{t('deliveryReceive.shippingNotes')}</p>
                     <div className="bg-slate-50 border border-slate-200 rounded-lg p-3">
                       <p className="text-sm text-slate-900">{delivery.deliveryRemarks}</p>
                     </div>
@@ -2910,7 +3037,7 @@ export function DeliveryReceivePage() {
                 )}
                 {delivery.shipToAddress && (
                   <div className="space-y-2">
-                    <p className="text-xs font-medium uppercase tracking-wider text-slate-500">Ship To Address</p>
+                    <p className="text-xs font-medium uppercase tracking-wider text-slate-500">{t('deliveryReceive.shipToAddress')}</p>
                     <div className="bg-slate-50 border border-slate-200 rounded-lg p-3">
                       <p className="text-sm text-slate-900">{delivery.shipToAddress}</p>
                     </div>
@@ -2926,28 +3053,28 @@ export function DeliveryReceivePage() {
           <CardHeader className="px-4 py-3 border-b border-slate-100">
             <CardTitle className="text-sm font-semibold text-slate-800 flex items-center gap-2">
               <FileText className="w-4 h-4 text-slate-500" />
-              Receiver Information
+              {t('deliveryReceive.receiverInformation')}
             </CardTitle>
           </CardHeader>
           <CardContent className="p-4 space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1.5">
-                <Label htmlFor="receiverName" className="text-xs font-medium text-slate-600">Receiver Name <span className="text-red-500">*</span></Label>
+                <Label htmlFor="receiverName" className="text-xs font-medium text-slate-600">{t('deliveryReceive.receiverName')} <span className="text-red-500">*</span></Label>
                 <Input
                   id="receiverName"
                   value={receiverName}
                   onChange={(e) => setReceiverName(e.target.value)}
                   disabled={delivery.isOpen == false || submitted || submitting}
-                  placeholder="Enter your full name"
+                  placeholder={t('deliveryReceive.enterFullName')}
                   className="h-10 text-sm border-slate-300 focus:border-[#1d2351] focus:ring-[#1d2351]"
                   required
                 />
                 {!receiverName.trim() && (
-                  <p className="text-xs text-red-600 font-medium mt-1">Receiver name is required before applying actions or submitting.</p>
+                  <p className="text-xs text-red-600 font-medium mt-1">{t('deliveryReceive.receiverNameRequiredMessage')}</p>
                 )}
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="receiveDate" className="text-xs font-medium text-slate-600">Receive Date <span className="text-red-500">*</span></Label>
+                <Label htmlFor="receiveDate" className="text-xs font-medium text-slate-600">{t('deliveryReceive.receiveDate')} <span className="text-red-500">*</span></Label>
                 <Input
                   id="receiveDate"
                   type="date"
@@ -2964,7 +3091,7 @@ export function DeliveryReceivePage() {
                       selected.setHours(0, 0, 0, 0)
 
                       if (selected > today) {
-                        setReceiveDateError("Receive date cannot be in the future")
+                        setReceiveDateError("deliveryReceive.receiveDateFutureError")
                       }
                     }
                   }}
@@ -2974,18 +3101,18 @@ export function DeliveryReceivePage() {
                   max={new Date().toISOString().split('T')[0]}
                 />
                 {receiveDateError && (
-                  <p className="text-xs text-red-600 font-medium mt-1">{receiveDateError}</p>
+                  <p className="text-xs text-red-600 font-medium mt-1">{resolveMessage(receiveDateError)}</p>
                 )}
               </div>
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="receiverNotes" className="text-xs font-medium text-slate-600">Additional Notes</Label>
+              <Label htmlFor="receiverNotes" className="text-xs font-medium text-slate-600">{t('deliveryReceive.additionalNotes')}</Label>
               <Input
                 id="receiverNotes"
                 value={receiverNotes}
                 onChange={(e) => setReceiverNotes(e.target.value)}
                 disabled={delivery.isOpen == false || submitted || submitting}
-                placeholder="Any additional delivery notes..."
+                placeholder={t('deliveryReceive.additionalNotesPlaceholder')}
                 className="h-10 text-sm border-slate-300 focus:border-[#1d2351] focus:ring-[#1d2351]"
               />
             </div>
@@ -3000,22 +3127,29 @@ export function DeliveryReceivePage() {
                 <CheckCircle className="w-5 h-5 text-[#1d2351]" />
               </div>
               <div>
-                <h3 className="text-sm font-semibold text-[#1d2351]">Full Receipt</h3>
-                <p className="text-xs text-slate-600 mt-0.5">All items received without discrepancies</p>
+                <h3 className="text-sm font-semibold text-[#1d2351]">{t('deliveryReceive.fullReceipt')}</h3>
+                <p className="text-xs text-slate-600 mt-0.5">{t('deliveryReceive.fullReceiptDesc')}</p>
                 {!receiverName.trim() && (
-                  <p className="text-xs text-red-600 font-medium mt-1">Enter receiver name above to enable this action</p>
+                  <p className="text-xs text-red-600 font-medium mt-1">{t('deliveryReceive.enterReceiverNameHint')}</p>
                 )}
               </div>
             </div>
-            <Button
-              type="button"
-              size="sm"
-              className="bg-[#1d2351] hover:bg-[#2a3266] text-white shadow-sm"
-              onClick={() => handleReceiveAllClean(false)}
-              disabled={submitting || !receiverName.trim()}
-            >
-              Apply to All
-            </Button>
+            <div className="flex items-center gap-2">
+              <VisibilityToggle
+                enabled={showReturnReject}
+                onToggle={() => setShowReturnReject(!showReturnReject)}
+                disabled={submitting}
+              />
+              <Button
+                type="button"
+                size="sm"
+                className="bg-[#1d2351] hover:bg-[#2a3266] text-white shadow-sm"
+                onClick={() => handleReceiveAllClean(false)}
+                disabled={submitting || !receiverName.trim()}
+              >
+                {t('deliveryReceive.applyToAll')}
+              </Button>
+            </div>
           </div>
         )}
 
@@ -3032,15 +3166,15 @@ export function DeliveryReceivePage() {
           <Card className="shadow-sm border border-slate-200/80 rounded-xl bg-white overflow-hidden">
             <div className="p-4 border-b border-slate-100 space-y-4">
               <div className="flex items-center justify-between">
-                <CardTitle className="text-sm font-semibold text-slate-800">Line Items</CardTitle>
-                <span className="text-xs text-slate-500">{filteredDisplayableItems.length} of {delivery.lines.length}</span>
+                <CardTitle className="text-sm font-semibold text-slate-800">{t('deliveryReceive.lineItems')}</CardTitle>
+                <span className="text-xs text-slate-500">{t('common.countOf', { current: filteredDisplayableItems.length, total: delivery.lines.length })}</span>
               </div>
 
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                 <Input
                   type="text"
-                  placeholder="Search by Description, Order #, PO #, Batch..."
+                  placeholder={t('deliveryReceive.searchPlaceholder')}
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="pl-10 h-10 text-sm border-slate-300 focus:border-[#1d2351] focus:ring-[#1d2351]"
@@ -3056,7 +3190,7 @@ export function DeliveryReceivePage() {
                     : "border-transparent text-slate-500 hover:text-slate-700"
                     }`}
                 >
-                  All Items ({allFilteredItems.length})
+                  {t('deliveryReceive.allItems')} ({allFilteredItems.length})
                 </button>
                 <button
                   type="button"
@@ -3066,7 +3200,7 @@ export function DeliveryReceivePage() {
                     : "border-transparent text-slate-500 hover:text-slate-700"
                     }`}
                 >
-                  Discrepancies {issuesCount > 0 && `(${issuesCount})`}
+                  {t('deliveryReceive.discrepancies')} {issuesCount > 0 && `(${issuesCount})`}
                 </button>
               </div>
             </div>
@@ -3076,7 +3210,7 @@ export function DeliveryReceivePage() {
               {filteredDisplayableItems.length === 0 ? (
                 <div className="p-8 text-center">
                   <Package className="w-10 h-10 text-slate-300 mx-auto mb-2" />
-                  <p className="text-sm text-slate-500">No items found</p>
+                  <p className="text-sm text-slate-500">{t('deliveryReceive.noItemsFound')}</p>
                 </div>
               ) : (
                 <>
@@ -3102,6 +3236,8 @@ export function DeliveryReceivePage() {
                           calc={calc}
                           isInvoiced={delivery.isOpen == false}
                           isSubmitting={submitting}
+                          showReturnReject={showReturnReject}
+                          t={t}
                           onInputChange={handlers.onInputChange}
                         />
                       )
@@ -3119,6 +3255,8 @@ export function DeliveryReceivePage() {
                           isExpanded={isExpanded}
                           isInvoiced={delivery.isOpen == false}
                           isSubmitting={submitting}
+                          showReturnReject={showReturnReject}
+                          t={t}
                           onToggleExpansion={() => toggleRowExpansion(parentLine.deliveryLineNumber)}
                           linesMap={linesMap}
                           onInputChange={(lineNumber, field, value) => updateLineField(lineNumber, field, value)}
@@ -3134,7 +3272,7 @@ export function DeliveryReceivePage() {
             {totalDisplayablePages > 1 && (
               <div className="px-4 py-3 border-t border-slate-100 flex items-center justify-between gap-4">
                 <span className="text-xs text-slate-500">
-                  Page {currentPage} of {totalDisplayablePages}
+                  {t('common.pageOf', { current: currentPage, total: totalDisplayablePages })}
                 </span>
                 <div className="flex items-center gap-1">
                   <Button
@@ -3165,7 +3303,7 @@ export function DeliveryReceivePage() {
             <CardHeader className="px-4 py-3 border-b border-slate-100">
               <CardTitle className="text-sm font-semibold text-slate-800 flex items-center gap-2">
                 <Camera className="w-4 h-4 text-slate-500" />
-                Delivery Photos
+                {t('deliveryReceive.deliveryPhotos')}
               </CardTitle>
             </CardHeader>
             <CardContent className="p-4 space-y-4">
@@ -3178,7 +3316,7 @@ export function DeliveryReceivePage() {
                   className="h-11 border-slate-300 text-slate-700 hover:bg-slate-50"
                 >
                   <Camera className="w-4 h-4 mr-2" />
-                  Take Photo
+                  {t('deliveryReceive.takePhoto')}
                 </Button>
                 <Button
                   type="button"
@@ -3188,7 +3326,7 @@ export function DeliveryReceivePage() {
                   className="h-11 border-slate-300 text-slate-700 hover:bg-slate-50"
                 >
                   <Upload className="w-4 h-4 mr-2" />
-                  Upload Files
+                  {t('deliveryReceive.uploadFiles')}
                 </Button>
               </div>
 
@@ -3212,12 +3350,12 @@ export function DeliveryReceivePage() {
               />
 
               <div className="flex items-center justify-between text-xs">
-                <span className="text-slate-500">{activePhotosCount} / 5 photos</span>
-                {activePhotosCount >= 5 && <span className="text-red-600 font-medium">Maximum reached</span>}
+                <span className="text-slate-500">{t('common.photosCount', { count: activePhotosCount })}</span>
+                {activePhotosCount >= 5 && <span className="text-red-600 font-medium">{t('common.maximumReached')}</span>}
               </div>
 
               {photoErrors.map((pErr, idx) => (
-                <p key={idx} className="text-xs text-red-600 bg-red-50 p-2.5 rounded border border-red-100">{pErr}</p>
+                <p key={idx} className="text-xs text-red-600 bg-red-50 p-2.5 rounded border border-red-100">{resolveMessage(pErr)}</p>
               ))}
 
               <div className="grid grid-cols-3 sm:grid-cols-5 gap-3">
@@ -3236,7 +3374,7 @@ export function DeliveryReceivePage() {
                             : "bg-red-600/0 text-white opacity-0 group-hover:opacity-100 group-hover:bg-red-600/80"
                             }`}
                         >
-                          {marked ? "Undo" : "Remove"}
+                          {marked ? t('common.undo') : t('common.remove')}
                         </button>
                       )}
                     </div>
@@ -3285,7 +3423,7 @@ export function DeliveryReceivePage() {
               className="flex-1 h-12 text-sm font-semibold bg-[#1d2351] hover:bg-[#2a3266] text-white shadow-lg shadow-[#1d2351]/20"
               disabled={delivery.isOpen == false || submitting || !receiverName.trim()}
             >
-              {submitting ? "Posting..." : "Post Goods Receipt"}
+              {submitting ? t('deliveryReceive.posting') : t('deliveryReceive.postGoodsReceipt')}
             </Button>
           </div>
         </div>
