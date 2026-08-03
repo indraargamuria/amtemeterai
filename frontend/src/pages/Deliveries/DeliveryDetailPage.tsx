@@ -46,6 +46,7 @@ interface DeliveryDetail {
   deliveryID: number
   deliveryNumber: string
   deliveryDate: string
+  postGoodsIssueDate?: string | null
   deliveryRemarks: string | null
   shipToAddress?: string | null
   customerCode: string
@@ -862,7 +863,7 @@ export function DeliveryDetailPage() {
             {delivery.status === 3 && getStatusBadge(delivery.status)}
           </div>
           <p className="text-sm text-brand-blue/60 ml-8">
-            {formatDate(delivery.deliveryDate)}
+            {delivery.postGoodsIssueDate ? formatDate(delivery.postGoodsIssueDate) : formatDate(delivery.deliveryDate)}
           </p>
         </div>
         <div className="flex items-center gap-2">

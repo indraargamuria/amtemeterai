@@ -5,6 +5,7 @@ namespace amtemeterai.Api.Dtos
         public int DeliveryId { get; set; }
         public string DeliveryNumber { get; set; } = string.Empty;
         public DateTime DeliveryDate { get; set; }
+        public DateTime? PostGoodsIssueDate { get; set; }
         public string? DeliveryRemarks { get; set; }
         public string CustomerCode { get; set; } = string.Empty;
         public string CustomerName { get; set; } = string.Empty;

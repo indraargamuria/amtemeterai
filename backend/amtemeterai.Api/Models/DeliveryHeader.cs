@@ -54,6 +54,7 @@ public class DeliveryHeader
 
     public string DeliveryNumber { get; set; } = null!;
     public DateTime DeliveryDate { get; set; }
+    public DateTime? PostGoodsIssueDate { get; set; }
 
     public string? DeliveryRemarks { get; set; }
 

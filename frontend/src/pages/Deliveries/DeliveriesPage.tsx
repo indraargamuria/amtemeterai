@@ -20,6 +20,7 @@ interface DeliveryHeader {
   deliveryId: number
   deliveryNumber: string
   deliveryDate: string
+  postGoodsIssueDate: string | null
   deliveryRemarks: string | null
   customerCode: string
   customerName: string
@@ -591,7 +592,7 @@ export function DeliveriesPage() {
                 className="font-medium text-brand-blue/50 uppercase text-xs tracking-wider cursor-pointer hover:text-brand-blue/70 transition-colors"
                 onClick={() => handleSort("deliveryDate")}
               >
-                Delivery / Date {getSortIcon("deliveryDate")}
+                PGI Date {getSortIcon("deliveryDate")}
               </TableHead>
               
               {/* 🚀 CONDITIONAL HEADER: Drop Customer column dynamically if the warehouse role matches */}
@@ -657,7 +658,7 @@ export function DeliveriesPage() {
                         {delivery.deliveryNumber}
                       </p>
                       <p className="text-xs text-brand-blue/40">
-                        {formatDate(delivery.deliveryDate)}
+                        {delivery.postGoodsIssueDate ? formatDate(delivery.postGoodsIssueDate) : formatDate(delivery.deliveryDate)}
                       </p>
                     </div>
                   </TableCell>

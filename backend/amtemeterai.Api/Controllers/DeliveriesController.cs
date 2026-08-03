@@ -121,6 +121,7 @@ public class DeliveriesController : ControllerBase
                 DeliveryId = d.DeliveryID,
                 DeliveryNumber = d.DeliveryNumber,
                 DeliveryDate = d.DeliveryDate,
+                PostGoodsIssueDate = d.PostGoodsIssueDate,
                 DeliveryRemarks = d.DeliveryRemarks,
 
                 // Conditional: Hide customer info for warehouse role
@@ -198,6 +199,7 @@ public class DeliveriesController : ControllerBase
                 DeliveryId = d.DeliveryId,
                 DeliveryNumber = d.DeliveryNumber,
                 DeliveryDate = d.DeliveryDate,
+                PostGoodsIssueDate = d.PostGoodsIssueDate,
                 DeliveryRemarks = d.DeliveryRemarks,
                 CustomerCode = d.CustomerCode ?? string.Empty,
                 CustomerName = d.CustomerName ?? string.Empty,
@@ -322,6 +324,7 @@ public class DeliveriesController : ControllerBase
             DeliveryID = delivery.DeliveryID,
             DeliveryNumber = delivery.DeliveryNumber,
             DeliveryDate = delivery.DeliveryDate,
+            PostGoodsIssueDate = delivery.PostGoodsIssueDate,
             DeliveryRemarks = delivery.DeliveryRemarks,
             ShipToAddress = delivery.ShipToAddress,
 
@@ -555,6 +558,7 @@ public class DeliveriesController : ControllerBase
             CustomerID = customer.CustomerID,
             DeliveryNumber = dto.DeliveryNumber,
             DeliveryDate = dto.DeliveryDate,
+            PostGoodsIssueDate = dto.PostGoodsIssueDate,
             DeliveryRemarks = dto.DeliveryRemarks,
             ShipToAddress = dto.ShipToAddress,
             Plant = dto.Plant,
@@ -620,6 +624,7 @@ public class DeliveriesController : ControllerBase
             return NotFound("Delivery not found. Use POST to create.");
 
         existing.DeliveryDate = dto.DeliveryDate;
+        existing.PostGoodsIssueDate = dto.PostGoodsIssueDate;
         existing.DeliveryRemarks = dto.DeliveryRemarks;
         existing.ShipToAddress = dto.ShipToAddress;
         existing.Plant = dto.Plant;

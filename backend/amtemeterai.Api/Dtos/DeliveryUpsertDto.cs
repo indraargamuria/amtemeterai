@@ -6,6 +6,7 @@ public class DeliveryUpsertDto
     public string DeliveryNumber { get; set; } = null!;
 
     public DateTime DeliveryDate { get; set; }
+    public DateTime? PostGoodsIssueDate { get; set; }
     public string? DeliveryRemarks { get; set; }
 
     public string? ShipToAddress { get; set; }
