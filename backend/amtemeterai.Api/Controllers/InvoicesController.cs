@@ -948,6 +948,93 @@ public class InvoicesController : ControllerBase
         }
     }
 
+    /// <summary>
+    /// Delete invoice by SAP invoice number.
+    /// - If invoice is standalone (without DO), removes it completely.
+    /// - If invoice is linked to a DO, deletes the invoice and resets delivery status to allow re-invoicing.
+    /// </summary>
+    [HttpDelete("by-sap-number/{invoiceNumber}")]
+    public async Task<IActionResult> DeleteInvoiceByNumber(string invoiceNumber)
+    {
+        if (string.IsNullOrWhiteSpace(invoiceNumber))
+        {
+            return BadRequest("Invoice number is required.");
+        }
+
+        // Start explicit transaction for atomicity
+        using var transaction = await _db.Database.BeginTransactionAsync();
+        try
+        {
+            // Look up the invoice by its SAP number
+            var invoice = await _db.Invoices
+                .Include(i => i.DeliveryHeader)
+                .Include(i => i.Documents)
+                .FirstOrDefaultAsync(i => i.InvoiceNumber == invoiceNumber);
+
+            if (invoice == null)
+            {
+                return NotFound($"Invoice with number {invoiceNumber} not found.");
+            }
+
+            var deliveryNumber = invoice.DeliveryHeader?.DeliveryNumber;
+            var isStandalone = invoice.DeliveryHeader == null;
+
+            // If invoice is linked to a delivery, reset the delivery status
+            if (!isStandalone)
+            {
+                invoice.DeliveryHeader!.Invoiced = false;
+                invoice.DeliveryHeader.BillingStatus = DeliveryHeader.DeliveryBillingStatus.Unbilled;
+            }
+
+            // Store invoice ID for document cleanup
+            var invoiceId = invoice.InvoiceID;
+
+            // Remove the invoice
+            _db.Invoices.Remove(invoice);
+
+            // Remove associated documents (invoice printouts, etc.)
+            var documentsToDelete = await _db.Documents
+                .Where(d => d.InvoiceID == invoiceId)
+                .ToListAsync();
+
+            if (documentsToDelete.Any())
+            {
+                _db.Documents.RemoveRange(documentsToDelete);
+            }
+
+            await _db.SaveChangesAsync();
+
+            // Commit transaction
+            await transaction.CommitAsync();
+
+            _logger.LogInformation(
+                "Invoice {InvoiceNumber} deleted completely. Standalone: {IsStandalone}, Delivery: {DeliveryNumber}",
+                invoiceNumber,
+                isStandalone,
+                deliveryNumber ?? "N/A");
+
+            return Ok(new
+            {
+                success = true,
+                message = isStandalone
+                    ? $"Standalone invoice {invoiceNumber} has been deleted."
+                    : $"Invoice {invoiceNumber} has been deleted and delivery {deliveryNumber} is ready for re-invoicing.",
+                invoiceNumber = invoiceNumber,
+                deliveryNumber = deliveryNumber,
+                isStandalone = isStandalone,
+                documentsDeleted = documentsToDelete.Count
+            });
+        }
+        catch (Exception ex)
+        {
+            // Rollback transaction on error
+            await transaction.RollbackAsync();
+
+            _logger.LogError(ex, "Error deleting invoice {InvoiceNumber}", invoiceNumber);
+            return StatusCode(500, $"Internal error during invoice deletion: {ex.Message}");
+        }
+    }
+
     private static string GetStatusText(Invoice.InvoiceStatus status)
     {
         return status switch
