@@ -728,6 +728,55 @@ public class InvoicesController : ControllerBase
     }
 
     /// <summary>
+    /// Update the DownPay (Local and Foreign) for an invoice by SAP invoice number.
+    /// The nett AmountLocal / AmountForeign are automatically recalculated
+    /// as BaseAmount + DownPayAmount for each currency.
+    /// Validation for foreign currency is skipped if BaseAmountForeign is zero.
+    /// </summary>
+    [HttpPut("by-sap-number/{invoiceNumber}/downpay")]
+    public async Task<ActionResult<InvoiceResponseDto>> UpdateInvoiceDownPayByNumber(
+        string invoiceNumber,
+        [FromBody] UpdateInvoiceDownPayDto dto)
+    {
+        if (string.IsNullOrWhiteSpace(invoiceNumber))
+        {
+            return BadRequest("Invoice number is required.");
+        }
+
+        var invoice = await _db.Invoices
+            .Include(i => i.DeliveryHeader)
+            .FirstOrDefaultAsync(i => i.InvoiceNumber == invoiceNumber);
+
+        if (invoice == null)
+            return NotFound($"Invoice with number {invoiceNumber} not found.");
+
+        // Adopt the current nett amount as the base when it was never captured (legacy rows)
+        if (invoice.BaseAmountLocal <= 0) invoice.BaseAmountLocal = invoice.AmountLocal;
+        if (invoice.BaseAmountForeign <= 0) invoice.BaseAmountForeign = invoice.AmountForeign;
+
+        // Validation: skip foreign currency validation if BaseAmountForeign is zero
+        if (dto.DownPayAmountLocal < 0)
+            return BadRequest("Down payment (local) cannot be negative.");
+
+        if (invoice.BaseAmountForeign > 0 && dto.DownPayAmountForeign < 0)
+            return BadRequest("Down payment (foreign) cannot be negative when foreign currency is enabled.");
+
+        invoice.ApplyDownPay(dto.DownPayAmountLocal, dto.DownPayAmountForeign);
+        await _db.SaveChangesAsync();
+
+        _logger.LogInformation(
+            "Invoice {InvoiceNumber} down payment updated. Local: {DownPayLocal}, Foreign: {DownPayForeign}. " +
+            "Nett recalculated to Local: {NettLocal}, Foreign: {NettForeign}.",
+            invoice.InvoiceNumber,
+            invoice.DownPayAmountLocal,
+            invoice.DownPayAmountForeign,
+            invoice.AmountLocal,
+            invoice.AmountForeign);
+
+        return await GetInvoiceById(invoice.InvoiceID);
+    }
+
+    /// <summary>
     /// Upload invoice printout using internal invoice ID (Legacy endpoint)
     /// </summary>
     [HttpPost("{id:int}/upload-printout")]
