@@ -989,19 +989,27 @@ public class InvoicesController : ControllerBase
             // Store invoice ID for document cleanup
             var invoiceId = invoice.InvoiceID;
 
-            // Remove the invoice
-            _db.Invoices.Remove(invoice);
+            // Break circular dependency: clear the StampedDocumentId reference
+            invoice.StampedDocumentId = null;
+
+            // Save the invoice changes (nullifying StampedDocumentId) first
+            await _db.SaveChangesAsync();
 
             // Remove associated documents (invoice printouts, etc.)
             var documentsToDelete = await _db.Documents
                 .Where(d => d.InvoiceID == invoiceId)
                 .ToListAsync();
 
+            int documentsDeletedCount = 0;
             if (documentsToDelete.Any())
             {
                 _db.Documents.RemoveRange(documentsToDelete);
+                await _db.SaveChangesAsync();
+                documentsDeletedCount = documentsToDelete.Count;
             }
 
+            // Now remove the invoice after all documents are deleted and reference is broken
+            _db.Invoices.Remove(invoice);
             await _db.SaveChangesAsync();
 
             // Commit transaction
@@ -1022,7 +1030,7 @@ public class InvoicesController : ControllerBase
                 invoiceNumber = invoiceNumber,
                 deliveryNumber = deliveryNumber,
                 isStandalone = isStandalone,
-                documentsDeleted = documentsToDelete.Count
+                documentsDeleted = documentsDeletedCount
             });
         }
         catch (Exception ex)
