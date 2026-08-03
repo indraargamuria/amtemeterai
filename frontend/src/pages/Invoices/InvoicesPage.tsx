@@ -16,7 +16,7 @@ export function InvoicesPage() {
   const [openDropdownId, setOpenDropdownId] = useState<number | null>(null)
 
   // Filter states
-  const [complianceFilter, setComplianceFilter] = useState<"all" | "bc" | "nonbc">("all")
+  const [complianceFilter, setComplianceFilter] = useState<"all" | "bc" | "nonbc" | "other">("all")
   const [statusFilter, setStatusFilter] = useState<"all" | "draft" | "syncedtosap" | "stamped" | "voided">("all")
 
   const ITEMS_PER_PAGE = 25
@@ -45,6 +45,7 @@ export function InvoicesPage() {
       filtered = filtered.filter((inv) => {
         if (complianceFilter === "bc") return inv.complianceCategory === "BC"
         if (complianceFilter === "nonbc") return inv.complianceCategory === "NonBC"
+        if (complianceFilter === "other") return inv.complianceCategory === "OTHER"
         return true
       })
     }
@@ -139,7 +140,15 @@ export function InvoicesPage() {
   const getComplianceBadgeVariant = (category?: string): "default" | "success" | "warning" | "accent" | "outline" => {
     if (category === "BC") return "success"
     if (category === "NonBC") return "default"
+    if (category === "OTHER") return "outline"
     return "outline"
+  }
+
+  const getComplianceLabel = (category?: string) => {
+    if (category === "BC") return "BC"
+    if (category === "NonBC") return "Non-BC"
+    if (category === "OTHER") return "Other"
+    return "-"
   }
 
   const getStatusVariant = (statusText: string): "default" | "success" | "warning" | "accent" | "outline" => {
@@ -206,8 +215,12 @@ export function InvoicesPage() {
       "Billing Date": string
       "Customer Name": string
       "Currency": string
-      "Local Amount": string
-      "Foreign Amount": string
+      "Local Base": string
+      "Local DownPay": string
+      "Local Nett": string
+      "Foreign Base": string
+      "Foreign DownPay": string
+      "Foreign Nett": string
       "Type": string
       "Status": string
     }
@@ -218,8 +231,16 @@ export function InvoicesPage() {
       "Billing Date": formatDate(inv.invoicedDate),
       "Customer Name": inv.customerName || "-",
       "Currency": inv.currency || "IDR",
-      "Local Amount": formatCurrency(inv.amountLocal),
-      "Foreign Amount": inv.currency && inv.currency !== "IDR"
+      "Local Base": formatCurrency(inv.baseAmountLocal),
+      "Local DownPay": formatCurrency(inv.downPayAmountLocal),
+      "Local Nett": formatCurrency(inv.amountLocal),
+      "Foreign Base": inv.currency && inv.currency !== "IDR"
+        ? formatForeignCurrency(inv.baseAmountForeign, inv.currency)
+        : "0",
+      "Foreign DownPay": inv.currency && inv.currency !== "IDR"
+        ? formatForeignCurrency(inv.downPayAmountForeign, inv.currency)
+        : "0",
+      "Foreign Nett": inv.currency && inv.currency !== "IDR"
         ? formatForeignCurrency(inv.amountForeign, inv.currency)
         : "0",
       "Type": inv.complianceCategory || "-",
@@ -233,8 +254,12 @@ export function InvoicesPage() {
       { wch: 15 },
       { wch: 30 },
       { wch: 10 },
-      { wch: 20 },
-      { wch: 20 },
+      { wch: 18 },
+      { wch: 18 },
+      { wch: 18 },
+      { wch: 18 },
+      { wch: 18 },
+      { wch: 18 },
       { wch: 10 },
       { wch: 15 },
     ]
@@ -335,7 +360,8 @@ export function InvoicesPage() {
                   {[
                     { value: "all", label: "All" },
                     { value: "bc", label: "BC" },
-                    { value: "nonbc", label: "Non BC" }
+                    { value: "nonbc", label: "Non BC" },
+                    { value: "other", label: "Other" }
                   ].map((option) => (
                     <button
                       key={option.value}
@@ -468,22 +494,72 @@ export function InvoicesPage() {
                         </span>
                       </TableCell>
 
-                      {/* Conditional Amount Cell */}
+                      {/* Conditional Amount Cell with Base, DownPay, and Nett */}
                       <TableCell className="py-2 px-3 text-right whitespace-nowrap">
                         {invoice.currency === "IDR" || !invoice.currency ? (
-                          // IDR only - single bold amount
-                          <span className="text-sm font-semibold text-brand-blue tabular-nums">
-                            {formatCurrency(invoice.amountLocal)}
-                          </span>
-                        ) : (
-                          // Foreign currency - dual-line layout
+                          // IDR only - single line with Base, DownPay, and Nett
                           <div className="text-right">
-                            <span className="text-sm font-semibold text-brand-blue tabular-nums block">
-                              {formatCurrency(invoice.amountLocal)}
-                            </span>
-                            <span className="text-xs text-brand-blue/50 tabular-nums font-medium block">
-                              {formatForeignCurrency(invoice.amountForeign, invoice.currency)}
-                            </span>
+                            {invoice.downPayAmountLocal > 0 ? (
+                              <>
+                                {/* Nett Amount (prominent) */}
+                                <span className="text-sm font-semibold text-brand-blue tabular-nums block">
+                                  {formatCurrency(invoice.amountLocal)}
+                                </span>
+                                {/* Base and DownPay (smaller) */}
+                                <div className="flex items-center justify-end gap-1 text-xs text-brand-blue/50">
+                                  <span>{formatCurrency(invoice.baseAmountLocal)}</span>
+                                  <span>+</span>
+                                  <span>{formatCurrency(invoice.downPayAmountLocal)}</span>
+                                </div>
+                              </>
+                            ) : (
+                              // No downpay - just show nett/base (they're the same)
+                              <span className="text-sm font-semibold text-brand-blue tabular-nums block">
+                                {formatCurrency(invoice.amountLocal)}
+                              </span>
+                            )}
+                          </div>
+                        ) : (
+                          // Foreign currency - show both local and foreign
+                          <div className="text-right">
+                            {/* Local Amount */}
+                            {invoice.downPayAmountLocal > 0 ? (
+                              <>
+                                <span className="text-sm font-semibold text-brand-blue tabular-nums block">
+                                  {formatCurrency(invoice.amountLocal)}
+                                </span>
+                                <div className="flex items-center justify-end gap-1 text-xs text-brand-blue/50">
+                                  <span>{formatCurrency(invoice.baseAmountLocal)}</span>
+                                  <span>+</span>
+                                  <span>{formatCurrency(invoice.downPayAmountLocal)}</span>
+                                </div>
+                              </>
+                            ) : (
+                              <span className="text-sm font-semibold text-brand-blue tabular-nums block">
+                                {formatCurrency(invoice.amountLocal)}
+                              </span>
+                            )}
+                            {/* Foreign Amount */}
+                            {invoice.baseAmountForeign > 0 && (
+                              <>
+                                {invoice.downPayAmountForeign > 0 ? (
+                                  <>
+                                    <span className="text-xs text-brand-blue/60 tabular-nums font-medium block mt-0.5">
+                                      {formatForeignCurrency(invoice.amountForeign, invoice.currency)}
+                                    </span>
+                                    <div className="flex items-center justify-end gap-1 text-xs text-brand-blue/40">
+                                      <span>{formatForeignCurrency(invoice.baseAmountForeign, invoice.currency)}</span>
+                                      <span>+</span>
+                                      <span>{formatForeignCurrency(invoice.downPayAmountForeign, invoice.currency)}</span>
+                                    </div>
+                                  </>
+                                ) : (
+                                  <span className="text-xs text-brand-blue/50 tabular-nums font-medium block mt-0.5">
+                                    {formatForeignCurrency(invoice.amountForeign, invoice.currency)}
+                                  </span>
+                                )}
+                              </>
+                            )}
                           </div>
                         )}
                       </TableCell>
@@ -495,7 +571,7 @@ export function InvoicesPage() {
                             variant={getComplianceBadgeVariant(invoice.complianceCategory)}
                             className="text-xs font-medium px-2 py-0.5"
                           >
-                            {invoice.complianceCategory === 'BC' ? 'BC' : 'Non-BC'}
+                            {getComplianceLabel(invoice.complianceCategory)}
                           </Badge>
                         ) : (
                           <span className="text-xs text-brand-blue/30">—</span>

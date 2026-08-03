@@ -126,11 +126,15 @@ export interface Invoice {
   customerName?: string
   // Legacy single amount field - kept for backward compatibility
   invoiceAmount: number
-  // New dual-currency fields
+  // New dual-currency fields (nett amounts = Base + DownPay)
   amountForeign: number
   amountLocal: number
+  baseAmountForeign: number
+  baseAmountLocal: number
+  downPayAmountForeign: number
+  downPayAmountLocal: number
   currency: string
-  complianceCategory?: string // "BC" or "NonBC"
+  complianceCategory?: string // "BC", "NonBC", or "OTHER"
   invoicedDate: string
   status: number
   statusText: string
