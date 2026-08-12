@@ -110,7 +110,8 @@ builder.Services.AddScoped<IPdfAnchorService, PdfAnchorService>();
 builder.Services.AddScoped<BcInvoiceSyncService>();
 
 // Register Billing Background Service for automatic BC invoice sync
-builder.Services.AddHostedService<BillingBackgroundService>();
+// DISABLED: Temporarily disabled for maintenance
+// builder.Services.AddHostedService<BillingBackgroundService>();
 
 // Register Delivery Auto Confirm Service for automatic delivery confirmation
 builder.Services.AddHostedService<DeliveryAutoConfirmService>();
