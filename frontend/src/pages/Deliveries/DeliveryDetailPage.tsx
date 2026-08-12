@@ -876,7 +876,11 @@ export function DeliveryDetailPage() {
             const isBC = delivery.type === 1
             const isNonBC = delivery.type === 2
 
-            if (delivery.received && delivery.status !== 3) {
+            // For Non BC deliveries, show invoice button even when not yet received
+            // For BC deliveries, only show button when received
+            const shouldShowButton = isNonBC || (delivery.received && delivery.status !== 3)
+
+            if (shouldShowButton) {
               if (isNonBC && canBill) {
                 return (
                   <Button
@@ -890,7 +894,7 @@ export function DeliveryDetailPage() {
                   </Button>
                 )
               }
-              if (isBC && canBill) {
+              if (isBC && canBill && delivery.received) {
                 return (
                   <Button
                     variant="default"
