@@ -27,6 +27,7 @@ public class DeliveriesController : ControllerBase
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly SapOptions _sapOptions;
     private readonly IServiceProvider _serviceProvider;
+    private readonly IServiceScopeFactory _scopeFactory;
     private readonly ILogger<DeliveriesController> _logger;
 
     // Helper method to log activity
@@ -52,6 +53,7 @@ public class DeliveriesController : ControllerBase
         IHttpClientFactory httpClientFactory,
         IOptions<SapOptions> sapOptions,
         IServiceProvider serviceProvider,
+        IServiceScopeFactory scopeFactory,
         ILogger<DeliveriesController> logger)
     {
         _db = db;
@@ -62,6 +64,7 @@ public class DeliveriesController : ControllerBase
         _httpClientFactory = httpClientFactory;
         _sapOptions = sapOptions.Value;
         _serviceProvider = serviceProvider;
+        _scopeFactory = scopeFactory;
         _logger = logger;
     }
 
@@ -937,7 +940,7 @@ public class DeliveriesController : ControllerBase
             {
                 try
                 {
-                    using (var scope = _serviceProvider.CreateScope())
+                    using (var scope = _scopeFactory.CreateScope())
                     {
                         var httpClientFactory = scope.ServiceProvider.GetRequiredService<IHttpClientFactory>();
                         var sapOptions = scope.ServiceProvider.GetRequiredService<IOptions<SapOptions>>().Value;
@@ -1005,7 +1008,7 @@ public class DeliveriesController : ControllerBase
                         if (sapBillingData != null)
                         {
                             // Create a new scope for database operations
-                            using (var dbScope = _serviceProvider.CreateScope())
+                            using (var dbScope = _scopeFactory.CreateScope())
                             {
                                 var db = dbScope.ServiceProvider.GetRequiredService<AppDbContext>();
 
@@ -1092,7 +1095,7 @@ public class DeliveriesController : ControllerBase
                                 maxRetries);
 
                             // Log failure activity
-                            using (var dbScope = _serviceProvider.CreateScope())
+                            using (var dbScope = _scopeFactory.CreateScope())
                             {
                                 var db = dbScope.ServiceProvider.GetRequiredService<AppDbContext>();
                                 var activityLog = new ActivityLog
@@ -1113,7 +1116,7 @@ public class DeliveriesController : ControllerBase
                     _logger.LogError(ex, "Background invoice creation faulted for Non BC delivery {DeliveryNumber}", data.DeliveryNumber);
 
                     // Log error activity
-                    using (var scope = _serviceProvider.CreateScope())
+                    using (var scope = _scopeFactory.CreateScope())
                     {
                         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
                         var activityLog = new ActivityLog
