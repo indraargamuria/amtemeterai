@@ -13,7 +13,11 @@
       "Bash(dotnet add package:*)",
       "Bash(docker exec:*)",
       "Bash(if not exist \"D:\\\\As a Solution Architect\\\\amtemeterai\\\\docs\" mkdir \"D:\\\\As a Solution Architect\\\\amtemeterai\\\\docs\")",
-      "Bash(cd:*)"
+      "Bash(cd:*)",
+      "Bash(git add:*)",
+      "Bash(git commit -m \"$\\(cat <<''EOF''\nModify OCR logic to check for Notes or Remarks\n\n- Modified PdfAnchorService to check for either ''Notes'' or ''Remarks'' keywords\n- Updated comments and log messages to reflect the dual keyword search\n- This allows PDF anchor coordinate extraction to work with invoices using either ''Notes'' or ''Remarks'' labels\n\nCo-Authored-By: Claude Opus 4.6 \\(1M context\\) <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(git push:*)",
+      "Bash(git commit:*)"
     ]
   }
 }

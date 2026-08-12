@@ -133,8 +133,8 @@ export function CustomersPage() {
       const aValue = a[sortField] ?? ""
       const bValue = b[sortField] ?? ""
 
-      const comparison = aValue.localeCompare(bValue)
-      return sortOrder === "asc" ? comparison : -comparison
+      const comparison = String(aValue).localeCompare(String(bValue));
+      return sortOrder === "asc" ? comparison : -comparison;
     })
 
     return filtered

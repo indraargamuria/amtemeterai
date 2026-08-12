@@ -38,6 +38,9 @@ builder.Services.Configure<JwtOptions>(builder.Configuration.GetSection(JwtOptio
 // Configure Billing Sync Options for background service
 builder.Services.Configure<BillingSyncOptions>(builder.Configuration.GetSection(BillingSyncOptions.SectionName));
 
+// Configure Delivery Auto Confirm Options for background service
+builder.Services.Configure<DeliveryAutoConfirmOptions>(builder.Configuration.GetSection(DeliveryAutoConfirmOptions.SectionName));
+
 // Configure Email Routing Options for staging/production routing
 builder.Services.Configure<EmailRoutingOptions>(builder.Configuration.GetSection(EmailRoutingOptions.SectionName));
 
@@ -108,6 +111,9 @@ builder.Services.AddScoped<BcInvoiceSyncService>();
 
 // Register Billing Background Service for automatic BC invoice sync
 builder.Services.AddHostedService<BillingBackgroundService>();
+
+// Register Delivery Auto Confirm Service for automatic delivery confirmation
+builder.Services.AddHostedService<DeliveryAutoConfirmService>();
 
 // Register the named HttpClient that your DeliveriesController uses to talk to SAP
 builder.Services.AddHttpClient("SapClient", (serviceProvider, client) =>
