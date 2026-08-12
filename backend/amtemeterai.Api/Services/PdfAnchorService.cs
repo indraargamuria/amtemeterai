@@ -6,7 +6,7 @@ namespace amtemeterai.Api.Services;
 /// <summary>
 /// Implementation of PDF anchor text coordinate extractor using PdfPig library.
 /// Searches sequentially for "Notes" keyword first, then "Remarks" if not found, and calculates e-Meterai stamp bounding box coordinates.
-/// For "Remarks", the stamp position is adjusted: 1 cm left from the "Notes" position.
+/// For "Remarks", the stamp position is adjusted: 2 cm left and 0.5 cm bottom from the "Notes" position.
 /// </summary>
 public class PdfAnchorService : IPdfAnchorService
 {
@@ -16,9 +16,11 @@ public class PdfAnchorService : IPdfAnchorService
     private const int VerticalOffset = 0; // Offset to position stamp below the "Notes" text line
 
     // Position adjustments for "Remarks" (converted from cm to points: 1 point = 1/72 inch, 1 cm = 28.35 points)
-    private const double RemarksCmLeftward = 1.0; // 1 cm leftward
+    private const double RemarksCmLeftward = 2.0; // 2 cm leftward
+    private const double RemarksCmDownward = 0.5; // 0.5 cm downward
     private const double PointsPerCm = 28.35; // 1 cm = 28.35 points
-    private const int RemarksHorizontalOffsetPoints = (int)(RemarksCmLeftward * PointsPerCm); // ~28 points
+    private const int RemarksHorizontalOffsetPoints = (int)(RemarksCmLeftward * PointsPerCm); // ~57 points
+    private const int RemarksVerticalOffsetPoints = (int)(RemarksCmDownward * PointsPerCm); // ~14 points
 
     // Fallback default constants when anchor pattern cannot be verified
     private const int DefaultVisLLX = 428;
@@ -31,7 +33,7 @@ public class PdfAnchorService : IPdfAnchorService
     /// Extracts the "Notes" or "Remarks" keyword position from a PDF stream and calculates
     /// the e-Meterai stamp bounding box coordinates.
     /// Searches sequentially: first looks for "Notes", if not found, then searches for "Remarks".
-    /// For "Remarks", applies position adjustment: 1 cm left from "Notes" position.
+    /// For "Remarks", applies position adjustment: 2 cm left and 0.5 cm bottom from "Notes" position.
     /// </summary>
     /// <param name="pdfStream">Stream containing the PDF document</param>
     /// <returns>Tuple containing (visLLX, visLLY, visURX, visURY, stampPageNumber) or null if anchor not found</returns>
@@ -93,11 +95,13 @@ public class PdfAnchorService : IPdfAnchorService
         // Apply vertical offset to clear any overlap
         int visURY = (int)anchorY - VerticalOffset;
 
-        // For "Remarks", apply horizontal adjustment: 1 cm left
+        // For "Remarks", apply position adjustments: 2 cm left and 0.5 cm bottom from Notes position
         if (isRemarks)
         {
-            // Move left by 1 cm (28 points) - this means reducing visURX
+            // Move left by 2 cm (57 points) - this means reducing visURX
             visURX -= RemarksHorizontalOffsetPoints;
+            // Move down by 0.5 cm (14 points) - this means reducing visURY
+            visURY -= RemarksVerticalOffsetPoints;
         }
 
         // Ensure visURY is not negative
