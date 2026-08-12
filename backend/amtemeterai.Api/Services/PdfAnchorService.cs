@@ -5,7 +5,8 @@ namespace amtemeterai.Api.Services;
 
 /// <summary>
 /// Implementation of PDF anchor text coordinate extractor using PdfPig library.
-/// Searches for the "Notes" or "Remarks" keyword and calculates e-Meterai stamp bounding box coordinates.
+/// Searches sequentially for "Notes" keyword first, then "Remarks" if not found, and calculates e-Meterai stamp bounding box coordinates.
+/// For "Remarks", the stamp position is adjusted: 0.5 cm down and 1 cm left from the "Notes" position.
 /// </summary>
 public class PdfAnchorService : IPdfAnchorService
 {
@@ -13,6 +14,13 @@ public class PdfAnchorService : IPdfAnchorService
     private const int StampSize = 54; // 54x54 point bounding box
     private const int HardcodedVisURX = 482; // Lock horizontal target (X-Axis)
     private const int VerticalOffset = 0; // Offset to position stamp below the "Notes" text line
+
+    // Position adjustments for "Remarks" (converted from cm to points: 1 point = 1/72 inch, 1 cm = 28.35 points)
+    private const double RemarksCmDownward = 0.5; // 0.5 cm downward
+    private const double RemarksCmLeftward = 1.0; // 1 cm leftward
+    private const double PointsPerCm = 28.35; // 1 cm = 28.35 points
+    private const int RemarksVerticalOffsetPoints = (int)(RemarksCmDownward * PointsPerCm); // ~14 points
+    private const int RemarksHorizontalOffsetPoints = (int)(RemarksCmLeftward * PointsPerCm); // ~28 points
 
     // Fallback default constants when anchor pattern cannot be verified
     private const int DefaultVisLLX = 428;
@@ -24,6 +32,8 @@ public class PdfAnchorService : IPdfAnchorService
     /// <summary>
     /// Extracts the "Notes" or "Remarks" keyword position from a PDF stream and calculates
     /// the e-Meterai stamp bounding box coordinates.
+    /// Searches sequentially: first looks for "Notes", if not found, then searches for "Remarks".
+    /// For "Remarks", applies position adjustment: 0.5 cm down and 1 cm left from "Notes" position.
     /// </summary>
     /// <param name="pdfStream">Stream containing the PDF document</param>
     /// <returns>Tuple containing (visLLX, visLLY, visURX, visURY, stampPageNumber) or null if anchor not found</returns>
@@ -44,41 +54,23 @@ public class PdfAnchorService : IPdfAnchorService
                 // Get all words from the page
                 var words = page.GetWords();
 
-                // Search for the "Notes" or "Remarks" keyword
+                // First pass: Search for "Notes" keyword
                 foreach (var word in words)
                 {
                     string trimmedWord = word.Text.Trim();
-                    if (string.Equals(trimmedWord, "Notes", StringComparison.OrdinalIgnoreCase) ||
-                        string.Equals(trimmedWord, "Remarks", StringComparison.OrdinalIgnoreCase))
+                    if (string.Equals(trimmedWord, "Notes", StringComparison.OrdinalIgnoreCase))
                     {
-                        // When "Notes" or "Remarks" text box is located, calculate coordinates
+                        return CalculateStampCoordinates(word, pageIndex, isRemarks: false);
+                    }
+                }
 
-                        // 1. Lock Horizontal Target (X-Axis)
-                        int visURX = HardcodedVisURX;
-
-                        // 2. Calculate Vertical Target (Y-Axis)
-                        // Use the bottom position of the keyword box to position stamp slightly below
-                        double notesY = word.BoundingBox.Bottom;
-
-                        // Apply vertical offset to clear any overlap
-                        int visURY = (int)notesY - VerticalOffset;
-
-                        // Ensure visURY is not negative
-                        if (visURY < 0)
-                        {
-                            visURY = DefaultVisURY;
-                        }
-
-                        // 3. Derive Remaining Dimensions
-                        // Calculate lower-left markers relative to upper-right benchmarks
-                        // to maintain uniform 54x54 point bounding box
-                        int visLLX = visURX - StampSize;
-                        int visLLY = visURY - StampSize;
-
-                        // Return calculated coordinates with 1-based page number
-                        int stampPageNumber = pageIndex + 1;
-
-                        return (visLLX, visLLY, visURX, visURY, stampPageNumber);
+                // Second pass: If "Notes" not found, search for "Remarks" keyword
+                foreach (var word in words)
+                {
+                    string trimmedWord = word.Text.Trim();
+                    if (string.Equals(trimmedWord, "Remarks", StringComparison.OrdinalIgnoreCase))
+                    {
+                        return CalculateStampCoordinates(word, pageIndex, isRemarks: true);
                     }
                 }
             }
@@ -86,6 +78,48 @@ public class PdfAnchorService : IPdfAnchorService
             // Anchor pattern not found - return null to signal fallback to defaults
             return null;
         });
+    }
+
+    /// <summary>
+    /// Calculates stamp coordinates based on the found anchor word and whether it's "Remarks" or "Notes"
+    /// </summary>
+    private (int visLLX, int visLLY, int visURX, int visURY, int stampPageNumber) CalculateStampCoordinates(Word anchorWord, int pageIndex, bool isRemarks)
+    {
+        // 1. Lock Horizontal Target (X-Axis)
+        int visURX = HardcodedVisURX;
+
+        // 2. Calculate Vertical Target (Y-Axis)
+        // Use the bottom position of the keyword box to position stamp slightly below
+        double anchorY = anchorWord.BoundingBox.Bottom;
+
+        // Apply vertical offset to clear any overlap
+        int visURY = (int)anchorY - VerticalOffset;
+
+        // For "Remarks", apply additional adjustments: 0.5 cm down and 1 cm left
+        if (isRemarks)
+        {
+            // Move down by 0.5 cm (14 points) - this means reducing visURY
+            visURY -= RemarksVerticalOffsetPoints;
+            // Move left by 1 cm (28 points) - this means reducing visURX
+            visURX -= RemarksHorizontalOffsetPoints;
+        }
+
+        // Ensure visURY is not negative
+        if (visURY < 0)
+        {
+            visURY = DefaultVisURY;
+        }
+
+        // 3. Derive Remaining Dimensions
+        // Calculate lower-left markers relative to upper-right benchmarks
+        // to maintain uniform 54x54 point bounding box
+        int visLLX = visURX - StampSize;
+        int visLLY = visURY - StampSize;
+
+        // Return calculated coordinates with 1-based page number
+        int stampPageNumber = pageIndex + 1;
+
+        return (visLLX, visLLY, visURX, visURY, stampPageNumber);
     }
 
     /// <summary>
