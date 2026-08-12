@@ -38,10 +38,14 @@ public class DeliveryAutoConfirmService : BackgroundService
         {
             try
             {
+                _logger.LogInformation("Delivery Auto Confirm cycle starting at: {Timestamp}", DateTime.UtcNow);
+
                 using var scope = _serviceProvider.CreateScope();
                 var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
                 await ProcessPendingAutoConfirmAsync(db);
+
+                _logger.LogInformation("Delivery Auto Confirm cycle completed at: {Timestamp}", DateTime.UtcNow);
             }
             catch (Exception ex)
             {
@@ -57,12 +61,19 @@ public class DeliveryAutoConfirmService : BackgroundService
 
     private async Task ProcessPendingAutoConfirmAsync(AppDbContext db)
     {
+        // Log when auto delivery confirm is invoked
+        _logger.LogInformation("Delivery Auto Confirm Service invoked at: {Timestamp}", DateTime.UtcNow);
+
         // Find deliveries that:
         // 1. Have NOT been received yet (Received = false)
         // 2. Have a PostGoodsIssueDate (PGI date)
         // 3. Have a Customer with LeadTimeDays
         // 4. Expected receive date (PGI date + lead time) is today or in the past
         var today = DateTime.UtcNow.Date;
+
+        _logger.LogInformation(
+            "Auto-confirm criteria: Today = {Today}, looking for deliveries with PGI date + lead time <= today",
+            today.ToString("yyyy-MM-dd"));
         var pendingDeliveries = await db.DeliveryHeaders
             .Include(d => d.Customer)
             .Include(d => d.Lines)
