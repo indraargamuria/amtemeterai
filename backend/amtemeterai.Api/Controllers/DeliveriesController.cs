@@ -923,6 +923,213 @@ public class DeliveriesController : ControllerBase
             hasDiscrepancy ? "Warning" : "Info"
         );
 
+        // 🎯 AUTO-GENERATE INVOICE FOR NON BC DELIVERIES
+        // For Non BC delivery orders, immediately invoke the invoice creation API
+        // after confirmation is completed
+        if (data.Type == DeliveryHeader.DeliveryType.NonBC)
+        {
+            _logger.LogInformation(
+                "Non BC delivery {DeliveryNumber} confirmed. Triggering automatic invoice creation.",
+                data.DeliveryNumber);
+
+            // Start background task for invoice creation
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    using (var scope = _serviceProvider.CreateScope())
+                    {
+                        var httpClientFactory = scope.ServiceProvider.GetRequiredService<IHttpClientFactory>();
+                        var sapOptions = scope.ServiceProvider.GetRequiredService<IOptions<SapOptions>>().Value;
+                        var loggerFactory = scope.ServiceProvider.GetRequiredService<ILoggerFactory>();
+                        var logger = loggerFactory.CreateLogger<DeliveriesController>();
+
+                        logger.LogInformation("Background invoice creation starting for Non BC delivery {DeliveryNumber}", data.DeliveryNumber);
+
+                        // Use a clean client instance to avoid base address issues
+                        var sapClient = httpClientFactory.CreateClient("SapClient");
+                        var sapUrl = $"{sapOptions.BaseUrl.TrimEnd('/')}/sap/bc/zr_createinv?sap-client={sapOptions.Client}";
+
+                        var sapRequest = new SapBillingRequestDto
+                        {
+                            DeliveryNumber = data.DeliveryNumber
+                        };
+
+                        // Retry loop for SAP invoice creation
+                        int maxRetries = 3;
+                        int delayMs = 1500;
+                        SapBillingResponseDto sapBillingData = null;
+
+                        for (int attempt = 1; attempt <= maxRetries; attempt++)
+                        {
+                            try
+                            {
+                                var sapResponse = await sapClient.PostAsJsonAsync(sapUrl, sapRequest);
+
+                                if (sapResponse.IsSuccessStatusCode)
+                                {
+                                    var candidateData = await sapResponse.Content.ReadFromJsonAsync<SapBillingResponseDto>();
+
+                                    if (candidateData != null &&
+                                        !string.IsNullOrEmpty(candidateData.SapInvoiceNumber) &&
+                                        candidateData.AmountLocal > 0)
+                                    {
+                                        sapBillingData = candidateData;
+                                        logger.LogInformation(
+                                            "SAP billing successful on attempt {Attempt}. Invoice {InvoiceNumber}",
+                                            attempt,
+                                            sapBillingData.SapInvoiceNumber);
+                                        break;
+                                    }
+                                }
+
+                                if (attempt < maxRetries)
+                                {
+                                    await Task.Delay(delayMs);
+                                }
+                            }
+                            catch (Exception ex)
+                            {
+                                logger.LogWarning(ex,
+                                    "Exception during SAP billing attempt {Attempt}/{MaxRetries}",
+                                    attempt,
+                                    maxRetries);
+
+                                if (attempt < maxRetries)
+                                {
+                                    await Task.Delay(delayMs);
+                                }
+                            }
+                        }
+
+                        if (sapBillingData != null)
+                        {
+                            // Create a new scope for database operations
+                            using (var dbScope = _serviceProvider.CreateScope())
+                            {
+                                var db = dbScope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+                                // Reload the delivery to get fresh data
+                                var delivery = await db.DeliveryHeaders
+                                    .Include(d => d.Customer)
+                                    .Include(d => d.Lines)
+                                    .FirstOrDefaultAsync(d => d.DeliveryNumber == data.DeliveryNumber);
+
+                                if (delivery != null)
+                                {
+                                    // Check if an active invoice already exists
+                                    var existingInvoice = await db.Invoices
+                                        .FirstOrDefaultAsync(i => i.DeliveryHeaderId == delivery.DeliveryID
+                                                               && i.Status != Invoice.InvoiceStatus.Canceled
+                                                               && i.Status != Invoice.InvoiceStatus.Voided);
+
+                                    if (existingInvoice == null)
+                                    {
+                                        // Create invoice record
+                                        var invoice = new Invoice
+                                        {
+                                            InvoiceNumber = sapBillingData.SapInvoiceNumber,
+                                            CustomerNumber = sapBillingData.CustomerNumber,
+#pragma warning disable CS0618 // Type or member is obsolete
+                                            InvoiceAmount = sapBillingData.AmountLocal,
+#pragma warning restore CS0618
+                                            AmountForeign = sapBillingData.AmountForeign,
+                                            AmountLocal = sapBillingData.AmountLocal,
+                                            BaseAmountForeign = sapBillingData.AmountForeign,
+                                            BaseAmountLocal = sapBillingData.AmountLocal,
+                                            DownPayAmountForeign = 0,
+                                            DownPayAmountLocal = 0,
+                                            Currency = sapBillingData.Currency,
+                                            ComplianceCategory = sapBillingData.ComplianceCategory,
+                                            InvoicedDate = sapBillingData.BillingDate,
+                                            Status = Invoice.InvoiceStatus.Draft,
+                                            DeliveryHeaderId = delivery.DeliveryID,
+                                            StampingStatus = Invoice.InvoiceStampingStatus.NotStamped
+                                        };
+
+                                        // Update delivery billing status
+                                        delivery.Invoiced = true;
+                                        if (delivery.BillingStatus == DeliveryHeader.DeliveryBillingStatus.Unbilled ||
+                                            delivery.BillingStatus == DeliveryHeader.DeliveryBillingStatus.ReadyToRebill)
+                                        {
+                                            delivery.BillingStatus = DeliveryHeader.DeliveryBillingStatus.Billed;
+                                        }
+
+                                        db.Invoices.Add(invoice);
+                                        await db.SaveChangesAsync();
+
+                                        logger.LogInformation(
+                                            "Successfully created invoice {InvoiceNumber} for Non BC delivery {DeliveryNumber}",
+                                            sapBillingData.SapInvoiceNumber,
+                                            data.DeliveryNumber);
+
+                                        // Log activity
+                                        var activityLog = new ActivityLog
+                                        {
+                                            EventType = "NonBcInvoiceAutoCreated",
+                                            ReferenceID = data.DeliveryNumber,
+                                            Message = $"Invoice {sapBillingData.SapInvoiceNumber} automatically created for Non BC delivery {data.DeliveryNumber}. Foreign: {sapBillingData.AmountForeign} {sapBillingData.Currency}, Local: {sapBillingData.AmountLocal}",
+                                            Severity = "Success"
+                                        };
+                                        db.ActivityLogs.Add(activityLog);
+                                        await db.SaveChangesAsync();
+                                    }
+                                    else
+                                    {
+                                        logger.LogInformation(
+                                            "Invoice {InvoiceNumber} already exists for Non BC delivery {DeliveryNumber}",
+                                            existingInvoice.InvoiceNumber,
+                                            data.DeliveryNumber);
+                                    }
+                                }
+                            }
+                        }
+                        else
+                        {
+                            logger.LogError(
+                                "Failed to create SAP invoice for Non BC delivery {DeliveryNumber} after {MaxRetries} attempts",
+                                data.DeliveryNumber,
+                                maxRetries);
+
+                            // Log failure activity
+                            using (var dbScope = _serviceProvider.CreateScope())
+                            {
+                                var db = dbScope.ServiceProvider.GetRequiredService<AppDbContext>();
+                                var activityLog = new ActivityLog
+                                {
+                                    EventType = "NonBcInvoiceAutoCreationFailed",
+                                    ReferenceID = data.DeliveryNumber,
+                                    Message = $"Failed to automatically create invoice for Non BC delivery {data.DeliveryNumber} after {maxRetries} attempts",
+                                    Severity = "Error"
+                                };
+                                db.ActivityLogs.Add(activityLog);
+                                await db.SaveChangesAsync();
+                            }
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Background invoice creation faulted for Non BC delivery {DeliveryNumber}", data.DeliveryNumber);
+
+                    // Log error activity
+                    using (var scope = _serviceProvider.CreateScope())
+                    {
+                        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+                        var activityLog = new ActivityLog
+                        {
+                            EventType = "NonBcInvoiceAutoCreationError",
+                            ReferenceID = data.DeliveryNumber,
+                            Message = $"Error during automatic invoice creation: {ex.Message}",
+                            Severity = "Error"
+                        };
+                        db.ActivityLogs.Add(activityLog);
+                        await db.SaveChangesAsync();
+                    }
+                }
+            });
+        }
+
         return Ok();
     }
 
