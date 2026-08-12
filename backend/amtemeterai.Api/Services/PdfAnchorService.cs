@@ -5,7 +5,7 @@ namespace amtemeterai.Api.Services;
 
 /// <summary>
 /// Implementation of PDF anchor text coordinate extractor using PdfPig library.
-/// Searches for the "Notes" keyword and calculates e-Meterai stamp bounding box coordinates.
+/// Searches for the "Notes" or "Remarks" keyword and calculates e-Meterai stamp bounding box coordinates.
 /// </summary>
 public class PdfAnchorService : IPdfAnchorService
 {
@@ -22,7 +22,7 @@ public class PdfAnchorService : IPdfAnchorService
     private const int DefaultPageNumber = 1;
 
     /// <summary>
-    /// Extracts the "Notes" keyword position from a PDF stream and calculates
+    /// Extracts the "Notes" or "Remarks" keyword position from a PDF stream and calculates
     /// the e-Meterai stamp bounding box coordinates.
     /// </summary>
     /// <param name="pdfStream">Stream containing the PDF document</param>
@@ -44,12 +44,14 @@ public class PdfAnchorService : IPdfAnchorService
                 // Get all words from the page
                 var words = page.GetWords();
 
-                // Search for the "Notes" keyword
+                // Search for the "Notes" or "Remarks" keyword
                 foreach (var word in words)
                 {
-                    if (string.Equals(word.Text.Trim(), "Notes", StringComparison.OrdinalIgnoreCase))
+                    string trimmedWord = word.Text.Trim();
+                    if (string.Equals(trimmedWord, "Notes", StringComparison.OrdinalIgnoreCase) ||
+                        string.Equals(trimmedWord, "Remarks", StringComparison.OrdinalIgnoreCase))
                     {
-                        // When "Notes" text box is located, calculate coordinates
+                        // When "Notes" or "Remarks" text box is located, calculate coordinates
 
                         // 1. Lock Horizontal Target (X-Axis)
                         int visURX = HardcodedVisURX;

@@ -895,7 +895,7 @@ public class InvoicesController : ControllerBase
                     else
                     {
                         _logger.LogWarning(
-                            "Could not find 'Notes' anchor text in PDF for invoice {InvoiceNumber}. " +
+                            "Could not find 'Notes' or 'Remarks' anchor text in PDF for invoice {InvoiceNumber}. " +
                             "Will use default coordinates during stamping.",
                             invoice.InvoiceNumber);
                     }
