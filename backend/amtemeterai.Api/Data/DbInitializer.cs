@@ -112,9 +112,10 @@ public static class DbInitializer
 
         if (financeRole != null)
         {
-            // Finance only gets access to dashboard and customer
+            // Finance gets access to dashboard, customer, and invoices
             await AssignPermissionToRoleAsync(context, financeRole.Id, 1); // dashboard:read
             await AssignPermissionToRoleAsync(context, financeRole.Id, 2); // customer:read
+            await AssignPermissionToRoleAsync(context, financeRole.Id, 4); // invoice:read
         }
 
         if (warehouseRole != null)
