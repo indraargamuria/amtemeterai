@@ -107,7 +107,7 @@ public class DeliveriesController : ControllerBase
         // Also preload invoice data for state calculation
         var deliveryIds = query.Select(d => d.DeliveryID).ToList();
         var invoicesData = await _db.Invoices
-            .Where(i => deliveryIds.Contains(i.DeliveryHeaderId.Value))
+            .Where(i => i.DeliveryHeaderId.HasValue && deliveryIds.Contains(i.DeliveryHeaderId.Value))
             .Select(i => new
             {
                 i.DeliveryHeaderId,

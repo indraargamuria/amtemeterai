@@ -356,7 +356,7 @@ public class InvoicesController : ControllerBase
                     .FirstOrDefault() ?? string.Empty,
                 CustomerEmail = _db.Customers
                     .Where(c => c.CustomerCode == i.CustomerNumber)
-                    .Select(c => c.Email)
+                    .Select(c => c.CustomerEmail)
                     .FirstOrDefault() ?? string.Empty,
 #pragma warning disable CS0618 // Type or member is obsolete
                 // Legacy amount field for backward compatibility

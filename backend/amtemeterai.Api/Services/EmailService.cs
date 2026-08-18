@@ -415,7 +415,7 @@ namespace amtemeterai.Api.Services
                 if (request.ReferenceType.ToLower() == "delivery")
                 {
                     var delivery = await _db.DeliveryHeaders
-                        .Include(d => d.Invoice)
+                        .Include(d => d.Invoices)
                         .FirstOrDefaultAsync(d => d.DeliveryNumber == request.ReferenceNumber);
 
                     if (delivery != null)
@@ -426,11 +426,11 @@ namespace amtemeterai.Api.Services
                                        d.Type != DocumentType.DeliveryPhoto)
                             .ToListAsync();
 
-                        // If delivery has an invoice, also include invoice documents
-                        if (delivery.Invoice != null)
+                        // If delivery has invoices, also include invoice documents
+                        if (delivery.Invoices != null && delivery.Invoices.Any())
                         {
                             var invoiceDocuments = await _db.Documents
-                                .Where(d => d.InvoiceID == delivery.Invoice.InvoiceID)
+                                .Where(d => delivery.Invoices.Select(i => i.InvoiceID).Contains(d.InvoiceID ?? 0))
                                 .ToListAsync();
                             documents.AddRange(invoiceDocuments);
                         }
