@@ -1,4 +1,5 @@
 using System.Threading.Tasks;
+using amtemeterai.Api.Dtos;
 
 namespace amtemeterai.Api.Services
 {
@@ -6,5 +7,6 @@ namespace amtemeterai.Api.Services
     {
         Task SendDeliveryConfirmationEmailAsync(int deliveryId);
         Task<bool> SendPinEmailAsync(string customerEmail, string customerPin, string deliveryNumber);
+        Task<bool> SendEmailWithAttachmentsAsync(SendEmailRequestDto request);
     }
 }

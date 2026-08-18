@@ -124,6 +124,7 @@ export interface Invoice {
   invoiceNumber: string
   customerNumber: string
   customerName?: string
+  customerEmail?: string
   // Legacy single amount field - kept for backward compatibility
   invoiceAmount: number
   // New dual-currency fields (nett amounts = Base + DownPay)

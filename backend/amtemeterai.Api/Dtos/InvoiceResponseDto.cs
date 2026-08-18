@@ -6,6 +6,7 @@ public class InvoiceResponseDto
     public string InvoiceNumber { get; set; } = string.Empty;
     public string CustomerNumber { get; set; } = string.Empty;
     public string? CustomerName { get; set; }
+    public string? CustomerEmail { get; set; }
 
     // Legacy single amount field - kept for backward compatibility
     public decimal InvoiceAmount { get; set; }

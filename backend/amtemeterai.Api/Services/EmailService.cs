@@ -1,5 +1,6 @@
 using amtemeterai.Api.Config; // Kept as your local namespace reference
 using amtemeterai.Api.Data;
+using amtemeterai.Api.Dtos;
 using amtemeterai.Api.Models;
 using MailKit.Net.Smtp;
 using MailKit.Security;
@@ -19,17 +20,20 @@ namespace amtemeterai.Api.Services
         private readonly SmtpSettings _smtpSettings;
         private readonly EmailRoutingOptions _routingOptions;
         private readonly ILogger<EmailService> _logger;
+        private readonly IStorageService _storageService;
 
         public EmailService(
             AppDbContext db,
             IOptions<SmtpSettings> smtpSettings,
             IOptions<EmailRoutingOptions> routingOptions,
-            ILogger<EmailService> logger)
+            ILogger<EmailService> logger,
+            IStorageService storageService)
         {
             _db = db;
             _smtpSettings = smtpSettings.Value;
             _routingOptions = routingOptions.Value;
             _logger = logger;
+            _storageService = storageService;
 
             // Diagnostic configuration validation to prevent silent empty connections
             if (string.IsNullOrWhiteSpace(_smtpSettings.Host))
@@ -358,6 +362,168 @@ namespace amtemeterai.Api.Services
             sb.Append("</div>"); // Close outer wrapper block
 
             return sb.ToString();
+        }
+
+        public async Task<bool> SendEmailWithAttachmentsAsync(SendEmailRequestDto request)
+        {
+            try
+            {
+                _logger.LogInformation("Sending email with attachments to {Email} for {Type} {Number}",
+                    request.ToEmail, request.ReferenceType, request.ReferenceNumber);
+
+                // Validate request
+                if (string.IsNullOrWhiteSpace(request.ToEmail))
+                {
+                    _logger.LogWarning("Email task skipped: Recipient email is empty");
+                    return false;
+                }
+
+                if (string.IsNullOrWhiteSpace(request.ReferenceType) || string.IsNullOrWhiteSpace(request.ReferenceNumber))
+                {
+                    _logger.LogWarning("Email task skipped: Reference type or number is empty");
+                    return false;
+                }
+
+                // ====================================================================
+                // 📧 RECIPIENT ROUTING ENGINE (Staging/Production Mode)
+                // ====================================================================
+                string targetToEmail;
+                string[] targetCcEmails;
+
+                if (_routingOptions.EnableStagingMode)
+                {
+                    // STAGING MODE: Use configured staging addresses
+                    targetToEmail = _routingOptions.StagingTo;
+                    targetCcEmails = _routingOptions.StagingCc.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+                    _logger.LogInformation("Email routing in STAGING mode: To={To}, CC={Cc}", targetToEmail, string.Join(", ", targetCcEmails));
+                }
+                else
+                {
+                    // PRODUCTION MODE: Use actual recipient email
+                    targetToEmail = request.ToEmail;
+                    // Parse CC emails if provided
+                    targetCcEmails = (!string.IsNullOrWhiteSpace(request.CcEmails)
+                        ? request.CcEmails.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                        : Array.Empty<string>());
+                    _logger.LogInformation("Email routing in PRODUCTION mode: To={To}", targetToEmail);
+                }
+                // ====================================================================
+
+                // Get documents based on reference type
+                List<Document> documents = new List<Document>();
+
+                if (request.ReferenceType.ToLower() == "delivery")
+                {
+                    var delivery = await _db.DeliveryHeaders
+                        .Include(d => d.Invoice)
+                        .FirstOrDefaultAsync(d => d.DeliveryNumber == request.ReferenceNumber);
+
+                    if (delivery != null)
+                    {
+                        // Get delivery documents (excluding photos)
+                        documents = await _db.Documents
+                            .Where(d => d.DeliveryID == delivery.DeliveryID &&
+                                       d.Type != DocumentType.DeliveryPhoto)
+                            .ToListAsync();
+
+                        // If delivery has an invoice, also include invoice documents
+                        if (delivery.Invoice != null)
+                        {
+                            var invoiceDocuments = await _db.Documents
+                                .Where(d => d.InvoiceID == delivery.Invoice.InvoiceID)
+                                .ToListAsync();
+                            documents.AddRange(invoiceDocuments);
+                        }
+                    }
+                }
+                else if (request.ReferenceType.ToLower() == "invoice")
+                {
+                    var invoice = await _db.Invoices
+                        .FirstOrDefaultAsync(i => i.InvoiceNumber == request.ReferenceNumber);
+
+                    if (invoice != null)
+                    {
+                        documents = await _db.Documents
+                            .Where(d => d.InvoiceID == invoice.InvoiceID)
+                            .ToListAsync();
+                    }
+                }
+
+                _logger.LogInformation("Found {Count} documents to attach", documents.Count);
+
+                // Create email message
+                var message = new MimeMessage();
+                message.From.Add(new MailboxAddress(_smtpSettings.SenderName, _smtpSettings.SenderEmail));
+                message.To.Add(new MailboxAddress(request.ToName, targetToEmail));
+
+                // Add CC recipients
+                foreach (var ccEmail in targetCcEmails)
+                {
+                    if (!string.IsNullOrWhiteSpace(ccEmail))
+                    {
+                        message.Cc.Add(new MailboxAddress("", ccEmail.Trim()));
+                    }
+                }
+
+                message.Subject = request.Subject;
+
+                // Build email body with attachments
+                var bodyBuilder = new BodyBuilder { HtmlBody = request.Body };
+
+                // Add attachments
+                foreach (var doc in documents)
+                {
+                    try
+                    {
+                        if (!string.IsNullOrEmpty(doc.StorageKey))
+                        {
+                            // Get file stream from storage
+                            var fileStream = await _storageService.GetFileStreamAsync(doc.StorageKey);
+                            if (fileStream != null)
+                            {
+                                bodyBuilder.Attachments.Add(doc.FileName ?? "attachment.pdf", fileStream);
+                                _logger.LogDebug("Attached document: {FileName}", doc.FileName);
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Failed to attach document {FileName}", doc.FileName);
+                    }
+                }
+
+                message.Body = bodyBuilder.ToMessageBody();
+
+                // Send email
+                using var client = new SmtpClient();
+                try
+                {
+                    await client.ConnectAsync(_smtpSettings.Host, _smtpSettings.Port, SecureSocketOptions.StartTls);
+                    await client.AuthenticateAsync(_smtpSettings.Username, _smtpSettings.Password);
+                    await client.SendAsync(message);
+
+                    string ccTraceList = string.Join(", ", targetCcEmails);
+                    _logger.LogInformation("Email with {AttachmentCount} attachments successfully dispatched to {Email} (CC: [{Cc}]) for {Type} {Number}",
+                        documents.Count, targetToEmail, ccTraceList, request.ReferenceType, request.ReferenceNumber);
+
+                    return true;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Failed to send email with attachments to {Email} for {Type} {Number}",
+                        targetToEmail, request.ReferenceType, request.ReferenceNumber);
+                    return false;
+                }
+                finally
+                {
+                    await client.DisconnectAsync(true);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error in SendEmailWithAttachmentsAsync");
+                return false;
+            }
         }
     }
 }

@@ -5,7 +5,8 @@ import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from ".
 import { Badge } from "../../shared/components/ui/Badge"
 import { getInvoices } from "../../shared/utils/api"
 import { cn } from "../../shared/utils/cn"
-import { FileText, Truck, Package, AlertCircle, ChevronRight, X, Loader2 } from "lucide-react"
+import { FileText, Truck, Package, AlertCircle, ChevronRight, X, Loader2, Mail } from "lucide-react"
+import { EmailComposerModal } from "../../shared/components/EmailComposer"
 
 type FilterType = "all" | "delivery-centric" | "invoice-centric"
 
@@ -15,6 +16,7 @@ interface DocumentRow {
   deliveryNumber: string | null
   customerNumber: string
   customerName?: string
+  customerEmail?: string
   invoiceAmount: number
   invoicedDate: string
   statusText: string
@@ -34,6 +36,8 @@ export function DocumentsPage() {
   const [selectedDoc, setSelectedDoc] = useState<DocumentRow | null>(null)
   const [activeTab, setActiveTab] = useState<ViewTab>("invoice")
   const [sheetOpen, setSheetOpen] = useState(false)
+  const [emailComposerOpen, setEmailComposerOpen] = useState(false)
+  const [emailDoc, setEmailDoc] = useState<DocumentRow | null>(null)
 
   useEffect(() => {
     fetchDocuments()
@@ -51,6 +55,7 @@ export function DocumentsPage() {
         deliveryNumber: inv.deliveryNumber || null,
         customerNumber: inv.customerNumber,
         customerName: inv.customerName,
+        customerEmail: inv.customerEmail,
         invoiceAmount: inv.invoiceAmount,
         invoicedDate: inv.invoicedDate,
         statusText: inv.statusText,
@@ -130,6 +135,19 @@ export function DocumentsPage() {
     setSheetOpen(false)
     // Delay clearing selected doc for animation
     setTimeout(() => setSelectedDoc(null), 300)
+  }
+
+  // Open email composer
+  const openEmailComposer = (doc: DocumentRow, e: React.MouseEvent) => {
+    e.stopPropagation()
+    setEmailDoc(doc)
+    setEmailComposerOpen(true)
+  }
+
+  // Close email composer
+  const closeEmailComposer = () => {
+    setEmailComposerOpen(false)
+    setEmailDoc(null)
   }
 
   return (
@@ -278,6 +296,18 @@ export function DocumentsPage() {
                     {/* Operations Matrix */}
                     <TableCell className="py-2.5 px-4 text-right">
                       <div className="flex items-center justify-end gap-2">
+                        {/* Email Button - Send email with attachments */}
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={(e) => openEmailComposer(doc, e)}
+                          className="min-w-[90px]"
+                          title="Send email with attachments"
+                        >
+                          <Mail className="w-3.5 h-3.5" />
+                          Email
+                        </Button>
+
                         {/* DO Button - Disabled for standalone */}
                         <Button
                           variant="outline"
@@ -380,6 +410,18 @@ export function DocumentsPage() {
             </div>
           </div>
         </>
+      )}
+
+      {/* Email Composer Modal */}
+      {emailComposerOpen && emailDoc && (
+        <EmailComposerModal
+          isOpen={emailComposerOpen}
+          onClose={closeEmailComposer}
+          referenceType={emailDoc.deliveryNumber ? "delivery" : "invoice"}
+          referenceNumber={emailDoc.deliveryNumber || emailDoc.invoiceNumber}
+          customerName={emailDoc.customerName || ""}
+          customerEmail={emailDoc.customerEmail}
+        />
       )}
     </div>
   )

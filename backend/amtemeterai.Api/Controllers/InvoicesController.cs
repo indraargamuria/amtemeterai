@@ -354,6 +354,10 @@ public class InvoicesController : ControllerBase
                     .Where(c => c.CustomerCode == i.CustomerNumber)
                     .Select(c => c.CustomerName)
                     .FirstOrDefault() ?? string.Empty,
+                CustomerEmail = _db.Customers
+                    .Where(c => c.CustomerCode == i.CustomerNumber)
+                    .Select(c => c.Email)
+                    .FirstOrDefault() ?? string.Empty,
 #pragma warning disable CS0618 // Type or member is obsolete
                 // Legacy amount field for backward compatibility
                 InvoiceAmount = i.InvoiceAmount,
@@ -417,6 +421,7 @@ public class InvoicesController : ControllerBase
             InvoiceNumber = i.InvoiceNumber,
             CustomerNumber = i.CustomerNumber,
             CustomerName = i.CustomerName,
+            CustomerEmail = i.CustomerEmail,
             InvoiceAmount = i.InvoiceAmount,
             AmountForeign = i.AmountForeign,
             AmountLocal = i.AmountLocal,
