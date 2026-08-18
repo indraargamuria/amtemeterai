@@ -12,5 +12,5 @@ public class DeliveryAutoConfirmOptions
     /// Check interval in minutes between auto-confirm cycles
     /// Default: 60 minutes (1 hour)
     /// </summary>
-    public int CheckIntervalMinutes { get; set; } = 60;
+    public int CheckIntervalMinutes { get; set; } = 1;
 }

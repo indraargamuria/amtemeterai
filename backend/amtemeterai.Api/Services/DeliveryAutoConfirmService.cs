@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.EntityFrameworkCore;
+using System.Text.Json;
 using amtemeterai.Api.Config;
 using amtemeterai.Api.Data;
 using amtemeterai.Api.Models;
@@ -165,6 +166,143 @@ public class DeliveryAutoConfirmService : BackgroundService
                 }
 
                 await db.SaveChangesAsync();
+
+                // 🎯 CALL SAP zrest_doconfirm AFTER DATABASE UPDATE
+                // Similar to manual confirmation (UpdateByToken), notify SAP of the delivery confirmation
+                _ = Task.Run(async () =>
+                {
+                    try
+                    {
+                        using (var scope = _scopeFactory.CreateScope())
+                        {
+                            var httpClientFactory = scope.ServiceProvider.GetRequiredService<IHttpClientFactory>();
+                            var sapOptions = scope.ServiceProvider.GetRequiredService<IOptions<SapOptions>>().Value;
+                            var loggerFactory = scope.ServiceProvider.GetRequiredService<ILoggerFactory>();
+                            var logger = loggerFactory.CreateLogger<DeliveryAutoConfirmService>();
+
+                            logger.LogInformation("SAP zrest_doconfirm call starting for auto-confirmed delivery {DeliveryNumber}", delivery.DeliveryNumber);
+
+                            // Create a clean client instance from the factory
+                            var sapClient = httpClientFactory.CreateClient("SapClient");
+
+                            // Build the SAP confirmation payload
+                            var dbLines = (fullDelivery.Lines ?? Enumerable.Empty<DeliveryLine>()).ToList();
+
+                            var sapPayload = new SapDeliveryConfirmationPayload
+                            {
+                                CustomerCode = fullDelivery.Customer?.CustomerCode ?? string.Empty,
+                                DeliveryNumber = fullDelivery.DeliveryNumber,
+                                ReceiverName = fullDelivery.ReceiverName ?? string.Empty,
+                                ReceiverStatus = "1", // Always "1" for auto-confirm (FullyReceived)
+                                ReceiverNotes = fullDelivery.ReceiverNotes ?? string.Empty,
+
+                                Lines = dbLines.Select(l =>
+                                {
+                                    // 🎯 Identify if this row acts as a parent line for any split-batch child lines
+                                    var children = dbLines.Where(c => !string.IsNullOrEmpty(c.ParentLineNumber) && c.ParentLineNumber.Trim() == l.DeliveryLineNumber).ToList();
+                                    bool isParentLine = children.Any();
+
+                                    // Dynamically roll up all quantities from children if this is a structural parent line
+                                    decimal packQty = isParentLine ? children.Sum(c => c.PackQuantity) : l.PackQuantity;
+                                    decimal delivered = isParentLine ? children.Sum(c => c.PackQuantityDelivered) : l.PackQuantityDelivered;
+                                    decimal returned = isParentLine ? children.Sum(c => c.PackQuantityReturned) : l.PackQuantityReturned;
+                                    decimal rejected = isParentLine ? children.Sum(c => c.PackQuantityRejected) : l.PackQuantityRejected;
+
+                                    // Compute unified variance using the non-zero target base
+                                    decimal totalActual = delivered + returned + rejected;
+                                    decimal rawVariance = totalActual - packQty;
+                                    decimal percentCalc = packQty > 0 ? (rawVariance / packQty) * 100 : 0;
+
+                                    return new SapDeliveryLinePayload
+                                    {
+                                        DeliveryLineNumber = l.DeliveryLineNumber,
+                                        DeliveredQuantity = delivered, // 🎯 Sent as structural aggregate to SAP
+                                        RejectedQuantity = rejected,
+                                        ReturnedQuantity = returned,
+                                        LineComment = l.LineComment ?? "",
+                                        VariancePercent = Math.Round(percentCalc, 2, MidpointRounding.AwayFromZero)
+                                    };
+                                }).ToList()
+                            };
+
+                            // Use configured SAP base URL
+                            if (string.IsNullOrWhiteSpace(sapOptions.BaseUrl))
+                            {
+                                throw new InvalidOperationException("SAP BaseUrl is not configured. Please check the SapOptions configuration.");
+                            }
+                            string baseSapUrl = sapOptions.BaseUrl.TrimEnd('/');
+
+                            string sapClientParam = !string.IsNullOrEmpty(sapOptions.Client)
+                                ? sapOptions.Client
+                                : "250";
+
+                            string absoluteSapUrl = $"{baseSapUrl}/sap/bc/zrest_doconfirm?sap-client={sapClientParam}";
+
+                            // Execute post operation targeting the absolute URL pathway directly
+                            var response = await sapClient.PostAsJsonAsync(absoluteSapUrl, sapPayload);
+
+                            if (response.IsSuccessStatusCode)
+                            {
+                                logger.LogInformation("SAP zrest_doconfirm successful for auto-confirmed delivery {DeliveryNumber}", delivery.DeliveryNumber);
+
+                                // Log success activity
+                                using (var dbScope = _scopeFactory.CreateScope())
+                                {
+                                    var db = dbScope.ServiceProvider.GetRequiredService<AppDbContext>();
+                                    var activityLog = new ActivityLog
+                                    {
+                                        EventType = "DeliveryAutoConfirmSapSync",
+                                        ReferenceID = delivery.DeliveryNumber,
+                                        Message = $"SAP zrest_doconfirm successful for auto-confirmed delivery {delivery.DeliveryNumber}",
+                                        Severity = "Success"
+                                    };
+                                    db.ActivityLogs.Add(activityLog);
+                                    await db.SaveChangesAsync();
+                                }
+                            }
+                            else
+                            {
+                                string errorResponse = await response.Content.ReadAsStringAsync();
+                                logger.LogError("SAP zrest_doconfirm failed for {DeliveryNumber}. Status: {StatusCode}, Error: {Error}",
+                                    delivery.DeliveryNumber, response.StatusCode, errorResponse);
+
+                                // Log failure activity
+                                using (var dbScope = _scopeFactory.CreateScope())
+                                {
+                                    var db = dbScope.ServiceProvider.GetRequiredService<AppDbContext>();
+                                    var activityLog = new ActivityLog
+                                    {
+                                        EventType = "DeliveryAutoConfirmSapSyncFailed",
+                                        ReferenceID = delivery.DeliveryNumber,
+                                        Message = $"SAP zrest_doconfirm failed for auto-confirmed delivery {delivery.DeliveryNumber}. Status: {response.StatusCode}",
+                                        Severity = "Error"
+                                    };
+                                    db.ActivityLogs.Add(activityLog);
+                                    await db.SaveChangesAsync();
+                                }
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "Background SAP zrest_doconfirm faulted for auto-confirmed delivery {DeliveryNumber}", delivery.DeliveryNumber);
+
+                        // Log error activity
+                        using (var scope = _scopeFactory.CreateScope())
+                        {
+                            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+                            var activityLog = new ActivityLog
+                            {
+                                EventType = "DeliveryAutoConfirmSapSyncError",
+                                ReferenceID = delivery.DeliveryNumber,
+                                Message = $"Error during SAP zrest_doconfirm: {ex.Message}",
+                                Severity = "Error"
+                            };
+                            db.ActivityLogs.Add(activityLog);
+                            await db.SaveChangesAsync();
+                        }
+                    }
+                });
 
                 confirmedCount++;
 
