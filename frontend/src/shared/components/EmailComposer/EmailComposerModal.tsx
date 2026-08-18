@@ -1,6 +1,6 @@
 import { useState } from "react"
 import { X, Mail, Send, Loader2, Paperclip } from "lucide-react"
-import { useApi } from "../../../utils/api"
+import { useApi } from "../../utils/api"
 
 interface EmailComposerModalProps {
   isOpen: boolean
