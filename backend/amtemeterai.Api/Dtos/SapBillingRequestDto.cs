@@ -47,17 +47,55 @@ public class SapBillingResponseDto
     public decimal AmountLocal { get; set; }
 
     /// <summary>
-    /// Down payment amount from SAP
-    /// Used to calculate the nett amount: nett = base + downpay
+    /// Base amount from SAP (gross amount before down payment deduction)
     /// </summary>
-    [JsonPropertyName("downPayment")]
-    public decimal DownPayment { get; set; }
+    [JsonPropertyName("baseAmount")]
+    public decimal BaseAmount { get; set; }
 
     /// <summary>
-    /// Down payment tax amount from SAP
+    /// Invoice amount from SAP (final amount after down payment deduction)
+    /// This is the amount the customer needs to pay
     /// </summary>
-    [JsonPropertyName("dpTax")]
-    public decimal DpTax { get; set; }
+    [JsonPropertyName("amountInvoice")]
+    public decimal AmountInvoice { get; set; }
+
+    /// <summary>
+    /// Tax amount in foreign currency
+    /// </summary>
+    [JsonPropertyName("taxAmount")]
+    public decimal TaxAmount { get; set; }
+
+    /// <summary>
+    /// Tax amount in local currency
+    /// </summary>
+    [JsonPropertyName("localTaxAmount")]
+    public decimal LocalTaxAmount { get; set; }
+
+    /// <summary>
+    /// Down payment amount from SAP (foreign currency)
+    /// Used to calculate the nett amount: nett = base - downpay
+    /// </summary>
+    [JsonPropertyName("downPayAmount")]
+    public decimal DownPayAmount { get; set; }
+
+    /// <summary>
+    /// Down payment amount from SAP (local currency)
+    /// Used to calculate the nett amount: nett = base - downpay
+    /// </summary>
+    [JsonPropertyName("localDownPayAmount")]
+    public decimal LocalDownPayAmount { get; set; }
+
+    /// <summary>
+    /// Down payment tax amount from SAP (foreign currency)
+    /// </summary>
+    [JsonPropertyName("downPayTaxAmount")]
+    public decimal DownPayTaxAmount { get; set; }
+
+    /// <summary>
+    /// Down payment tax amount from SAP (local currency)
+    /// </summary>
+    [JsonPropertyName("localDownPayTaxAmount")]
+    public decimal LocalDownPayTaxAmount { get; set; }
 
     /// <summary>
     /// Currency code (e.g., "USD", "IDR")

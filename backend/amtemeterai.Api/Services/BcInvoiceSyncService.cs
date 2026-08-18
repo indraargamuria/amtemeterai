@@ -251,22 +251,45 @@ public class BcInvoiceSyncService
                 }
 
                 // Create invoice record with dual-currency support
-                // New logic: Nett Amount = BaseAmount + DownPayAmount
-                // SAP sends: amountLocal as base, downPayment as additional amount
-                var downPayLocal = sapBillingData.DownPayment;
-                var downPayForeign = 0m; // Down payment is currently based on local currency only
+                // Updated logic: Down payment REDUCES the gross amount, not increases it
+                // SAP sends: amountInvoice as final net amount (baseAmount - downPayAmount)
+                // We store all components for accurate tracking
+
+                // Use the new SAP response fields
+                var baseAmountLocal = sapBillingData.BaseAmount > 0 ? sapBillingData.BaseAmount : sapBillingData.AmountLocal;
+                var baseAmountForeign = sapBillingData.AmountForeign; // Foreign currency base amount
+
+                // Down payment amounts (deduct from base to get net)
+                var downPayLocal = sapBillingData.LocalDownPayAmount;
+                var downPayForeign = sapBillingData.DownPayAmount;
+
+                // Tax amounts
+                var taxAmountLocal = sapBillingData.LocalTaxAmount;
+                var taxAmountForeign = sapBillingData.TaxAmount;
+
+                // Down payment tax amounts
+                var downPayTaxAmountLocal = sapBillingData.LocalDownPayTaxAmount;
+                var downPayTaxAmountForeign = sapBillingData.DownPayTaxAmount;
+
+                // Final invoice amount (use amountInvoice if available, otherwise calculate)
+                var finalInvoiceAmount = sapBillingData.AmountInvoice > 0 ? sapBillingData.AmountInvoice : sapBillingData.AmountLocal;
+                var finalInvoiceAmountForeign = sapBillingData.AmountForeign; // Assuming same logic for foreign
 
                 var invoice = new Invoice
                 {
                     InvoiceNumber = sapBillingData.SapInvoiceNumber,
                     CustomerNumber = sapBillingData.CustomerNumber,
-                    InvoiceAmount = sapBillingData.AmountLocal + downPayLocal, // Legacy field for compatibility
-                    AmountForeign = sapBillingData.AmountForeign + downPayForeign,
-                    AmountLocal = sapBillingData.AmountLocal + downPayLocal,
-                    BaseAmountForeign = sapBillingData.AmountForeign,
-                    BaseAmountLocal = sapBillingData.AmountLocal,
+                    InvoiceAmount = finalInvoiceAmount, // Legacy field for compatibility
+                    AmountForeign = finalInvoiceAmountForeign,
+                    AmountLocal = finalInvoiceAmount,
+                    BaseAmountForeign = baseAmountForeign,
+                    BaseAmountLocal = baseAmountLocal,
                     DownPayAmountForeign = downPayForeign,
                     DownPayAmountLocal = downPayLocal,
+                    DownPayTaxAmountForeign = downPayTaxAmountForeign,
+                    DownPayTaxAmountLocal = downPayTaxAmountLocal,
+                    TaxAmountForeign = taxAmountForeign,
+                    TaxAmountLocal = taxAmountLocal,
                     Currency = sapBillingData.Currency,
                     ComplianceCategory = sapBillingData.ComplianceCategory,
                     InvoicedDate = sapBillingData.BillingDate,

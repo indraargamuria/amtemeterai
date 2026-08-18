@@ -66,10 +66,34 @@ public class Invoice
 
     /// <summary>
     /// Local currency down payment amount
-    /// Nett Amount = BaseAmountLocal + DownPayAmountLocal
+    /// Nett Amount = BaseAmountLocal - DownPayAmountLocal
     /// Precision: 18 digits, 2 decimal places
     /// </summary>
     public decimal DownPayAmountLocal { get; set; }
+
+    /// <summary>
+    /// Foreign currency down payment tax amount
+    /// Precision: 18 digits, 2 decimal places
+    /// </summary>
+    public decimal DownPayTaxAmountForeign { get; set; }
+
+    /// <summary>
+    /// Local currency down payment tax amount
+    /// Precision: 18 digits, 2 decimal places
+    /// </summary>
+    public decimal DownPayTaxAmountLocal { get; set; }
+
+    /// <summary>
+    /// Foreign currency tax amount
+    /// Precision: 18 digits, 2 decimal places
+    /// </summary>
+    public decimal TaxAmountForeign { get; set; }
+
+    /// <summary>
+    /// Local currency tax amount
+    /// Precision: 18 digits, 2 decimal places
+    /// </summary>
+    public decimal TaxAmountLocal { get; set; }
 
     /// <summary>
     /// Applies a down payment and recalculates the nett amounts.
