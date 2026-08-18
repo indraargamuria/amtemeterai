@@ -51,7 +51,7 @@ type ComplianceFilter = "all" | "bc" | "nonbc"
 // 🚀 EXTENDED: Filter state to capture delivery pipeline exclusions
 type PipelineFilter = "all" | "active" | "canceled"
 // NEW: Delivery Status Filter
-type DeliveryStatusFilter = "all" | "fullyReceived" | "partialReceived" | "canceled"
+type DeliveryStatusFilter = "all" | "fullyReceived" | "partialReceived" | "notDelivered" | "canceled"
 // NEW: Invoice Status Filter
 type InvoiceStatusFilter = "all" | "invoiced" | "pending"
 
@@ -199,6 +199,7 @@ export function DeliveriesPage() {
     if (deliveryStatusFilter !== "all") {
       filtered = filtered.filter((d) => {
         if (deliveryStatusFilter === "canceled") return d.isCanceled
+        if (deliveryStatusFilter === "notDelivered") return !d.received && !d.isCanceled
         if (deliveryStatusFilter === "fullyReceived") return d.received && d.status === 1 && !d.isCanceled
         if (deliveryStatusFilter === "partialReceived") return d.received && d.status === 2 && !d.isCanceled
         return true
@@ -543,6 +544,7 @@ export function DeliveriesPage() {
                   className="bg-transparent text-xs text-brand-blue/70 font-medium focus:outline-none cursor-pointer hover:text-brand-blue"
                 >
                   <option value="all">All</option>
+                  <option value="notDelivered">Not Delivered</option>
                   <option value="fullyReceived">Fully Received</option>
                   <option value="partialReceived">Partial Received</option>
                   <option value="canceled">Canceled</option>
