@@ -27,17 +27,19 @@ public class DashboardController : ControllerBase
             .Where(d => !d.Received)
             .CountAsync();
 
-        // Calculate rejection rate
+        var receivedDeliveries = await _db.DeliveryHeaders
+            .Where(d => d.Received)
+            .CountAsync();
+
+        // Rejection rate on received deliveries
         var allDeliveredLines = await _db.DeliveryLines
             .Where(dl => dl.DeliveryHeader.Received)
             .Select(dl => new { dl.PackQuantityDelivered, dl.PackQuantityRejected })
             .ToListAsync();
 
-        // FIX: Removed ?? 0m because these are likely already non-nullable decimals based on your build error
-        // If they are nullable, the sum logic should handle them via casting or explicit null checks before sum
         decimal totalDelivered = allDeliveredLines.Sum(dl => dl.PackQuantityDelivered);
         decimal totalRejected = allDeliveredLines.Sum(dl => dl.PackQuantityRejected);
-        
+
         double rejectionRate = totalDelivered > 0
             ? Math.Round((double)(totalRejected / totalDelivered * 100), 1)
             : 0;
@@ -46,12 +48,47 @@ public class DashboardController : ControllerBase
             .Where(d => d.Received && !d.Invoiced)
             .CountAsync();
 
+        // Invoice / stamping KPIs
+        var totalInvoices = await _db.Invoices.CountAsync();
+
+        var pendingStamps = await _db.Invoices
+            .Where(i => i.StampingStatus == Invoice.InvoiceStampingStatus.NotStamped
+                     || i.StampingStatus == Invoice.InvoiceStampingStatus.Pending)
+            .CountAsync();
+
+        var stamped = await _db.Invoices
+            .Where(i => i.StampingStatus == Invoice.InvoiceStampingStatus.Stamped)
+            .CountAsync();
+
+        var failedStamps = await _db.Invoices
+            .Where(i => i.StampingStatus == Invoice.InvoiceStampingStatus.Failed)
+            .CountAsync();
+
+        var invoiceValueTotal = await _db.Invoices.SumAsync(i => (decimal?)i.AmountLocal) ?? 0m;
+        var invoiceValueStamped = await _db.Invoices
+            .Where(i => i.StampingStatus == Invoice.InvoiceStampingStatus.Stamped)
+            .SumAsync(i => (decimal?)i.AmountLocal) ?? 0m;
+
+        var activeCustomers = await _db.Invoices
+            .Select(i => i.CustomerNumber)
+            .Distinct()
+            .CountAsync();
+
         return Ok(new DashboardStatsDto
         {
             TotalDeliveries = totalDeliveries,
             PendingDeliveries = pendingDeliveries,
+            ReceivedDeliveries = receivedDeliveries,
             PendingInvoice = pendingInvoice,
-            RejectionRate = rejectionRate
+            SapDiscrepancies = pendingInvoice,
+            RejectionRate = rejectionRate,
+            TotalInvoices = totalInvoices,
+            PendingStamps = pendingStamps,
+            Stamped = stamped,
+            FailedStamps = failedStamps,
+            InvoiceValueTotal = invoiceValueTotal,
+            InvoiceValueStamped = invoiceValueStamped,
+            ActiveCustomers = activeCustomers
         });
     }
 
@@ -60,26 +97,56 @@ public class DashboardController : ControllerBase
     {
         var thirtyDaysAgo = DateTime.UtcNow.AddDays(-30);
 
-        // 1. Database level: Group and Count
-        var rawData = await _db.DeliveryHeaders
+        // Deliveries per day
+        var deliveryRaw = await _db.DeliveryHeaders
             .Where(d => d.DeliveryDate >= thirtyDaysAgo)
             .GroupBy(d => d.DeliveryDate.Date)
-            .Select(g => new 
-            { 
-                Key = g.Key, 
-                Count = g.Count() 
-            })
+            .Select(g => new { Key = g.Key, Count = g.Count() })
             .OrderBy(g => g.Key)
             .ToListAsync();
 
-        // 2. Memory level: Format the Date to string
-        var deliveryData = rawData.Select(d => new ChartDataPoint
+        var deliveryData = deliveryRaw.Select(d => new ChartDataPoint
         {
             Date = d.Key.ToString("yyyy-MM-dd"),
             Count = d.Count
         }).ToList();
 
-        return Ok(deliveryData);
+        // Invoices per day
+        var invoiceRaw = await _db.Invoices
+            .Where(i => i.InvoicedDate >= thirtyDaysAgo)
+            .GroupBy(i => i.InvoicedDate.Date)
+            .Select(g => new { Key = g.Key, Count = g.Count() })
+            .OrderBy(g => g.Key)
+            .ToListAsync();
+
+        var invoiceData = invoiceRaw.Select(d => new ChartDataPoint
+        {
+            Date = d.Key.ToString("yyyy-MM-dd"),
+            Count = d.Count
+        }).ToList();
+
+        return Ok(new DashboardChartsDto
+        {
+            Deliveries = deliveryData,
+            Invoices = invoiceData
+        });
+    }
+
+    [HttpGet("stamp-breakdown")]
+    public async Task<IActionResult> GetStampBreakdown()
+    {
+        var breakdown = await _db.Invoices
+            .GroupBy(i => i.StampingStatus)
+            .Select(g => new StampBreakdownDto
+            {
+                Status = g.Key,
+                Count = g.Count(),
+                Value = g.Sum(i => i.AmountLocal)
+            })
+            .OrderBy(g => g.Status)
+            .ToListAsync();
+
+        return Ok(breakdown);
     }
 
     [HttpGet("logs")]
@@ -110,15 +177,37 @@ public record DashboardStatsDto
 {
     public int TotalDeliveries { get; init; }
     public int PendingDeliveries { get; init; }
+    public int ReceivedDeliveries { get; init; }
     public int PendingInvoice { get; init; }
+    public int SapDiscrepancies { get; init; }
     public double RejectionRate { get; init; }
+
+    public int TotalInvoices { get; init; }
+    public int PendingStamps { get; init; }
+    public int Stamped { get; init; }
+    public int FailedStamps { get; init; }
+    public decimal InvoiceValueTotal { get; init; }
+    public decimal InvoiceValueStamped { get; init; }
+    public int ActiveCustomers { get; init; }
+}
+
+public record DashboardChartsDto
+{
+    public List<ChartDataPoint> Deliveries { get; init; } = new();
+    public List<ChartDataPoint> Invoices { get; init; } = new();
 }
 
 public record ChartDataPoint
 {
-    // FIX: Added required to satisfy non-nullable property check
     public required string Date { get; init; }
     public int Count { get; init; }
+}
+
+public record StampBreakdownDto
+{
+    public Invoice.InvoiceStampingStatus Status { get; init; }
+    public int Count { get; init; }
+    public decimal Value { get; init; }
 }
 
 public record ActivityLogDto

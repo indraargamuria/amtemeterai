@@ -85,11 +85,45 @@ export function useApi() {
 // Dashboard API Functions
 // =========================
 
+export interface DashboardStats {
+  totalDeliveries: number
+  pendingDeliveries: number
+  receivedDeliveries: number
+  pendingInvoice: number
+  sapDiscrepancies: number
+  rejectionRate: number
+  totalInvoices: number
+  pendingStamps: number
+  stamped: number
+  failedStamps: number
+  invoiceValueTotal: number
+  invoiceValueStamped: number
+  activeCustomers: number
+}
+
+export interface ChartDataPoint {
+  date: string
+  count: number
+}
+
+export interface DashboardCharts {
+  deliveries: ChartDataPoint[]
+  invoices: ChartDataPoint[]
+}
+
+export type StampStatus = 1 | 2 | 3 | 4
+
+export interface StampBreakdown {
+  status: StampStatus
+  count: number
+  value: number
+}
+
 /**
  * GET /api/dashboard/stats
  * Returns aggregated KPI data for dashboard
  */
-export async function getDashboardStats() {
+export async function getDashboardStats(): Promise<DashboardStats> {
   const response = await authGet("/api/dashboard/stats")
   if (!response.ok) throw new Error("Failed to fetch dashboard stats")
   return await response.json()
@@ -97,11 +131,21 @@ export async function getDashboardStats() {
 
 /**
  * GET /api/dashboard/charts
- * Returns data grouped by date for last 30 days
+ * Returns deliveries + invoices grouped by date for last 30 days
  */
-export async function getDashboardCharts() {
+export async function getDashboardCharts(): Promise<DashboardCharts> {
   const response = await authGet("/api/dashboard/charts")
   if (!response.ok) throw new Error("Failed to fetch dashboard charts")
+  return await response.json()
+}
+
+/**
+ * GET /api/dashboard/stamp-breakdown
+ * Returns invoice count + value grouped by stamping status
+ */
+export async function getStampBreakdown(): Promise<StampBreakdown[]> {
+  const response = await authGet("/api/dashboard/stamp-breakdown")
+  if (!response.ok) throw new Error("Failed to fetch stamp breakdown")
   return await response.json()
 }
 

@@ -1,27 +1,26 @@
 import { useState, useEffect } from "react"
 import { Card, CardContent } from "../../shared/components/ui/Card"
-import { getDashboardStats, getDashboardCharts, getDashboardLogs } from "../../shared/utils/api"
+import {
+  getDashboardStats,
+  getDashboardCharts,
+  getStampBreakdown,
+  getDashboardLogs,
+  type DashboardStats,
+  type DashboardCharts,
+  type StampBreakdown
+} from "../../shared/utils/api"
 import {
   AreaChart,
   Area,
+  PieChart,
+  Pie,
+  Cell,
   Tooltip,
   XAxis,
   YAxis,
-  ResponsiveContainer
+  ResponsiveContainer,
+  Legend
 } from "recharts"
-
-// Types for API responses
-interface DashboardStats {
-  totalDeliveries: number
-  pendingDeliveries: number
-  pendingInvoice: number
-  rejectionRate: number
-}
-
-interface ChartDataPoint {
-  date: string
-  count: number
-}
 
 interface ActivityLog {
   logID: number
@@ -32,9 +31,32 @@ interface ActivityLog {
   severity: string
 }
 
+const STAMP_STATUS_LABELS: Record<number, string> = {
+  1: "Not Stamped",
+  2: "Pending",
+  3: "Stamped",
+  4: "Failed"
+}
+
+const STAMP_STATUS_COLORS: Record<number, string> = {
+  1: "#94a3b8",
+  2: "#f59e0b",
+  3: "#10b981",
+  4: "#ef4444"
+}
+
+function formatIDR(value: number): string {
+  return new Intl.NumberFormat("id-ID", {
+    style: "currency",
+    currency: "IDR",
+    maximumFractionDigits: 0
+  }).format(value)
+}
+
 export function DashboardPage() {
   const [stats, setStats] = useState<DashboardStats | null>(null)
-  const [chartsData, setChartsData] = useState<ChartDataPoint[]>([])
+  const [chartsData, setChartsData] = useState<DashboardCharts | null>(null)
+  const [stampBreakdown, setStampBreakdown] = useState<StampBreakdown[]>([])
   const [logs, setLogs] = useState<ActivityLog[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -45,13 +67,15 @@ export function DashboardPage() {
         setLoading(true)
         setError(null)
 
-        const [statsRes, chartsRes] = await Promise.all([
+        const [statsRes, chartsRes, stampRes] = await Promise.all([
           getDashboardStats(),
-          getDashboardCharts()
+          getDashboardCharts(),
+          getStampBreakdown()
         ])
 
         setStats(statsRes)
         setChartsData(chartsRes)
+        setStampBreakdown(stampRes)
       } catch (err) {
         console.error("Failed to fetch dashboard data:", err)
         setError("Failed to load dashboard data. Please try again.")
@@ -106,14 +130,11 @@ export function DashboardPage() {
     }
   }
 
-  // Helper mapping function to resolve and clear unformatted log lines
   const resolveLogTitle = (log: ActivityLog) => {
-    // If we have a true explicit domain type, handle it first
     if (log.eventType === "CustomerSync" || log.message.toLowerCase().includes("customer sync")) {
       return "ERP Customer Sync"
     }
-    
-    // If reference ID is corrupted or contains a blank fallback character, strip it cleanly
+
     if (!log.referenceID || log.referenceID.trim() === "-") {
       return "System Update"
     }
@@ -121,16 +142,41 @@ export function DashboardPage() {
     return log.referenceID
   }
 
+  // Merge delivery + invoice series by date for the dual-line chart
+  const mergedChartData = (() => {
+    if (!chartsData) return []
+    const map = new Map<string, { date: string; deliveries: number; invoices: number }>()
+    for (const d of chartsData.deliveries) {
+      const entry = map.get(d.date) ?? { date: d.date, deliveries: 0, invoices: 0 }
+      entry.deliveries = d.count
+      map.set(d.date, entry)
+    }
+    for (const i of chartsData.invoices) {
+      const entry = map.get(i.date) ?? { date: i.date, deliveries: 0, invoices: 0 }
+      entry.invoices = i.count
+      map.set(i.date, entry)
+    }
+    return Array.from(map.values())
+      .sort((a, b) => a.date.localeCompare(b.date))
+      .map((e) => ({ date: e.date, deliveries: e.deliveries, invoices: e.invoices }))
+  })()
+
+  const donutData = stampBreakdown.map((s) => ({
+    name: STAMP_STATUS_LABELS[s.status] ?? `Status ${s.status}`,
+    value: s.count,
+    color: STAMP_STATUS_COLORS[s.status] ?? "#94a3b8"
+  }))
+
+  const totalStampValue = stampBreakdown.reduce((acc, s) => acc + s.value, 0)
+
   return (
     <div className="space-y-6">
-      {/* Premium Dashboard Header layout with live infrastructure status indicator */}
+      {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-brand-blue/5 pb-5">
         <div className="space-y-1">
           <h1 className="text-2xl font-semibold text-brand-blue dark:text-slate-100 tracking-tight">Dashboard</h1>
           <p className="text-sm text-brand-blue dark:text-slate-100/60 dark:text-slate-300">Real-time logistics matrix and automation tracking</p>
         </div>
-        
-        {/* Connection pipeline node visualization badge */}
         <div className="flex items-center gap-2 text-[11px] font-medium text-emerald-700 dark:text-emerald-400 bg-emerald-500/5 border border-emerald-500/10 px-3 py-1 rounded-full w-fit">
           <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
           ERP Connectivity Link Active
@@ -143,86 +189,136 @@ export function DashboardPage() {
         <Card><CardContent className="p-12 text-center text-brand-red/60">{error}</CardContent></Card>
       ) : (
         <>
-          {/* Main KPI metric grids */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-            <MetricCard title="Total Deliveries" value={stats?.totalDeliveries ?? 0} subtitle="Active pipeline entries" />
-            <MetricCard title="Pending Invoice" value={stats?.pendingInvoice ?? 0} subtitle="Unprocessed compliances" />
-            <MetricCard title="Rejection Rate" value={`${stats?.rejectionRate ?? 0}%`} subtitle="Efficiency compliance metrics" isAlert={stats?.rejectionRate! > 5} />
+          {/* KPI grid — 6 cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+            <MetricCard title="Total Deliveries" value={stats?.totalDeliveries ?? 0} subtitle={`${stats?.receivedDeliveries ?? 0} received · ${stats?.pendingDeliveries ?? 0} pending`} icon="📦" />
+            <MetricCard title="Uninvoiced Deliveries" value={stats?.pendingInvoice ?? 0} subtitle="Received, awaiting billing sync" isAlert={(stats?.pendingInvoice ?? 0) > 0} icon="🧾" />
+            <MetricCard title="Pending e-Meterai Stamps" value={stats?.pendingStamps ?? 0} subtitle={`${stats?.stamped ?? 0} stamped · ${stats?.failedStamps ?? 0} failed`} isAlert={(stats?.pendingStamps ?? 0) > 0} icon="🏷️" />
+            <MetricCard title="Failed Stamps" value={stats?.failedStamps ?? 0} subtitle="Require attention" isAlert={(stats?.failedStamps ?? 0) > 0} icon="⚠️" />
+            <MetricCard title="Invoice Value (Stamped)" value={formatIDR(stats?.invoiceValueStamped ?? 0)} subtitle={`of ${formatIDR(stats?.invoiceValueTotal ?? 0)} total`} icon="💰" />
+            <MetricCard title="Rejection Rate" value={`${stats?.rejectionRate ?? 0}%`} subtitle={`${stats?.activeCustomers ?? 0} active customers`} isAlert={(stats?.rejectionRate ?? 0) > 5} icon="📉" />
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Left Panel: Delivery Chart Engine with subtle details */}
-            <div className="space-y-3">
-              <h2 className="text-sm font-semibold text-brand-blue dark:text-slate-100/70 dark:text-slate-400 uppercase tracking-wider">Delivery Trends</h2>
+          {/* Charts row */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Delivery + Invoice trend */}
+            <div className="lg:col-span-2 space-y-3">
+              <h2 className="text-sm font-semibold text-brand-blue dark:text-slate-100/70 dark:text-slate-400 uppercase tracking-wider">Delivery & Invoice Trends</h2>
               <Card className="shadow-none">
-                <CardContent className="p-6 h-64">
+                <CardContent className="p-6 h-72">
                   <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={chartsData} margin={{ top: 10, right: 5, left: -35, bottom: 0 }}>
+                    <AreaChart data={mergedChartData} margin={{ top: 10, right: 5, left: -35, bottom: 0 }}>
                       <defs>
-                        <linearGradient id="colorCount" x1="0" y1="0" x2="0" y2="1">
+                        <linearGradient id="colorDeliveries" x1="0" y1="0" x2="0" y2="1">
                           <stop offset="5%" stopColor="var(--chart-ink)" stopOpacity={0.12}/>
                           <stop offset="95%" stopColor="var(--chart-ink)" stopOpacity={0}/>
                         </linearGradient>
+                        <linearGradient id="colorInvoices" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.12}/>
+                          <stop offset="95%" stopColor="#f59e0b" stopOpacity={0}/>
+                        </linearGradient>
                       </defs>
-                      {/* Clean minimalist styling helper ticks */}
-                      <XAxis 
-                        dataKey="date" 
-                        stroke="var(--chart-ink)" 
-                        opacity={0.2} 
-                        style={{ fontSize: '10px', fontFamily: 'monospace' }} 
-                        dy={8}
-                      />
-                      <YAxis 
-                        stroke="var(--chart-ink)" 
-                        opacity={0.2} 
-                        style={{ fontSize: '10px', fontFamily: 'monospace' }} 
-                      />
-                      <Tooltip 
-                        contentStyle={{ 
-                          background: 'var(--chart-tooltip-bg)', 
-                          border: '1px solid var(--chart-tooltip-border)', 
+                      <XAxis dataKey="date" stroke="var(--chart-ink)" opacity={0.2} style={{ fontSize: '10px', fontFamily: 'monospace' }} dy={8} />
+                      <YAxis stroke="var(--chart-ink)" opacity={0.2} style={{ fontSize: '10px', fontFamily: 'monospace' }} allowDecimals={false} />
+                      <Tooltip
+                        contentStyle={{
+                          background: 'var(--chart-tooltip-bg)',
+                          border: '1px solid var(--chart-tooltip-border)',
                           borderRadius: '6px',
                           fontSize: '12px',
                           color: 'var(--chart-tooltip-color)'
-                        }} 
+                        }}
                       />
-                      <Area type="monotone" dataKey="count" stroke="var(--chart-ink)" strokeWidth={2} fillOpacity={1} fill="url(#colorCount)" />
+                      <Legend wrapperStyle={{ fontSize: '12px' }} />
+                      <Area type="monotone" dataKey="deliveries" name="Deliveries" stroke="var(--chart-ink)" strokeWidth={2} fillOpacity={1} fill="url(#colorDeliveries)" />
+                      <Area type="monotone" dataKey="invoices" name="Invoices" stroke="#f59e0b" strokeWidth={2} fillOpacity={1} fill="url(#colorInvoices)" />
                     </AreaChart>
                   </ResponsiveContainer>
                 </CardContent>
               </Card>
             </div>
 
-            {/* Right Panel: Clean Activity Feed Component without trailing hyphens */}
+            {/* Stamping status donut */}
             <div className="space-y-3">
-              <h2 className="text-sm font-semibold text-brand-blue dark:text-slate-100/70 dark:text-slate-400 uppercase tracking-wider">Recent Activity</h2>
-              <Card className="shadow-none overflow-hidden">
-                <CardContent className="p-0 max-h-64 overflow-y-auto">
-                  {logs.length > 0 ? (
-                    <div className="divide-y divide-brand-blue/5">
-                      {logs.map((log) => (
-                        <div key={log.logID} className="flex items-center justify-between p-4 hover:bg-brand-blue/1 transition-colors">
-                          <div className="flex items-center gap-3">
-                            <div className={`w-1.5 h-1.5 rounded-full ${getSeverityColor(log.severity)} shrink-0`} />
-                            <div>
-                              <p className="text-sm font-semibold text-brand-blue dark:text-slate-100">
-                                {resolveLogTitle(log)}
-                              </p>
-                              <p className="text-xs text-brand-blue dark:text-slate-100/60 dark:text-slate-300 mt-0.5">{log.message}</p>
-                            </div>
-                          </div>
-                          <span className="text-xs text-brand-blue dark:text-slate-100/40 dark:text-slate-400 font-mono pl-2 whitespace-nowrap">
-                            {formatTimestamp(log.timestamp)}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="p-8 text-center text-sm text-brand-blue dark:text-slate-100/40 dark:text-slate-400">No records found on recent communication logs.</p>
-                  )}
+              <h2 className="text-sm font-semibold text-brand-blue dark:text-slate-100/70 dark:text-slate-400 uppercase tracking-wider">Stamping Status</h2>
+              <Card className="shadow-none">
+                <CardContent className="p-6 h-72 flex flex-col">
+                  <div className="flex-1 min-h-0">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={donutData}
+                          dataKey="value"
+                          nameKey="name"
+                          innerRadius="55%"
+                          outerRadius="80%"
+                          paddingAngle={2}
+                          stroke="none"
+                        >
+                          {donutData.map((entry, index) => (
+                            <Cell key={index} fill={entry.color} />
+                          ))}
+                        </Pie>
+                        <Tooltip
+                          contentStyle={{
+                            background: 'var(--chart-tooltip-bg)',
+                            border: '1px solid var(--chart-tooltip-border)',
+                            borderRadius: '6px',
+                            fontSize: '12px',
+                            color: 'var(--chart-tooltip-color)'
+                          }}
+                        />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+                  <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 mt-2">
+                    {donutData.map((d) => (
+                      <div key={d.name} className="flex items-center justify-between gap-2 text-xs">
+                        <span className="flex items-center gap-1.5 text-brand-blue dark:text-slate-100/70 dark:text-slate-400">
+                          <span className="w-2 h-2 rounded-full shrink-0" style={{ background: d.color }} />
+                          {d.name}
+                        </span>
+                        <span className="font-semibold text-brand-blue dark:text-slate-100">{d.value}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <p className="text-[11px] text-brand-blue dark:text-slate-100/40 dark:text-slate-400 mt-2">
+                    {formatIDR(totalStampValue)} total invoice value
+                  </p>
                 </CardContent>
               </Card>
             </div>
+          </div>
+
+          {/* Recent activity */}
+          <div className="space-y-3">
+            <h2 className="text-sm font-semibold text-brand-blue dark:text-slate-100/70 dark:text-slate-400 uppercase tracking-wider">Recent Activity</h2>
+            <Card className="shadow-none overflow-hidden">
+              <CardContent className="p-0 max-h-64 overflow-y-auto">
+                {logs.length > 0 ? (
+                  <div className="divide-y divide-brand-blue/5">
+                    {logs.map((log) => (
+                      <div key={log.logID} className="flex items-center justify-between p-4 hover:bg-brand-blue/1 transition-colors">
+                        <div className="flex items-center gap-3">
+                          <div className={`w-1.5 h-1.5 rounded-full ${getSeverityColor(log.severity)} shrink-0`} />
+                          <div>
+                            <p className="text-sm font-semibold text-brand-blue dark:text-slate-100">
+                              {resolveLogTitle(log)}
+                            </p>
+                            <p className="text-xs text-brand-blue dark:text-slate-100/60 dark:text-slate-300 mt-0.5">{log.message}</p>
+                          </div>
+                        </div>
+                        <span className="text-xs text-brand-blue dark:text-slate-100/40 dark:text-slate-400 font-mono pl-2 whitespace-nowrap">
+                          {formatTimestamp(log.timestamp)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="p-8 text-center text-sm text-brand-blue dark:text-slate-100/40 dark:text-slate-400">No records found on recent communication logs.</p>
+                )}
+              </CardContent>
+            </Card>
           </div>
         </>
       )}
@@ -230,12 +326,15 @@ export function DashboardPage() {
   )
 }
 
-function MetricCard({ title, value, subtitle, isAlert }: { title: string, value: string | number, subtitle: string, isAlert?: boolean }) {
+function MetricCard({ title, value, subtitle, isAlert, icon }: { title: string, value: string | number, subtitle: string, isAlert?: boolean, icon?: string }) {
   return (
     <Card className="shadow-none">
-      <CardContent className="p-6">
-        <p className="text-xs font-medium text-brand-blue dark:text-slate-100/50 dark:text-slate-400 uppercase tracking-wider">{title}</p>
-        <p className={`text-3xl font-bold tracking-tight mt-1.5 ${isAlert ? 'text-brand-red' : 'text-brand-blue dark:text-slate-100'}`}>{value}</p>
+      <CardContent className="p-5">
+        <div className="flex items-start justify-between gap-2">
+          <p className="text-xs font-medium text-brand-blue dark:text-slate-100/50 dark:text-slate-400 uppercase tracking-wider">{title}</p>
+          {icon && <span className="text-base opacity-60">{icon}</span>}
+        </div>
+        <p className={`text-2xl font-bold tracking-tight mt-1 ${isAlert ? 'text-brand-red' : 'text-brand-blue dark:text-slate-100'}`}>{value}</p>
         <p className="text-xs text-brand-blue dark:text-slate-100/40 dark:text-slate-400 mt-1">{subtitle}</p>
       </CardContent>
     </Card>
