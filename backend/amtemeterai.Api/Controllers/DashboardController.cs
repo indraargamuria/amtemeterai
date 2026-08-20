@@ -196,17 +196,50 @@ public class DashboardController : ControllerBase
 
             if (!string.IsNullOrWhiteSpace(address))
             {
-                // Match "Kota X" / "Kabupaten X" (case-insensitive) anywhere in the address
-                var m = Regex.Match(address, @"(?i)\b(?:kota|kabupaten)\s+([a-z\s\-\.']+?)(?=,|\s+\d{4,5}|\s+rt|\s+indonesia|$)",
-                    RegexOptions.IgnoreCase);
+                // 1) "Kota X" / "Kabupaten X" / "Kab. X"
+                var m = Regex.Match(address, @"(?i)\b(?:kota|kabupaten|kab\.?)\s+([a-z\s\-\.']+?)(?=,|\s+\d{4,5}|\s+rt|\s+indonesia|$)", RegexOptions.IgnoreCase);
                 if (m.Success)
                 {
-                    var city = Regex.Replace(m.Groups[1].Value.Trim(), @"\s{2,}", " ");
+                    var city = CollapseDuplicates(Regex.Replace(m.Groups[1].Value.Trim(), @"\s{2,}", " "));
+                    return char.ToUpperInvariant(city[0]) + city[1..];
+                }
+
+                // 2) "Jakarta Barat/Utara/..." (no Kota/Kabupaten keyword)
+                m = Regex.Match(address, @"(?i)\b(jakarta\s+(?:barat|utara|selatan|timur|pusat))", RegexOptions.IgnoreCase);
+                if (m.Success)
+                    return "Jakarta " + m.Groups[1].Value.Split(' ')[1];
+
+                // 3) "Tangerang Selatan" / "Bandung Barat" style (word + Selatan/Barat/Utara/Timur)
+                m = Regex.Match(address, @"(?i)\b([a-z]{4,}\s+(?:selatan|barat|utara|timur))(?=,|\s+\d{4,5}|\s+rt|\s+indonesia|$)", RegexOptions.IgnoreCase);
+                if (m.Success)
+                {
+                    var city = CollapseDuplicates(Regex.Replace(m.Groups[1].Value.Trim(), @"\s{2,}", " "));
+                    return char.ToUpperInvariant(city[0]) + city[1..];
+                }
+
+                // 4) Foreign addresses: "<number> <Street> <City> <postcode> <Country>" — take token before postcode
+                m = Regex.Match(address, @"(?i)\b([a-z\s\-]+?)\s+\d{4,5}\s+[a-z]+$", RegexOptions.IgnoreCase);
+                if (m.Success)
+                {
+                    var parts = m.Groups[1].Value.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                    var city = CollapseDuplicates(parts.Length >= 1 ? parts[^1] : m.Groups[1].Value.Trim());
                     return char.ToUpperInvariant(city[0]) + city[1..];
                 }
             }
 
             return "Unknown";
+        }
+
+        static string CollapseDuplicates(string input)
+        {
+            var words = input.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            var kept = new List<string>();
+            foreach (var w in words)
+            {
+                if (kept.Count == 0 || !string.Equals(kept[^1], w, StringComparison.OrdinalIgnoreCase))
+                    kept.Add(w);
+            }
+            return string.Join(' ', kept);
         }
 
         foreach (var d in deliveries)
