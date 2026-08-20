@@ -29,6 +29,7 @@ public class InvoicesController : ControllerBase
     private readonly IPeriuriPdsService _periuriPdsService;
     private readonly IPeruriOnPremiseStampService? _peruriOnPremiseStampService;
     private readonly IPdfAnchorService _pdfAnchorService;
+    private readonly IPeruriSaldoService _peruriSaldoService;
 
     public InvoicesController(
         AppDbContext db,
@@ -37,6 +38,7 @@ public class InvoicesController : ControllerBase
         ILogger<InvoicesController> logger,
         IPeriuriPdsService periuriPdsService,
         IPdfAnchorService pdfAnchorService,
+        IPeruriSaldoService peruriSaldoService,
         IPeruriOnPremiseStampService? peruriOnPremiseStampService = null)
     {
         _db = db;
@@ -45,6 +47,7 @@ public class InvoicesController : ControllerBase
         _logger = logger;
         _periuriPdsService = periuriPdsService;
         _pdfAnchorService = pdfAnchorService;
+        _peruriSaldoService = peruriSaldoService;
         _peruriOnPremiseStampService = peruriOnPremiseStampService;
     }
 
@@ -458,6 +461,25 @@ public class InvoicesController : ControllerBase
         }).ToList();
 
         return Ok(invoices);
+    }
+
+    /// <summary>
+    /// Remaining e-Meterai stamp quota from Peruri (saldopos). Cached 30s in the service.
+    /// </summary>
+    [HttpGet("stamp-quota")]
+    [Authorize(Policy = PermissionKeys.InvoiceRead)]
+    public async Task<IActionResult> GetStampQuota()
+    {
+        try
+        {
+            var saldo = await _peruriSaldoService.GetSaldoAsync();
+            return Ok(new { saldo = saldo.saldo, notstamp = saldo.notstamp, status = saldo.status, message = saldo.message });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to fetch Peruri stamp quota");
+            return StatusCode(502, new { error = "Failed to fetch stamp quota from Peruri." });
+        }
     }
 
     [HttpGet("{id:int}")]

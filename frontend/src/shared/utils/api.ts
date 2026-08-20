@@ -161,6 +161,23 @@ export async function getInvoices(): Promise<Invoice[]> {
   return await response.json()
 }
 
+export interface StampQuota {
+  saldo: number
+  notstamp: number
+  status: string
+  message: string
+}
+
+/**
+ * GET /api/invoices/stamp-quota
+ * Returns remaining e-Meterai stamp quota from Peruri (backend-cached 30s)
+ */
+export async function getStampQuota(): Promise<StampQuota> {
+  const response = await authGet("/api/invoices/stamp-quota")
+  if (!response.ok) throw new Error("Failed to fetch stamp quota")
+  return await response.json()
+}
+
 /**
  * GET /api/invoices/{id}
  * Returns a specific invoice

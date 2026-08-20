@@ -222,3 +222,23 @@ public class KeyStampSigningResponseDto
     public string message { get; set; } = string.Empty;
     public string? signedFilePath { get; set; }
 }
+
+/// <summary>
+/// Response DTO for Peruri saldo POS API
+/// GET https://backendservicestg.e-meterai.co.id/function/saldopos
+/// </summary>
+public class PeruriSaldoPosResponseDto
+{
+    public PeruriSaldoPosResultDto? result { get; set; }
+}
+
+public class PeruriSaldoPosResultDto
+{
+    /// <summary>"00" = success</summary>
+    public string status { get; set; } = string.Empty;
+    public string message { get; set; } = string.Empty;
+    /// <summary>Remaining stamp quota</summary>
+    public int saldo { get; set; }
+    /// <summary>Stamps issued but not yet used</summary>
+    public int notstamp { get; set; }
+}

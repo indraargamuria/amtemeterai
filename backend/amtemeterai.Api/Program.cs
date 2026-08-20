@@ -105,6 +105,9 @@ builder.Services.AddScoped<IPeriuriPdsService, PeriuriPdsService>();
 builder.Services.AddSingleton<IPeruriSessionService, PeruriSessionService>();
 builder.Services.AddScoped<IPeruriOnPremiseStampService, PeruriOnPremiseStampService>();
 
+// Peruri stamp quota (saldo POS) service — singleton with short in-memory cache
+builder.Services.AddSingleton<IPeruriSaldoService, PeruriSaldoService>();
+
 // Register PDF Anchor Service for dynamic e-Meterai coordinate extraction
 builder.Services.AddScoped<IPdfAnchorService, PdfAnchorService>();
 

@@ -3,7 +3,7 @@ import { Card, CardContent } from "../../shared/components/ui/Card"
 import { Button } from "../../shared/components/ui/Button"
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "../../shared/components/ui/Table"
 import { Badge } from "../../shared/components/ui/Badge"
-import { getInvoices, type Invoice } from "../../shared/utils/api"
+import { getInvoices, getStampQuota, type Invoice, type StampQuota } from "../../shared/utils/api"
 import { cn } from "../../shared/utils/cn"
 import { FileText, Download, Stamp, AlertCircle, Filter, X, File, ChevronDown, FileText as FileTextIcon } from "lucide-react"
 import { utils as xlsxUtils, writeFile } from "xlsx"
@@ -20,6 +20,29 @@ export function InvoicesPage() {
   const [statusFilter, setStatusFilter] = useState<"all" | "draft" | "syncedtosap" | "stamped" | "voided">("all")
 
   const ITEMS_PER_PAGE = 25
+
+  const [stampQuota, setStampQuota] = useState<StampQuota | null>(null)
+
+  const fetchStampQuota = async () => {
+    try {
+      setStampQuota(await getStampQuota())
+    } catch (err) {
+      console.error("Failed to fetch stamp quota:", err)
+    }
+  }
+
+  // Poll stamp quota every 60s (backend caches Peruri call 30s)
+  useEffect(() => {
+    fetchStampQuota()
+    const id = setInterval(fetchStampQuota, 60_000)
+    return () => clearInterval(id)
+  }, [])
+
+  // Refetch quota whenever a stamping state transition completes (stamped count changes)
+  const stampedCount = invoices.filter(i => i.stampingStatusText === "Stamped").length
+  useEffect(() => {
+    if (invoices.length > 0) fetchStampQuota()
+  }, [stampedCount])
 
   useEffect(() => {
     fetchInvoices()
@@ -286,7 +309,7 @@ export function InvoicesPage() {
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
         <SummaryCard
           title="Total Invoices"
           value={invoices.length}
@@ -304,6 +327,13 @@ export function InvoicesPage() {
           title="Stamped"
           value={invoices.filter(i => i.stampingStatusText === "Stamped").length}
           subtitle="Completed"
+          icon={<Stamp className="w-5 h-5" />}
+        />
+        <SummaryCard
+          title="Stamp Quota"
+          value={stampQuota ? stampQuota.saldo : "…"}
+          subtitle={stampQuota ? "Peruri e-Meterai balance" : "Loading..."}
+          isAlert={stampQuota !== null && stampQuota.saldo <= 10}
           icon={<Stamp className="w-5 h-5" />}
         />
       </div>
@@ -731,7 +761,7 @@ function SummaryCard({
   icon
 }: {
   title: string
-  value: number
+  value: number | string
   subtitle: string
   isAlert?: boolean
   icon?: React.ReactNode
