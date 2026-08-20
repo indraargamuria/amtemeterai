@@ -5,7 +5,7 @@ import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from ".
 import { Badge } from "../../shared/components/ui/Badge"
 import { getDocumentsHub, type DocumentHubGroup, type DocumentHubItem } from "../../shared/utils/api"
 import { cn } from "../../shared/utils/cn"
-import { FileText, Truck, Package, AlertCircle, ChevronRight, ChevronDown, X, Loader2, Mail, CheckSquare, CheckCircle2, Clock } from "lucide-react"
+import { FileText, Truck, Package, AlertCircle, ChevronRight, ChevronDown, X, Loader2, Mail, CheckSquare, CheckCircle2, Clock, Search } from "lucide-react"
 import { DocumentsHubEmailModal, type HubEmailItem } from "../../shared/components/EmailComposer/DocumentsHubEmailModal"
 
 type FilterType = "all" | "delivery-with-invoice" | "delivery-only" | "standalone-invoice"
@@ -35,6 +35,7 @@ export function DocumentsPage() {
   const [filter, setFilter] = useState<FilterType>("all")
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set())
+  const [search, setSearch] = useState("")
   const [sheetOpen, setSheetOpen] = useState(false)
   const [selectedDoc, setSelectedDoc] = useState<DocumentHubItem | null>(null)
   const [emailOpen, setEmailOpen] = useState(false)
@@ -50,8 +51,8 @@ export function DocumentsPage() {
       setError("")
       const data = await getDocumentsHub()
       setGroups(data)
-      // Expand first customer by default
-      if (data.length > 0) setExpanded(new Set([`${data[0].customerCode}`]))
+      // All customers start collapsed
+      setExpanded(new Set())
     } catch (err) {
       console.error("Failed to fetch document hub:", err)
       setError("Failed to load document hub. Please try again.")
@@ -60,15 +61,31 @@ export function DocumentsPage() {
     }
   }
 
-  // Filter items by type
+  // Filter items by type + search (customer code/name, delivery#, invoice#)
   const filteredGroups = useMemo(() => {
-    if (filter === "all") return groups
-    return groups
-      .map((g) => ({ ...g, items: g.items.filter((i) => i.type === filter) }))
+    const q = search.trim().toLowerCase()
+    let groupsToUse = groups
+    if (filter !== "all") {
+      groupsToUse = groups
+        .map((g) => ({ ...g, items: g.items.filter((i) => i.type === filter) }))
+        .filter((g) => g.items.length > 0)
+    }
+    if (!q) return groupsToUse
+    return groupsToUse
+      .map((g) => ({
+        ...g,
+        items: g.items.filter((i) =>
+          i.customerCode.toLowerCase().includes(q) ||
+          i.customerName.toLowerCase().includes(q) ||
+          i.deliveryNumber?.toLowerCase().includes(q) ||
+          i.invoiceNumber?.toLowerCase().includes(q) ||
+          i.keyNumber.toLowerCase().includes(q)
+        )
+      }))
       .filter((g) => g.items.length > 0)
-  }, [groups, filter])
+  }, [groups, filter, search])
 
-  const allItems = useMemo(() => filteredGroups.flatMap((g) => g.items), [filteredGroups])
+  // (allItems removed — selection uses all groups, not filtered)
 
   // Stats
   const stats = useMemo(() => {
@@ -112,7 +129,9 @@ export function DocumentsPage() {
     })
   }
 
-  const selectedItems = allItems.filter((i) => selectedKeys.has(i.keyNumber))
+  // Selection is global — persists across search/filter; email acts on ALL selected, not just visible
+  const selectedItems = groups.flatMap((g) => g.items).filter((i) => selectedKeys.has(i.keyNumber))
+  const selectedCustomerCount = new Set(selectedItems.map((i) => i.customerCode)).size
 
   const openEmail = () => {
     if (selectedItems.length === 0) return
@@ -168,31 +187,49 @@ export function DocumentsPage() {
         <StatCard label="Emailed" value={stats.sent} color="brand-blue" />
       </div>
 
-      {/* Filter Toggles */}
-      <div className="flex items-center gap-2 bg-brand-blue/[0.02] p-1.5 rounded-lg border border-brand-blue/5 w-fit">
-        <FilterButton active={filter === "all"} onClick={() => setFilter("all")} label={`All (${groups.flatMap((g) => g.items).length})`} />
-        <FilterButton active={filter === "delivery-with-invoice"} onClick={() => setFilter("delivery-with-invoice")} label="Delivery + Invoice" />
-        <FilterButton active={filter === "delivery-only"} onClick={() => setFilter("delivery-only")} label="Delivery Only" />
-        <FilterButton active={filter === "standalone-invoice"} onClick={() => setFilter("standalone-invoice")} label="Misc. Invoice" />
+      {/* Search + Filter Toggles */}
+      <div className="flex flex-col sm:flex-row gap-3">
+        <div className="relative flex-1 max-w-md">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-brand-blue/40 dark:text-slate-400" />
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search customer ID, name, delivery #, invoice #..."
+            className="w-full pl-9 pr-9 py-2 rounded-lg border border-brand-blue/10 bg-white dark:bg-slate-900 dark:border-slate-700 text-sm text-brand-blue dark:text-slate-100 placeholder:text-brand-blue/40 dark:placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-brand-blue/20 focus:border-brand-blue/30 transition-shadow"
+          />
+          {search && (
+            <button
+              onClick={() => setSearch("")}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 rounded-md text-brand-blue/40 hover:text-brand-blue/80 dark:text-slate-400 dark:hover:text-slate-200"
+              title="Clear search"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          )}
+        </div>
+        <div className="flex items-center gap-2 bg-brand-blue/[0.02] p-1.5 rounded-lg border border-brand-blue/5 w-fit">
+          <FilterButton active={filter === "all"} onClick={() => setFilter("all")} label={`All (${groups.flatMap((g) => g.items).length})`} />
+          <FilterButton active={filter === "delivery-with-invoice"} onClick={() => setFilter("delivery-with-invoice")} label="Delivery + Invoice" />
+          <FilterButton active={filter === "delivery-only"} onClick={() => setFilter("delivery-only")} label="Delivery Only" />
+          <FilterButton active={filter === "standalone-invoice"} onClick={() => setFilter("standalone-invoice")} label="Misc. Invoice" />
+        </div>
       </div>
 
-      {/* Bulk selection bar */}
+      {/* Floating email button + selection info (fixed bottom-right) */}
       {selectedKeys.size > 0 && (
-        <div className="flex flex-wrap items-center gap-3 p-3 rounded-lg bg-brand-blue/[0.03] border border-brand-blue/10 dark:bg-slate-800/50 dark:border-slate-700">
-          <CheckSquare className="w-4 h-4 text-brand-blue dark:text-slate-300" />
-          <span className="text-sm font-medium text-brand-blue dark:text-slate-200">
-            {selectedKeys.size} selected
-          </span>
-          <Button variant="default" size="sm" onClick={openEmail} className="min-w-[160px]">
-            <Mail className="w-3.5 h-3.5" />
+        <div className="fixed bottom-6 right-6 z-40 flex flex-col items-end gap-2">
+          <div className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-white dark:bg-slate-900 shadow-lg border border-brand-blue/10 dark:border-slate-700 text-sm text-brand-blue dark:text-slate-200">
+            <CheckSquare className="w-4 h-4 text-emerald-600" />
+            <span>
+              {selectedCustomerCount} customer{selectedCustomerCount !== 1 ? "s" : ""} selected
+              <span className="mx-1.5 text-brand-blue/30 dark:text-slate-600">·</span>
+              {selectedKeys.size} data selected
+            </span>
+          </div>
+          <Button variant="default" size="lg" onClick={openEmail} className="shadow-xl gap-2 h-12 px-6 rounded-full">
+            <Mail className="w-5 h-5" />
             Email {selectedKeys.size} Document{selectedKeys.size > 1 ? "s" : ""}
           </Button>
-          <Button variant="outline" size="sm" onClick={() => setSelectedKeys(new Set())}>
-            Clear
-          </Button>
-          <span className="text-xs text-brand-blue/50 dark:text-slate-400 ml-auto">
-            Each document sends a separate email with its own subject
-          </span>
         </div>
       )}
 
@@ -527,16 +564,24 @@ function StatCard({ label, value, color, alert }: {
   color: "brand-blue" | "emerald" | "slate" | "amber"
   alert?: boolean
 }) {
-  const colorMap = {
-    "brand-blue": "text-brand-blue dark:text-slate-100 bg-brand-blue/10",
-    "emerald": "text-emerald-700 bg-emerald-50",
-    "slate": "text-slate-600 bg-slate-100",
-    "amber": "text-amber-700 bg-amber-50",
+  const accentMap = {
+    "brand-blue": "bg-brand-blue/60",
+    "emerald": "bg-emerald-500/60",
+    "slate": "bg-slate-400/60",
+    "amber": "bg-amber-500/60",
+  }
+  const textMap = {
+    "brand-blue": "text-brand-blue dark:text-slate-100",
+    "emerald": "text-emerald-600 dark:text-emerald-400",
+    "slate": "text-slate-700 dark:text-slate-200",
+    "amber": "text-amber-600 dark:text-amber-400",
   }
   return (
-    <div className={cn("p-4 rounded-lg border", alert ? "border-amber/30 bg-amber-[0.02]" : "border-brand-blue/5")}>
+    <div className={cn("relative p-4 pl-5 rounded-lg border overflow-hidden", alert ? "border-amber-300/60 dark:border-amber-500/40" : "border-brand-blue/10 dark:border-slate-700/60")}>
+      {/* thin left accent — no middle color block */}
+      <div className={cn("absolute left-0 top-0 bottom-0 w-1", alert ? "bg-amber-400" : accentMap[color])} />
       <p className="text-xs font-medium text-brand-blue dark:text-slate-100/50 dark:text-slate-400 uppercase tracking-wider">{label}</p>
-      <p className={cn("text-2xl font-bold tracking-tight mt-1.5", colorMap[color])}>{value}</p>
+      <p className={cn("text-2xl font-bold tracking-tight mt-1.5", textMap[color])}>{value}</p>
     </div>
   )
 }
