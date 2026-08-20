@@ -53,13 +53,19 @@ public static class DbInitializer
             new() { Id = 9, PermissionKey = "uam:sync", Description = "Modify and write role permissions to database", Category = "Access Control", DisplayOrder = 9 },
 
             // Background Jobs (2026-08-20)
-            new() { Id = 10, PermissionKey = "job:read", Description = "View background jobs and execution history", Category = "Background Jobs", DisplayOrder = 10 },
-            new() { Id = 11, PermissionKey = "job:manage", Description = "Enable/disable background jobs, change intervals, trigger runs", Category = "Background Jobs", DisplayOrder = 11 }
+            // No explicit Id: let the DB assign one, so these never collide with
+            // pre-existing rows on a production database (e.g. finance_menu_access
+            // already occupies Id 10). Lookups use PermissionKey, not Id.
+            new() { PermissionKey = "job:read", Description = "View background jobs and execution history", Category = "Background Jobs", DisplayOrder = 10 },
+            new() { PermissionKey = "job:manage", Description = "Enable/disable background jobs, change intervals, trigger runs", Category = "Background Jobs", DisplayOrder = 11 }
         };
 
         foreach (var perm in defaultPermissions)
         {
-            if (!await context.Permissions.AnyAsync(p => p.PermissionKey == perm.PermissionKey))
+            // Insert only if neither the key nor the explicit Id already exists,
+            // so explicit-Id seeds never clash with pre-existing rows on an
+            // already-populated production database.
+            if (!await context.Permissions.AnyAsync(p => p.PermissionKey == perm.PermissionKey || p.Id == perm.Id))
             {
                 await context.Permissions.AddAsync(perm);
             }
