@@ -119,6 +119,12 @@ export interface StampBreakdown {
   value: number
 }
 
+export interface DeliveryMapBucket {
+  city: string
+  total: number
+  received: number
+}
+
 /**
  * GET /api/dashboard/stats
  * Returns aggregated KPI data for dashboard
@@ -156,6 +162,16 @@ export async function getStampBreakdown(): Promise<StampBreakdown[]> {
 export async function getDashboardLogs(count: number = 20) {
   const response = await authGet(`/api/dashboard/logs?count=${count}`)
   if (!response.ok) throw new Error("Failed to fetch dashboard logs")
+  return await response.json()
+}
+
+/**
+ * GET /api/dashboard/delivery-map
+ * Returns delivery volume grouped by destination city/regency for the heatmap
+ */
+export async function getDeliveryMap(): Promise<DeliveryMapBucket[]> {
+  const response = await authGet("/api/dashboard/delivery-map")
+  if (!response.ok) throw new Error("Failed to fetch delivery map")
   return await response.json()
 }
 

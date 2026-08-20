@@ -6,10 +6,12 @@ import {
   getStampBreakdown,
   getDashboardLogs,
   getStampQuota,
+  getDeliveryMap,
   type DashboardStats,
   type DashboardCharts,
   type StampBreakdown,
-  type StampQuota
+  type StampQuota,
+  type DeliveryMapBucket
 } from "../../shared/utils/api"
 import {
   AreaChart,
@@ -61,6 +63,7 @@ export function DashboardPage() {
   const [stampBreakdown, setStampBreakdown] = useState<StampBreakdown[]>([])
   const [stampQuota, setStampQuota] = useState<StampQuota | null>(null)
   const [stampQuotaError, setStampQuotaError] = useState(false)
+  const [deliveryMap, setDeliveryMap] = useState<DeliveryMapBucket[]>([])
   const [logs, setLogs] = useState<ActivityLog[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -71,15 +74,17 @@ export function DashboardPage() {
         setLoading(true)
         setError(null)
 
-        const [statsRes, chartsRes, stampRes] = await Promise.all([
+        const [statsRes, chartsRes, stampRes, mapRes] = await Promise.all([
           getDashboardStats(),
           getDashboardCharts(),
-          getStampBreakdown()
+          getStampBreakdown(),
+          getDeliveryMap()
         ])
 
         setStats(statsRes)
         setChartsData(chartsRes)
         setStampBreakdown(stampRes)
+        setDeliveryMap(mapRes)
       } catch (err) {
         console.error("Failed to fetch dashboard data:", err)
         setError("Failed to load dashboard data. Please try again.")
@@ -188,6 +193,8 @@ export function DashboardPage() {
   }))
 
   const totalStampValue = stampBreakdown.reduce((acc, s) => acc + s.value, 0)
+
+  const heatmapMax = Math.max(1, ...deliveryMap.map((b) => b.total))
 
   return (
     <div className="space-y-6">
@@ -310,6 +317,66 @@ export function DashboardPage() {
                 </CardContent>
               </Card>
             </div>
+          </div>
+
+          {/* Delivery heatmap by destination */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <h2 className="text-sm font-semibold text-brand-blue dark:text-slate-100/70 dark:text-slate-400 uppercase tracking-wider">
+                Delivery Heatmap by Destination
+              </h2>
+              <span className="text-[11px] text-brand-blue dark:text-slate-100/40 dark:text-slate-400">
+                volume · received vs pending
+              </span>
+            </div>
+            <Card className="shadow-none">
+              <CardContent className="p-6">
+                {deliveryMap.length === 0 ? (
+                  <p className="text-sm text-brand-blue dark:text-slate-100/40 dark:text-slate-400 text-center py-6">
+                    No delivery location data yet.
+                  </p>
+                ) : (
+                  <>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-6 gap-3">
+                      {deliveryMap.slice(0, 12).map((bucket) => {
+                        const intensity = heatmapMax > 0 ? bucket.total / heatmapMax : 0
+                        const bg = bucket.city === "Unknown"
+                          ? "bg-slate-100 dark:bg-slate-800/60"
+                          : `rgba(37, 99, 235, ${0.06 + intensity * 0.85})`
+                        return (
+                          <div
+                            key={bucket.city}
+                            className="rounded-lg border border-brand-blue/10 dark:border-slate-700 p-3 transition-transform hover:-translate-y-0.5"
+                            style={{ background: bg }}
+                            title={`${bucket.city}: ${bucket.total} deliveries (${bucket.received} received)`}
+                          >
+                            <p className="text-xs font-semibold text-brand-blue dark:text-slate-200 truncate">
+                              {bucket.city}
+                            </p>
+                            <p className="text-2xl font-bold text-brand-blue dark:text-slate-100 mt-1">
+                              {bucket.total}
+                            </p>
+                            <div className="flex items-center gap-2 mt-1 text-[11px]">
+                              <span className="text-emerald-700 dark:text-emerald-400">✓ {bucket.received}</span>
+                              <span className="text-slate-500 dark:text-slate-400">· {bucket.total - bucket.received} pending</span>
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                    {/* Legend */}
+                    <div className="flex items-center gap-2 mt-4 text-[11px] text-brand-blue dark:text-slate-100/50 dark:text-slate-400">
+                      <span>Low</span>
+                      <div className="flex-1 max-w-[200px] h-2 rounded-full" style={{ background: "linear-gradient(to right, rgba(37,99,235,0.08), rgba(37,99,235,0.9))" }} />
+                      <span>High</span>
+                      <span className="ml-auto flex items-center gap-1.5">
+                        <span className="w-2.5 h-2.5 rounded bg-slate-200 dark:bg-slate-700 inline-block" /> Unknown location
+                      </span>
+                    </div>
+                  </>
+                )}
+              </CardContent>
+            </Card>
           </div>
 
           {/* Recent activity */}

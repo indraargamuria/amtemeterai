@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using System.Text.RegularExpressions;
 using amtemeterai.Api.Data;
 using amtemeterai.Api.Models;
 
@@ -168,6 +169,65 @@ public class DashboardController : ControllerBase
 
         return Ok(logs);
     }
+
+    /// <summary>
+    /// Delivery heatmap data grouped by destination city/regency.
+    /// Uses structured CityRegency where available, else falls back to parsing
+    /// the free-text ShipToAddress for "Kota/Kabupaten &lt;name&gt;" patterns.
+    /// </summary>
+    [HttpGet("delivery-map")]
+    public async Task<IActionResult> GetDeliveryMap()
+    {
+        var deliveries = await _db.DeliveryHeaders
+            .Select(d => new
+            {
+                d.CityRegency,
+                d.ShipToAddress,
+                d.Received
+            })
+            .ToListAsync();
+
+        var buckets = new Dictionary<string, DeliveryMapBucket>();
+
+        static string ExtractCity(string? cityRegency, string? address)
+        {
+            if (!string.IsNullOrWhiteSpace(cityRegency))
+                return cityRegency.Trim();
+
+            if (!string.IsNullOrWhiteSpace(address))
+            {
+                // Match "Kota X" / "Kabupaten X" (case-insensitive) anywhere in the address
+                var m = Regex.Match(address, @"(?i)\b(?:kota|kabupaten)\s+([a-z\s\-\.']+?)(?=,|\s+\d{4,5}|\s+rt|\s+indonesia|$)",
+                    RegexOptions.IgnoreCase);
+                if (m.Success)
+                {
+                    var city = Regex.Replace(m.Groups[1].Value.Trim(), @"\s{2,}", " ");
+                    return char.ToUpperInvariant(city[0]) + city[1..];
+                }
+            }
+
+            return "Unknown";
+        }
+
+        foreach (var d in deliveries)
+        {
+            var city = ExtractCity(d.CityRegency, d.ShipToAddress);
+            if (!buckets.TryGetValue(city, out var bucket))
+            {
+                bucket = new DeliveryMapBucket { City = city };
+                buckets[city] = bucket;
+            }
+
+            bucket.Total++;
+            if (d.Received) bucket.Received++;
+        }
+
+        var result = buckets.Values
+            .OrderByDescending(b => b.Total)
+            .ToList();
+
+        return Ok(result);
+    }
 }
 
 // =========================
@@ -208,6 +268,13 @@ public record StampBreakdownDto
     public Invoice.InvoiceStampingStatus Status { get; init; }
     public int Count { get; init; }
     public decimal Value { get; init; }
+}
+
+public record DeliveryMapBucket
+{
+    public required string City { get; init; }
+    public int Total { get; set; }
+    public int Received { get; set; }
 }
 
 public record ActivityLogDto
