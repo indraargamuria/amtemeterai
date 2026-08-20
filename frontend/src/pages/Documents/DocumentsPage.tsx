@@ -5,8 +5,8 @@ import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from ".
 import { Badge } from "../../shared/components/ui/Badge"
 import { getInvoices } from "../../shared/utils/api"
 import { cn } from "../../shared/utils/cn"
-import { FileText, Truck, Package, AlertCircle, ChevronRight, X, Loader2, Mail } from "lucide-react"
-import { EmailComposerModal } from "../../shared/components/EmailComposer"
+import { FileText, Truck, Package, AlertCircle, ChevronRight, X, Loader2, Mail, CheckSquare } from "lucide-react"
+import { EmailComposerModal, type EmailAttachmentRef } from "../../shared/components/EmailComposer"
 
 type FilterType = "all" | "delivery-centric" | "invoice-centric"
 
@@ -23,6 +23,7 @@ interface DocumentRow {
   stampingStatusText: string
   serialNumber?: string
   stampedDocumentUrl?: string
+  deliveryPrintoutUrl?: string
   hasPrintoutDocument: boolean
   isStandalone: boolean
 }
@@ -38,6 +39,8 @@ export function DocumentsPage() {
   const [sheetOpen, setSheetOpen] = useState(false)
   const [emailComposerOpen, setEmailComposerOpen] = useState(false)
   const [emailDoc, setEmailDoc] = useState<DocumentRow | null>(null)
+  const [emailAttachments, setEmailAttachments] = useState<EmailAttachmentRef[]>([])
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
 
   useEffect(() => {
     fetchDocuments()
@@ -62,6 +65,7 @@ export function DocumentsPage() {
         stampingStatusText: inv.stampingStatusText,
         serialNumber: inv.serialNumber,
         stampedDocumentUrl: inv.stampedDocumentUrl,
+        deliveryPrintoutUrl: inv.deliveryPrintoutUrl,
         hasPrintoutDocument: inv.hasPrintoutDocument,
         isStandalone: !inv.deliveryNumber,
       }))
@@ -137,10 +141,42 @@ export function DocumentsPage() {
     setTimeout(() => setSelectedDoc(null), 300)
   }
 
-  // Open email composer
+  // Build attachment references for a document (DO printout + stamped invoice PDF)
+  const buildAttachments = (doc: DocumentRow): EmailAttachmentRef[] => {
+    const refs: EmailAttachmentRef[] = []
+    if (!doc.isStandalone && doc.deliveryNumber) {
+      refs.push({
+        referenceType: "delivery",
+        referenceNumber: doc.deliveryNumber,
+        label: `DO ${doc.deliveryNumber}`,
+        previewUrl: doc.deliveryPrintoutUrl,
+        hasPreview: !!doc.deliveryPrintoutUrl
+      })
+    }
+    refs.push({
+      referenceType: "invoice",
+      referenceNumber: doc.invoiceNumber,
+      label: `Invoice ${doc.invoiceNumber}`,
+      previewUrl: doc.stampedDocumentUrl,
+      hasPreview: !!doc.stampedDocumentUrl
+    })
+    return refs
+  }
+
+  // Open email composer for a single document
   const openEmailComposer = (doc: DocumentRow, e: React.MouseEvent) => {
     e.stopPropagation()
     setEmailDoc(doc)
+    setEmailAttachments(buildAttachments(doc))
+    setEmailComposerOpen(true)
+  }
+
+  // Open email composer for multiple selected documents
+  const openBulkEmailComposer = () => {
+    const selected = documents.filter((d) => selectedIds.has(d.id))
+    if (selected.length === 0) return
+    setEmailDoc(null)
+    setEmailAttachments(selected.flatMap(buildAttachments))
     setEmailComposerOpen(true)
   }
 
@@ -148,7 +184,31 @@ export function DocumentsPage() {
   const closeEmailComposer = () => {
     setEmailComposerOpen(false)
     setEmailDoc(null)
+    setEmailAttachments([])
   }
+
+  // Selection helpers
+  const toggleSelect = (id: number) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  const toggleSelectAll = () => {
+    const visibleIds = filteredDocuments.map((d) => d.id)
+    setSelectedIds((prev) => {
+      const allVisibleSelected = visibleIds.every((id) => prev.has(id))
+      const next = new Set(prev)
+      if (allVisibleSelected) visibleIds.forEach((id) => next.delete(id))
+      else visibleIds.forEach((id) => next.add(id))
+      return next
+    })
+  }
+
+  const selectedCount = selectedIds.size
 
   return (
     <div className="space-y-6">
@@ -195,12 +255,50 @@ export function DocumentsPage() {
         />
       </div>
 
+      {/* Bulk selection bar */}
+      {selectedCount > 0 && (
+        <div className="flex flex-wrap items-center gap-3 p-3 rounded-lg bg-brand-blue/[0.03] border border-brand-blue/10 dark:bg-slate-800/50 dark:border-slate-700">
+          <CheckSquare className="w-4 h-4 text-brand-blue dark:text-slate-300" />
+          <span className="text-sm font-medium text-brand-blue dark:text-slate-200">
+            {selectedCount} selected
+          </span>
+          <Button
+            variant="default"
+            size="sm"
+            onClick={openBulkEmailComposer}
+            className="min-w-[140px]"
+          >
+            <Mail className="w-3.5 h-3.5" />
+            Email {selectedCount} Document{selectedCount > 1 ? "s" : ""}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setSelectedIds(new Set())}
+          >
+            Clear
+          </Button>
+          <span className="text-xs text-brand-blue/50 dark:text-slate-400 ml-auto">
+            Each document sends a separate email with its own DO + invoice attachments
+          </span>
+        </div>
+      )}
+
       {/* Documents Table */}
       <Card className="overflow-hidden">
         <CardContent className="p-0">
           <Table>
             <TableHeader>
               <TableRow className="bg-brand-blue/[0.02]">
+                <TableHead className="w-10 py-3 px-4">
+                  <input
+                    type="checkbox"
+                    checked={filteredDocuments.length > 0 && filteredDocuments.every((d) => selectedIds.has(d.id))}
+                    onChange={toggleSelectAll}
+                    className="w-4 h-4 rounded border-brand-blue/20 accent-brand-blue cursor-pointer"
+                    title="Select all filtered"
+                  />
+                </TableHead>
                 <TableHead className="py-3 px-4 text-xs font-semibold text-brand-blue dark:text-slate-100/60 dark:text-slate-300 uppercase tracking-wider">
                   Invoice Ref
                 </TableHead>
@@ -221,7 +319,7 @@ export function DocumentsPage() {
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center py-12">
+                  <TableCell colSpan={6} className="text-center py-12">
                     <div className="flex flex-col items-center gap-3">
                       <Loader2 className="w-6 h-6 text-brand-blue dark:text-slate-100/40 dark:text-slate-400 animate-spin" />
                       <p className="text-sm text-brand-blue dark:text-slate-100/40 dark:text-slate-400">Loading documents...</p>
@@ -230,7 +328,7 @@ export function DocumentsPage() {
                 </TableRow>
               ) : filteredDocuments.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center py-12">
+                  <TableCell colSpan={6} className="text-center py-12">
                     <div className="flex flex-col items-center gap-3">
                       <div className="w-12 h-12 rounded-full bg-brand-blue/5 flex items-center justify-center">
                     <AlertCircle className="w-6 h-6 text-brand-blue dark:text-slate-100/30 dark:text-slate-500" />
@@ -246,6 +344,17 @@ export function DocumentsPage() {
                     className="hover:bg-brand-blue/[0.02] transition-colors cursor-pointer group"
                     onClick={() => openSheet(doc)}
                   >
+                    {/* Select */}
+                    <TableCell className="py-2.5 px-4" onClick={(e) => e.stopPropagation()}>
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.has(doc.id)}
+                        onChange={() => toggleSelect(doc.id)}
+                        className="w-4 h-4 rounded border-brand-blue/20 accent-brand-blue cursor-pointer"
+                        title={`Select ${doc.invoiceNumber}`}
+                      />
+                    </TableCell>
+
                     {/* Invoice Ref - Monospace */}
                     <TableCell className="py-2.5 px-4">
                       <div className="flex items-center gap-2">
@@ -413,14 +522,13 @@ export function DocumentsPage() {
       )}
 
       {/* Email Composer Modal */}
-      {emailComposerOpen && emailDoc && (
+      {emailComposerOpen && (
         <EmailComposerModal
           isOpen={emailComposerOpen}
           onClose={closeEmailComposer}
-          referenceType={emailDoc.deliveryNumber ? "delivery" : "invoice"}
-          referenceNumber={emailDoc.deliveryNumber || emailDoc.invoiceNumber}
-          customerName={emailDoc.customerName || ""}
-          customerEmail={emailDoc.customerEmail}
+          attachments={emailAttachments}
+          customerName={emailDoc?.customerName || (emailAttachments[0] ? documents.find((d) => d.invoiceNumber === emailAttachments[0].referenceNumber)?.customerName || "" : "")}
+          customerEmail={emailDoc?.customerEmail || (emailAttachments[0] ? documents.find((d) => d.invoiceNumber === emailAttachments[0].referenceNumber)?.customerEmail || "" : "")}
         />
       )}
     </div>
