@@ -1,5 +1,15 @@
 import * as React from "react"
 import { Link, useLocation, useNavigate } from "react-router-dom"
+import {
+  LayoutDashboard,
+  Users,
+  Package,
+  FileText,
+  FolderOpen,
+  ShieldAlert,
+  Settings,
+  type LucideIcon,
+} from "lucide-react"
 import { cn } from "../utils/cn"
 import Logo from '../../assets/amtlogo.png';
 import { useAuth } from "../contexts/AuthContext"
@@ -13,16 +23,17 @@ interface MenuItem {
   label: string
   requiredPermission: string
   sysAdminOnly?: boolean
+  icon: LucideIcon
 }
 
 const menuItems: MenuItem[] = [
-  { path: "/", label: "Dashboard", requiredPermission: "dashboard:read" },
-  { path: "/customers", label: "Customers", requiredPermission: "customer:read" },
-  { path: "/deliveries", label: "Deliveries", requiredPermission: "delivery:read" },
-  { path: "/invoices", label: "Invoices", requiredPermission: "invoice:read" },
-  { path: "/documents", label: "Document Hub", requiredPermission: "invoice:read" },
-  { path: "/admin/uam", label: "User Management", requiredPermission: "uam:read", sysAdminOnly: true },
-  { path: "/background-jobs", label: "Background Jobs", requiredPermission: "job:read" },
+  { path: "/", label: "Dashboard", requiredPermission: "dashboard:read", icon: LayoutDashboard },
+  { path: "/customers", label: "Customers", requiredPermission: "customer:read", icon: Users },
+  { path: "/deliveries", label: "Deliveries", requiredPermission: "delivery:read", icon: Package },
+  { path: "/invoices", label: "Invoices", requiredPermission: "invoice:read", icon: FileText },
+  { path: "/documents", label: "Document Hub", requiredPermission: "invoice:read", icon: FolderOpen },
+  { path: "/admin/uam", label: "User Management", requiredPermission: "uam:read", sysAdminOnly: true, icon: ShieldAlert },
+  { path: "/background-jobs", label: "Background Jobs", requiredPermission: "job:read", icon: Settings },
 ]
 
 // Helper to decode JWT payload
@@ -145,6 +156,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                         : "text-brand-blue/70 hover:bg-brand-blue/5 hover:text-brand-blue border-l-2 border-transparent"
                     )}
                   >
+                    <item.icon className="w-4 h-4 mr-3 shrink-0" />
                     {item.label}
                   </Link>
                 </li>
