@@ -22,12 +22,15 @@ export function InvoicesPage() {
   const ITEMS_PER_PAGE = 25
 
   const [stampQuota, setStampQuota] = useState<StampQuota | null>(null)
+  const [stampQuotaError, setStampQuotaError] = useState(false)
 
   const fetchStampQuota = async () => {
     try {
       setStampQuota(await getStampQuota())
+      setStampQuotaError(false)
     } catch (err) {
       console.error("Failed to fetch stamp quota:", err)
+      setStampQuotaError(true)
     }
   }
 
@@ -331,8 +334,8 @@ export function InvoicesPage() {
         />
         <SummaryCard
           title="Stamp Quota"
-          value={stampQuota ? stampQuota.saldo : "…"}
-          subtitle={stampQuota ? "Peruri e-Meterai balance" : "Loading..."}
+          value={stampQuotaError ? "—" : stampQuota ? stampQuota.saldo : "…"}
+          subtitle={stampQuotaError ? "Unavailable — retrying" : stampQuota ? "Peruri e-Meterai balance" : "Loading..."}
           isAlert={stampQuota !== null && stampQuota.saldo <= 10}
           icon={<Stamp className="w-5 h-5" />}
         />

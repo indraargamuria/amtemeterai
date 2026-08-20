@@ -5,9 +5,11 @@ import {
   getDashboardCharts,
   getStampBreakdown,
   getDashboardLogs,
+  getStampQuota,
   type DashboardStats,
   type DashboardCharts,
-  type StampBreakdown
+  type StampBreakdown,
+  type StampQuota
 } from "../../shared/utils/api"
 import {
   AreaChart,
@@ -57,6 +59,8 @@ export function DashboardPage() {
   const [stats, setStats] = useState<DashboardStats | null>(null)
   const [chartsData, setChartsData] = useState<DashboardCharts | null>(null)
   const [stampBreakdown, setStampBreakdown] = useState<StampBreakdown[]>([])
+  const [stampQuota, setStampQuota] = useState<StampQuota | null>(null)
+  const [stampQuotaError, setStampQuotaError] = useState(false)
   const [logs, setLogs] = useState<ActivityLog[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -98,6 +102,22 @@ export function DashboardPage() {
     }
 
     fetchLogs()
+  }, [])
+
+  // Stamp quota: fetch on load + poll every 60s (backend caches Peruri call 30s)
+  useEffect(() => {
+    const fetchStampQuota = async () => {
+      try {
+        setStampQuota(await getStampQuota())
+        setStampQuotaError(false)
+      } catch (err) {
+        console.error("Failed to fetch stamp quota:", err)
+        setStampQuotaError(true)
+      }
+    }
+    fetchStampQuota()
+    const id = setInterval(fetchStampQuota, 60_000)
+    return () => clearInterval(id)
   }, [])
 
   const formatTimestamp = (timestamp: string) => {
@@ -189,14 +209,16 @@ export function DashboardPage() {
         <Card><CardContent className="p-12 text-center text-brand-red/60">{error}</CardContent></Card>
       ) : (
         <>
-          {/* KPI grid — 6 cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+          {/* KPI grid — 8 cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
             <MetricCard title="Total Deliveries" value={stats?.totalDeliveries ?? 0} subtitle={`${stats?.receivedDeliveries ?? 0} received · ${stats?.pendingDeliveries ?? 0} pending`} icon="📦" />
             <MetricCard title="Uninvoiced Deliveries" value={stats?.pendingInvoice ?? 0} subtitle="Received, awaiting billing sync" isAlert={(stats?.pendingInvoice ?? 0) > 0} icon="🧾" />
             <MetricCard title="Pending e-Meterai Stamps" value={stats?.pendingStamps ?? 0} subtitle={`${stats?.stamped ?? 0} stamped · ${stats?.failedStamps ?? 0} failed`} isAlert={(stats?.pendingStamps ?? 0) > 0} icon="🏷️" />
+            <MetricCard title="Stamp Quota" value={stampQuotaError ? "—" : stampQuota ? stampQuota.saldo : "…"} subtitle={stampQuotaError ? "Unavailable — retrying" : stampQuota ? `${stampQuota.saldo - (stats?.pendingStamps ?? 0)} after pending` : "Loading..."} isAlert={stampQuota !== null && stampQuota.saldo <= (stats?.pendingStamps ?? 0)} icon="🏷️" />
             <MetricCard title="Failed Stamps" value={stats?.failedStamps ?? 0} subtitle="Require attention" isAlert={(stats?.failedStamps ?? 0) > 0} icon="⚠️" />
             <MetricCard title="Invoice Value (Stamped)" value={formatIDR(stats?.invoiceValueStamped ?? 0)} subtitle={`of ${formatIDR(stats?.invoiceValueTotal ?? 0)} total`} icon="💰" />
-            <MetricCard title="Rejection Rate" value={`${stats?.rejectionRate ?? 0}%`} subtitle={`${stats?.activeCustomers ?? 0} active customers`} isAlert={(stats?.rejectionRate ?? 0) > 5} icon="📉" />
+            <MetricCard title="Rejection Rate" value={`${stats?.rejectionRate ?? 0}%`} subtitle="of delivered quantity" isAlert={(stats?.rejectionRate ?? 0) > 5} icon="📉" />
+            <MetricCard title="Active Customers" value={stats?.activeCustomers ?? 0} subtitle="distinct customers" icon="🏢" />
           </div>
 
           {/* Charts row */}
