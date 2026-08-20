@@ -22,6 +22,28 @@ namespace amtemeterai.Api.Services
         private readonly ILogger<EmailService> _logger;
         private readonly IStorageService _storageService;
 
+        /// <summary>
+        /// Validates the SMTP server certificate (chain + hostname) but skips CRL/revocation checks,
+        /// which fail on servers whose CRL distribution points are unreachable from the container
+        /// (e.g. mail.amt.co.id). Windows SChannel tolerates this; .NET on Linux does not.
+        /// </summary>
+        private static bool ValidateSmtpCertificate(object sender, System.Security.Cryptography.X509Certificates.X509Certificate? certificate, System.Security.Cryptography.X509Certificates.X509Chain? chain, System.Net.Security.SslPolicyErrors sslPolicyErrors)
+        {
+            if (certificate == null) return false;
+
+            // Chain errors are acceptable only if ALL of them are revocation-related (CRL unreachable).
+            if (chain != null &&
+                (sslPolicyErrors & System.Net.Security.SslPolicyErrors.RemoteCertificateChainErrors) != 0 &&
+                chain.ChainStatus.Length > 0 &&
+                chain.ChainStatus.All(s => s.Status == System.Security.Cryptography.X509Certificates.X509ChainStatusFlags.RevocationStatusUnknown ||
+                                           s.Status == System.Security.Cryptography.X509Certificates.X509ChainStatusFlags.OfflineRevocation))
+            {
+                sslPolicyErrors &= ~System.Net.Security.SslPolicyErrors.RemoteCertificateChainErrors;
+            }
+
+            return sslPolicyErrors == System.Net.Security.SslPolicyErrors.None;
+        }
+
         public EmailService(
             AppDbContext db,
             IOptions<SmtpSettings> smtpSettings,
@@ -153,6 +175,7 @@ namespace amtemeterai.Api.Services
             message.Body = bodyBuilder.ToMessageBody();
 
             using var client = new SmtpClient();
+                client.ServerCertificateValidationCallback = ValidateSmtpCertificate;
             try
             {
                 // Connect using explicitly typed STARTTLS configurations required by Google
@@ -288,6 +311,7 @@ namespace amtemeterai.Api.Services
             message.Body = bodyBuilder.ToMessageBody();
 
             using var client = new SmtpClient();
+                client.ServerCertificateValidationCallback = ValidateSmtpCertificate;
             try
             {
                 await client.ConnectAsync(_smtpSettings.Host, _smtpSettings.Port, SecureSocketOptions.StartTls);
@@ -496,6 +520,7 @@ namespace amtemeterai.Api.Services
 
                 // Send email
                 using var client = new SmtpClient();
+                client.ServerCertificateValidationCallback = ValidateSmtpCertificate;
                 try
                 {
                     await client.ConnectAsync(_smtpSettings.Host, _smtpSettings.Port, SecureSocketOptions.StartTls);
