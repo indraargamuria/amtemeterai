@@ -1,3 +1,4 @@
+import * as React from "react"
 import { Link, useLocation, useNavigate } from "react-router-dom"
 import { cn } from "../utils/cn"
 import Logo from '../../assets/amtlogo.png';
@@ -78,11 +79,17 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   const location = useLocation()
   const navigate = useNavigate()
   const { user, logout } = useAuth()
+  const [sidebarOpen, setSidebarOpen] = React.useState(false)
 
   const handleLogout = () => {
     logout()
     navigate("/login")
   }
+
+  // Close mobile sidebar on navigation
+  React.useEffect(() => {
+    setSidebarOpen(false)
+  }, [location.pathname])
 
   // Get filtered menu items
   const visibleMenuItems = filterMenuItems(menuItems)
@@ -97,8 +104,21 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
 
   return (
     <div className="min-h-screen bg-white">
-      {/* Sidebar - Fixed to viewport */}
-      <aside className="fixed top-0 left-0 bottom-0 z-40 w-64 h-screen border-r border-brand-blue/5 bg-white flex flex-col">
+      {/* Mobile overlay - click to close sidebar */}
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 bg-brand-blue/20 backdrop-blur-sm z-30 lg:hidden"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
+      {/* Sidebar - Fixed to viewport (off-canvas on mobile, static on lg+) */}
+      <aside
+        className={cn(
+          "fixed top-0 left-0 bottom-0 z-40 w-64 h-screen border-r border-brand-blue/5 bg-white flex flex-col transition-transform duration-200 ease-in-out",
+          sidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
+        )}
+      >
         {/* Logo */}
         <div className="p-6">
           <Link to="/" className="block">
@@ -165,9 +185,23 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
         </div>
       </aside>
 
+      {/* Mobile top bar with menu toggle */}
+      <div className="lg:hidden sticky top-0 z-20 flex items-center gap-3 px-4 py-3 bg-white/95 backdrop-blur border-b border-brand-blue/5">
+        <button
+          onClick={() => setSidebarOpen(true)}
+          className="p-2 rounded-md text-brand-blue/70 hover:bg-brand-blue/5 hover:text-brand-blue transition-colors"
+          aria-label="Open menu"
+        >
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+          </svg>
+        </button>
+        <img src={Logo} alt="Logo" className="w-16 h-auto" />
+      </div>
+
       {/* Main Content - With left margin to account for fixed sidebar */}
-      <main className="ml-64 min-h-screen overflow-auto bg-brand-blue/[0.02]">
-        <div className="p-8 max-w-6xl mx-auto">{children}</div>
+      <main className="lg:ml-64 min-h-screen overflow-auto bg-brand-blue/[0.02]">
+        <div className="p-4 sm:p-6 lg:p-8 max-w-6xl mx-auto">{children}</div>
       </main>
     </div>
   )

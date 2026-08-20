@@ -835,7 +835,7 @@ const SingleBatchRow = memo(({
         <div className="px-4 pb-3 pt-2.5 flex items-start w-full gap-4">
 
           {/* LEFT COLUMN: Item Code + Batch Info (streamlined, no line number) */}
-          <div className="max-w-[40%] shrink-0 min-w-[200px] space-y-1.5">
+          <div className="max-w-[40%] sm:max-w-[40%] shrink-0 min-w-0 sm:min-w-[200px] space-y-1.5">
             {/* Top Line: Item Code only - line number already shown above */}
             <div className="flex items-center gap-2">
               <span className="text-xs font-medium text-slate-700 truncate" title={line.deliveryItemCode}>
@@ -997,7 +997,7 @@ const ChildRow = memo(({
       <div className="flex flex-row items-center w-full gap-4">
 
         {/* LEFT COLUMN: Metadata Stack (Max 40% Width) */}
-        <div className="max-w-[40%] shrink-0 min-w-[200px] space-y-1">
+        <div className="max-w-[40%] shrink-0 min-w-0 sm:min-w-[200px] space-y-1">
           {/* Top Line: Line Number + Item Code */}
           {/* ARGA - LINE IN PARENT SPLIT */}
           <div className="flex items-center gap-2">
@@ -1344,7 +1344,7 @@ const ToastNotification = memo(({ show, type, onClose, title, message }: ToastNo
 
   return (
     <div className="fixed top-4 right-4 z-50 animate-in slide-in-from-top-4 fade-in duration-300">
-      <div className={`bg-white border rounded-lg shadow-xl p-4 flex items-start gap-3 min-w-[300px] ${styles.border}`}>
+      <div className={`bg-white border rounded-lg shadow-xl p-4 flex items-start gap-3 w-[calc(100vw-2rem)] sm:min-w-[300px] sm:w-auto max-w-md ${styles.border}`}>
         <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${styles.bg}`}>
           {type === "error" ? (
             <AlertTriangle className={`w-4 h-4 ${styles.iconColor}`} />
@@ -1378,7 +1378,7 @@ const ApplyAllReminder = memo(({ show, onClose }: ApplyAllReminderProps) => {
 
   return (
     <div className="fixed top-4 right-4 z-40 animate-in slide-in-from-top-4 fade-in duration-300">
-      <div className="bg-white border border-blue-200 rounded-lg shadow-xl p-4 flex items-start gap-3 min-w-[320px]">
+      <div className="bg-white border border-blue-200 rounded-lg shadow-xl p-4 flex items-start gap-3 w-[calc(100vw-2rem)] sm:min-w-[320px] sm:w-auto max-w-md">
         <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center shrink-0">
           <CheckCircle className="w-4 h-4 text-blue-600" />
         </div>
@@ -1404,7 +1404,7 @@ const VarianceModal = memo(({ show, variances, onClose, onConfirm }: VarianceMod
 
   return (
     <div className="fixed top-16 left-1/2 -translate-x-1/2 z-50 animate-in slide-in-from-top-4 fade-in duration-300">
-      <div className="bg-white border border-amber-200 rounded-lg shadow-xl p-4 flex items-start gap-3 min-w-[400px] w-full max-w-lg">
+      <div className="bg-white border border-amber-200 rounded-lg shadow-xl p-4 flex items-start gap-3 w-[calc(100vw-2rem)] sm:min-w-[400px] sm:w-full max-w-lg">
         <div className="w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center shrink-0">
           <AlertTriangle className="w-4 h-4 text-amber-700" />
         </div>
@@ -1467,7 +1467,7 @@ const GuardrailModal = memo(({ show, issuesCount, onClose, onConfirm }: Guardrai
 
   return (
     <div className="fixed top-16 left-1/2 -translate-x-1/2 z-50 animate-in slide-in-from-top-4 fade-in duration-300">
-      <div className="bg-white border border-red-200 rounded-lg shadow-xl p-4 flex items-start gap-3 min-w-[360px]">
+      <div className="bg-white border border-red-200 rounded-lg shadow-xl p-4 flex items-start gap-3 w-[calc(100vw-2rem)] sm:min-w-[360px] sm:w-auto max-w-lg">
         <div className="w-8 h-8 rounded-full bg-red-100 flex items-center justify-center shrink-0">
           <AlertTriangle className="w-4 h-4 text-red-600" />
         </div>

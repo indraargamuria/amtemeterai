@@ -154,7 +154,7 @@ export function DocumentsPage() {
     <div className="space-y-6">
       {/* Header */}
       <div className="border-b border-brand-blue/5 pb-5">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h1 className="text-2xl font-semibold text-brand-blue tracking-tight">Document Hub</h1>
             <p className="text-sm text-brand-blue/60 mt-1">
@@ -165,7 +165,7 @@ export function DocumentsPage() {
       </div>
 
       {/* Summary Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 sm:gap-4">
         <StatCard label="Total Documents" value={stats.total} color="brand-blue" />
         <StatCard label="Linked Flow" value={stats.linked} color="emerald" />
         <StatCard label="Standalone" value={stats.standalone} color="slate" />
@@ -363,7 +363,7 @@ export function DocumentsPage() {
           />
 
           {/* Sheet Panel */}
-          <div className="fixed top-0 right-0 bottom-0 w-[480px] bg-white shadow-2xl z-50 transform transition-transform duration-300 ease-out">
+          <div className="fixed top-0 right-0 bottom-0 w-full sm:w-[480px] bg-white shadow-2xl z-50 transform transition-transform duration-300 ease-out">
             <div className="h-full flex flex-col">
               {/* Sheet Header */}
               <div className="flex items-center justify-between px-6 py-4 border-b border-brand-blue/5 bg-brand-blue/[0.02]">

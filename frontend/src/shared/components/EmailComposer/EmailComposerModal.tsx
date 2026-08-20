@@ -90,7 +90,7 @@ export function EmailComposerModal({
 
       {/* Modal */}
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-        <div className="bg-white rounded-lg shadow-xl w-full max-w-lg transform transition-all">
+        <div className="bg-white rounded-lg shadow-xl w-full max-w-lg transform transition-all max-h-[90vh] flex flex-col">
           {/* Header */}
           <div className="flex items-center justify-between px-6 py-4 border-b border-brand-blue/5 bg-brand-blue/[0.02]">
             <div className="flex items-center gap-2">
@@ -106,7 +106,7 @@ export function EmailComposerModal({
           </div>
 
           {/* Content */}
-          <div className="p-6 space-y-4">
+          <div className="p-6 space-y-4 overflow-y-auto">
             {/* Reference Info */}
             <div className="bg-brand-blue/5 rounded-lg p-3 text-sm">
               <div className="flex items-center gap-2 mb-2">

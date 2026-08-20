@@ -546,7 +546,7 @@ const ToastNotification = memo(({ show, type, onClose, title, message }: ToastNo
 
   return (
     <div className="fixed top-4 right-4 z-50 animate-in slide-in-from-top-4 fade-in duration-300">
-      <div className={`bg-white border rounded-lg shadow-xl p-4 flex items-start gap-3 min-w-[300px] ${styles.border}`}>
+      <div className={`bg-white border rounded-lg shadow-xl p-4 flex items-start gap-3 w-[calc(100vw-2rem)] sm:min-w-[300px] sm:w-auto max-w-md ${styles.border}`}>
         <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${styles.bg}`}>
           {type === "error" ? (
             <AlertTriangle className={`w-4 h-4 ${styles.iconColor}`} />
@@ -1246,16 +1246,16 @@ export function DeliveryDetailPage() {
 
       {/* BOTTOM SECTION: UNIFORM FULL WIDTH (100%) */}
       <div className="w-full">
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <h3 className="text-base font-bold text-brand-blue tracking-tight">Fulfillment Line Items</h3>
-          <span className="text-xs text-brand-blue/50 font-medium">
+          <span className="text-xs text-brand-blue/50 font-medium text-right">
             {totalPhysicalBatches > 0
               ? `Showing ${paginatedGroupedItems.length} of ${totalGroupedItems} item groups (${totalPhysicalBatches} total batches) - Page ${linePage} of ${totalLinePages}`
               : "No items"}
           </span>
         </div>
 
-        <div className="rounded-xl border border-brand-blue/10 overflow-hidden bg-white shadow-sm w-full">
+        <div className="rounded-xl border border-brand-blue/10 overflow-x-auto overflow-y-hidden bg-white shadow-sm w-full">
           <Table>
             <TableHeader className="bg-brand-blue/[0.02]">
               <TableRow>
