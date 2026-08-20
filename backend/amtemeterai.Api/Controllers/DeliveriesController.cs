@@ -373,8 +373,13 @@ public class DeliveriesController : ControllerBase
                 IsInvoiceStamped = hasInvoice && d.ActiveInvoiceStampingStatus == Invoice.InvoiceStampingStatus.Stamped,
                 InvoiceStampingStatusText = hasInvoice ? GetStampingStatusText(d.ActiveInvoiceStampingStatus) : null,
                 IsReadyToSend = ready,
-                EmailCount = emailStats.FirstOrDefault(e => e.ReferenceType == "delivery" && e.ReferenceNumber == d.DeliveryNumber)?.Count ?? 0,
-                LastSentAt = emailStats.FirstOrDefault(e => e.ReferenceType == "delivery" && e.ReferenceNumber == d.DeliveryNumber)?.LastSentAt,
+                EmailCount =
+                    (emailStats.FirstOrDefault(e => e.ReferenceType == "delivery" && e.ReferenceNumber == d.DeliveryNumber)?.Count ?? 0) +
+                    (hasInvoice ? (emailStats.FirstOrDefault(e => e.ReferenceType == "invoice" && e.ReferenceNumber == invNum)?.Count ?? 0) : 0),
+                LastSentAt = new[] {
+                    emailStats.FirstOrDefault(e => e.ReferenceType == "delivery" && e.ReferenceNumber == d.DeliveryNumber)?.LastSentAt,
+                    hasInvoice ? emailStats.FirstOrDefault(e => e.ReferenceType == "invoice" && e.ReferenceNumber == invNum)?.LastSentAt : null
+                }.Where(x => x != null).DefaultIfEmpty().Max(),
                 DeliveryPrintoutUrl = !string.IsNullOrEmpty(doPrintoutKey) ? dl("delivery", doPrintoutKey) : null,
                 InvoicePrintoutUrl = !string.IsNullOrEmpty(stampedKey) ? dl("invoice", stampedKey) : null
             });
