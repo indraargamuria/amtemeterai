@@ -133,7 +133,7 @@ export function DocumentsHubEmailModal({
             body,
             referenceType: a.referenceType,
             referenceNumber: a.referenceNumber,
-            ccEmails: []
+            ccEmails: ""
           })
           if (!response.ok) {
             throw new Error(`Failed to send for ${a.referenceNumber}`)

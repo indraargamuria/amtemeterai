@@ -257,6 +257,11 @@ public class DeliveriesController : ControllerBase
                 CustomerCode = d.Customer != null ? d.Customer.CustomerCode : "UNKNOWN",
                 CustomerName = d.Customer != null ? d.Customer.CustomerName : "UNKNOWN",
                 CustomerEmail = d.Customer != null ? d.Customer.CustomerEmail : null,
+                ActiveInvoiceID = d.Invoices
+                    .Where(i => i.Status != Invoice.InvoiceStatus.Canceled && i.Status != Invoice.InvoiceStatus.Voided)
+                    .OrderByDescending(i => i.InvoicedDate)
+                    .Select(i => (int?)i.InvoiceID)
+                    .FirstOrDefault(),
                 ActiveInvoiceNumber = d.Invoices
                     .Where(i => i.Status != Invoice.InvoiceStatus.Canceled && i.Status != Invoice.InvoiceStatus.Voided)
                     .OrderByDescending(i => i.InvoicedDate)
@@ -344,10 +349,11 @@ public class DeliveriesController : ControllerBase
                 .OrderByDescending(x => x.StorageKey)
                 .Select(x => x.StorageKey)
                 .FirstOrDefault();
-            var stampedKey = docLookup
-                .Where(x => x.DeliveryID == d.DeliveryID && x.Type == DocumentType.InvoicePrintOut && x.StorageKey.Contains("/stamped/"))
+            var stampedKey = d.ActiveInvoiceID != null ? docLookup
+                .Where(x => x.InvoiceID == d.ActiveInvoiceID && x.Type == DocumentType.InvoicePrintOut && x.StorageKey.Contains("/stamped/"))
+                .OrderByDescending(x => x.StorageKey)
                 .Select(x => x.StorageKey)
-                .FirstOrDefault();
+                .FirstOrDefault() : null;
 
             var ready = d.Received && hasInvoice && d.ActiveInvoiceStampingStatus == Invoice.InvoiceStampingStatus.Stamped;
 
@@ -1659,8 +1665,15 @@ public class DeliveriesController : ControllerBase
                 contentType = "image/jpeg";
             else if (key.EndsWith(".png", StringComparison.OrdinalIgnoreCase))
                 contentType = "image/png";
+            else if (key.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase))
+                contentType = "application/pdf";
 
-            return File(fileStream, contentType);
+            // Informative download filename (e.g. DO_2110019772_f9b2060c.pdf or STPINV_3410024628_xxx.pdf)
+            string fileName = System.IO.Path.GetFileName(key);
+            if (string.IsNullOrEmpty(fileName))
+                fileName = "document";
+
+            return File(fileStream, contentType, fileName);
         }
         catch (Exception ex)
         {
