@@ -60,7 +60,9 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
 // 2026-05-05 - Allow CORS Dynamically
-var allowedOrigins = builder.Configuration.GetSection("Cors:Origins").Get<string[]>();
+var allowedOrigins = builder.Configuration.GetSection("Cors:Origins").Get<string[]>()
+    ?? builder.Configuration["Cors:Origins"]?.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+    ?? Array.Empty<string>();
 
 builder.Services.AddSingleton<IStorageService, MinioStorageService>();
 

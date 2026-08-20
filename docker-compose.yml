@@ -41,6 +41,32 @@ services:
       Jwt__Audience: ${JWT_AUDIENCE}
       App__PublicBaseUrl: ${PUBLIC_BASE_URL}
       App__ApiBaseUrl: ${API_BASE_URL}
+      # --- Environment switching (see docs/CONFIGURATION.md) ---
+      # EMAIL_STAGING_MODE=true routes ALL outgoing email (confirmations, PIN) to EMAIL_STAGING_TO.
+      # Set false at go-live to send to real salesperson/customer addresses.
+      CustomerSource: ${CUSTOMER_SOURCE:-Erp}
+      EmailRouting__EnableStagingMode: ${EMAIL_STAGING_MODE:-true}
+      EmailRouting__StagingTo: ${EMAIL_STAGING_TO:-arga@opexcg.com}
+      EmailRouting__StagingCc: ${EMAIL_STAGING_CC:-}
+      EmailRouting__StagingPinTo: ${EMAIL_STAGING_PIN_TO:-arga@opexcg.com}
+      # --- External services (defaults = current values; override via .env) ---
+      SapOptions__BaseUrl: ${SAP_BASE_URL:-http://10.2.38.138:8000}
+      SapOptions__Client: ${SAP_CLIENT:-250}
+      SapOptions__Username: ${SAP_USERNAME:-OPEXCG01}
+      SapOptions__Password: ${SAP_PASSWORD}
+      SmtpSettings__Host: ${SMTP_HOST:-mail.amt.co.id}
+      SmtpSettings__Port: ${SMTP_PORT:-587}
+      SmtpSettings__SenderName: ${SMTP_SENDER_NAME:-AMT e-Meterai}
+      SmtpSettings__SenderEmail: ${SMTP_SENDER_EMAIL:-e-invoice@amt.co.id}
+      SmtpSettings__Username: ${SMTP_USERNAME:-e-invoice@amt.co.id}
+      SmtpSettings__Password: ${SMTP_PASSWORD}
+      SmtpSettings__EnableSsl: ${SMTP_ENABLE_SSL:-true}
+      GoogleMaps__ApiKey: ${GOOGLE_MAPS_API_KEY}
+      Peruri__BackendStg: ${PERURI_BACKEND_STG:-https://backendservicestg.e-meterai.co.id}
+      Peruri__Stampv2Stg: ${PERURI_STAMP_V2_STG:-https://stampv2stg.e-meterai.co.id}
+      Peruri__User: ${PERURI_USER:-opex_emet@yopmail.com}
+      Peruri__Password: ${PERURI_PASSWORD}
+      Cors__Origins: ${CORS_ORIGINS:-http://localhost:5173}
       # Peruri on-premise stamping configuration
       Peruri__KeyStamp: http://signadapter:7777
       Peruri__SharedFolder: /app/sharefolder
