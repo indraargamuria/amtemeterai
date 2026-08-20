@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react"
-import { X, Mail, Send, Loader2, Paperclip, FileText, ExternalLink, AlertCircle, CheckCircle2, Ban } from "lucide-react"
+import { X, Mail, Send, Loader2, Paperclip, FileText, ExternalLink, AlertCircle, CheckCircle2, Ban, AlertTriangle } from "lucide-react"
 import { useApi } from "../../utils/api"
 import { cn } from "../../utils/cn"
 
@@ -108,6 +108,17 @@ export function DocumentsHubEmailModal({
       const current = prev[activeItem.key] ?? makeDraft(activeItem)
       return { ...prev, [activeItem.key]: { ...current, ...patch } }
     })
+  }
+
+  // Expand a customer → also focus its FIRST document (user requirement)
+  const toggleCustomer = (ck: string, cItems: HubEmailItem[]) => {
+    if (expandedCustomer === ck) {
+      setExpandedCustomer(null)
+    } else {
+      setExpandedCustomer(ck)
+      const first = cItems[0]
+      if (first) setActiveItemKey(first.key)
+    }
   }
 
   const buildAttachmentRefs = (item: HubEmailItem): EmailAttachmentRef[] => {
@@ -255,7 +266,7 @@ export function DocumentsHubEmailModal({
               return (
                 <div key={ck} className="mb-1">
                   <button
-                    onClick={() => setExpandedCustomer(isExpanded ? null : ck)}
+                    onClick={() => toggleCustomer(ck, cItems)}
                     className={cn(
                       "w-full flex items-center gap-2 px-3 py-2 rounded-md text-left transition-colors",
                       isExpanded ? "bg-brand-blue/10 text-brand-blue dark:text-slate-100" : "text-brand-blue dark:text-slate-100/60 dark:text-slate-300 hover:bg-brand-blue/5"
@@ -267,21 +278,36 @@ export function DocumentsHubEmailModal({
                   </button>
                   {isExpanded && (
                     <div className="ml-5 mt-0.5 space-y-0.5">
-                      {cItems.map((it) => (
-                        <button
-                          key={it.key}
-                          onClick={() => setActiveItemKey(it.key)}
-                          className={cn(
-                            "w-full flex items-center gap-2 px-2.5 py-1.5 rounded-md text-left transition-colors",
-                            activeKey === it.key
-                              ? "bg-brand-blue/10 text-brand-blue dark:text-slate-100"
-                              : "text-brand-blue dark:text-slate-100/60 dark:text-slate-400 hover:bg-brand-blue/5"
-                          )}
-                        >
-                          <FileText className="w-3.5 h-3.5 shrink-0" />
-                          <span className="flex-1 truncate text-xs font-mono">{it.key}</span>
-                        </button>
-                      ))}
+                      {cItems.map((it) => {
+                        const draft = drafts[it.key] ?? makeDraft(it)
+                        const needsRecipient = !(draft.to ?? "").trim()
+                        const warn = needsRecipient || !it.isReadyToSend
+                        return (
+                          <button
+                            key={it.key}
+                            onClick={() => setActiveItemKey(it.key)}
+                            className={cn(
+                              "w-full flex items-center gap-2 px-2.5 py-1.5 rounded-md text-left transition-colors",
+                              activeKey === it.key
+                                ? "bg-brand-blue/10 text-brand-blue dark:text-slate-100"
+                                : "text-brand-blue dark:text-slate-100/60 dark:text-slate-400 hover:bg-brand-blue/5"
+                            )}
+                            title={
+                              warn
+                                ? (needsRecipient ? "Recipient email is empty" : "Document not ready to send")
+                                : undefined
+                            }
+                          >
+                            {/* Caution badge (left) when recipient empty OR not ready */}
+                            {warn ? (
+                              <AlertTriangle className="w-3.5 h-3.5 shrink-0 text-amber-500" />
+                            ) : (
+                              <FileText className="w-3.5 h-3.5 shrink-0" />
+                            )}
+                            <span className="flex-1 truncate text-xs font-mono">{it.key}</span>
+                          </button>
+                        )
+                      })}
                     </div>
                   )}
                 </div>
