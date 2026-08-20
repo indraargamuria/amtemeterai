@@ -629,18 +629,19 @@ public class InvoicesController : ControllerBase
         var complianceCategory = "OTHER";
 
         // Resolve base / down pay / nett amounts
-        // New rule: Nett Amount = BaseAmount + DownPayAmount
-        // When BaseAmount is 0, derive it from Amount: BaseAmount = Amount - DownPayAmount
+        // Rule: Nett Amount = BaseAmount - DownPayAmount
+        // When BaseAmount is 0, derive it from the nett amount and down payment:
+        // BaseAmount = AmountLocal + DownPayAmount  (gross = nett + downpay)
         var baseAmountLocal = dto.BaseAmountLocal > 0
             ? dto.BaseAmountLocal
-            : dto.AmountLocal - dto.DownPayAmountLocal;
+            : dto.AmountLocal + dto.DownPayAmountLocal;
         var baseAmountForeign = dto.BaseAmountForeign > 0
             ? dto.BaseAmountForeign
-            : dto.AmountForeign - dto.DownPayAmountForeign;
+            : dto.AmountForeign + dto.DownPayAmountForeign;
         var downPayAmountLocal = dto.DownPayAmountLocal;
         var downPayAmountForeign = dto.DownPayAmountForeign;
-        var nettAmountLocal = baseAmountLocal + downPayAmountLocal;
-        var nettAmountForeign = baseAmountForeign + downPayAmountForeign;
+        var nettAmountLocal = baseAmountLocal - downPayAmountLocal;
+        var nettAmountForeign = baseAmountForeign - downPayAmountForeign;
 
         // 1. Ensure invoice number is unique (only block if active, not voided/canceled)
         var existingInvoice = await _db.Invoices
@@ -692,12 +693,12 @@ public class InvoicesController : ControllerBase
     }
 
     /// <summary>
-    /// Update the DownPay (Local and Foreign) for an invoice.
-    /// The nett AmountLocal / AmountForeign are automatically recalculated
-    /// as BaseAmount + DownPayAmount for each currency.
-    /// Validation for foreign currency is skipped if BaseAmountForeign is zero.
-    /// </summary>
-    [HttpPut("{id:int}/downpay")]
+        /// Update the DownPay (Local and Foreign) for an invoice.
+        /// The nett AmountLocal / AmountForeign are automatically recalculated
+        /// as BaseAmount - DownPayAmount for each currency.
+        /// Validation for foreign currency is skipped if BaseAmountForeign is zero.
+        /// </summary>
+        [HttpPut("{id:int}/downpay")]
     public async Task<ActionResult<InvoiceResponseDto>> UpdateInvoiceDownPay(
         int id,
         [FromBody] UpdateInvoiceDownPayDto dto)

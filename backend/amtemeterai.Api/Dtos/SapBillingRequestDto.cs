@@ -104,6 +104,12 @@ public class SapBillingResponseDto
     public string Currency { get; set; } = string.Empty;
 
     /// <summary>
+    /// Exchange rate used for currency conversion (e.g., 1.00000 for IDR)
+    /// </summary>
+    [JsonPropertyName("exchangeRate")]
+    public decimal ExchangeRate { get; set; } = 1.0m;
+
+    /// <summary>
     /// Customer number from SAP
     /// </summary>
     [JsonPropertyName("customerNumber")]
@@ -128,9 +134,10 @@ public class SapBillingResponseDto
     public string DeliveryNumber { get; set; } = string.Empty;
 
     /// <summary>
-    /// Response message from SAP (MESSAGE field)
+    /// Response message from SAP
+    /// The actual SAP response uses lowercase "message" key.
     /// </summary>
-    [JsonPropertyName("MESSAGE")]
+    [JsonPropertyName("message")]
     public string Message { get; set; } = string.Empty;
 
     /// <summary>

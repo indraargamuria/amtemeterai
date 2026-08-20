@@ -5,7 +5,7 @@ namespace amtemeterai.Api.Dtos;
 /// <summary>
 /// Request payload for updating an invoice's down payment amounts.
 /// The nett AmountLocal / AmountForeign are automatically recalculated
-/// as BaseAmount + DownPayAmount for each currency.
+/// as BaseAmount - DownPayAmount for each currency.
 /// </summary>
 public class UpdateInvoiceDownPayDto
 {

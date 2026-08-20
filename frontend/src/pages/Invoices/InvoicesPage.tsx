@@ -512,7 +512,7 @@ export function InvoicesPage() {
                                 {/* Base and DownPay (smaller) */}
                                 <div className="flex items-center justify-end gap-1 text-xs text-brand-blue/50">
                                   <span>{formatCurrency(invoice.baseAmountLocal)}</span>
-                                  <span>+</span>
+                                  <span>−</span>
                                   <span>{formatCurrency(invoice.downPayAmountLocal)}</span>
                                 </div>
                               </>
@@ -534,7 +534,7 @@ export function InvoicesPage() {
                                 </span>
                                 <div className="flex items-center justify-end gap-1 text-xs text-brand-blue/50">
                                   <span>{formatCurrency(invoice.baseAmountLocal)}</span>
-                                  <span>+</span>
+                                  <span>−</span>
                                   <span>{formatCurrency(invoice.downPayAmountLocal)}</span>
                                 </div>
                               </>
@@ -553,7 +553,7 @@ export function InvoicesPage() {
                                     </span>
                                     <div className="flex items-center justify-end gap-1 text-xs text-brand-blue/40">
                                       <span>{formatForeignCurrency(invoice.baseAmountForeign, invoice.currency)}</span>
-                                      <span>+</span>
+                                      <span>−</span>
                                       <span>{formatForeignCurrency(invoice.downPayAmountForeign, invoice.currency)}</span>
                                     </div>
                                   </>

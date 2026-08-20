@@ -16,18 +16,18 @@ public class CreateInvoiceWithoutDeliveryDto
     public decimal AmountLocal { get; set; }
 
     /// <summary>
-    /// Optional base (gross) amounts. When 0, they default to the nett Amount.
-    /// Nett Amount = BaseAmount + DownPayAmount
-    /// </summary>
-    public decimal BaseAmountForeign { get; set; }
+        /// Optional base (gross) amounts. When 0, they default to the nett Amount.
+        /// Nett Amount = BaseAmount - DownPayAmount
+        /// </summary>
+        public decimal BaseAmountForeign { get; set; }
 
-    public decimal BaseAmountLocal { get; set; }
+        public decimal BaseAmountLocal { get; set; }
 
-    /// <summary>
-    /// Optional down payment amounts. When set, the nett Amount is recalculated
-    /// as BaseAmount + DownPayAmount.
-    /// </summary>
-    public decimal DownPayAmountForeign { get; set; }
+        /// <summary>
+        /// Optional down payment amounts. When set, the nett Amount is recalculated
+        /// as BaseAmount - DownPayAmount.
+        /// </summary>
+        public decimal DownPayAmountForeign { get; set; }
 
     public decimal DownPayAmountLocal { get; set; }
 
