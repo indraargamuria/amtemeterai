@@ -1032,18 +1032,19 @@ public class DeliveriesController : ControllerBase
                                     {
                                         // Create invoice record
                                         // Down payment REDUCES the gross: nett = base - downpay
-                                        // SAP sends amountInvoice as the final nett amount
+                                        // SAP sends amountLocal as gross; amountInvoice as final nett amount
+                                        // Total down payment = downPayAmount + downPayTaxAmount
                                         var baseAmountLocal = sapBillingData.BaseAmount > 0
                                             ? sapBillingData.BaseAmount
-                                            : (sapBillingData.AmountInvoice > 0 ? sapBillingData.AmountInvoice : sapBillingData.AmountLocal)
-                                                + sapBillingData.LocalDownPayAmount;
+                                            : sapBillingData.AmountLocal;
                                         var baseAmountForeign = sapBillingData.AmountForeign > 0
                                             ? sapBillingData.AmountForeign
-                                            : (sapBillingData.AmountInvoice > 0 ? sapBillingData.AmountInvoice : sapBillingData.AmountLocal)
-                                                + sapBillingData.DownPayAmount;
+                                            : sapBillingData.AmountLocal;
+                                        var downPayLocal = sapBillingData.LocalDownPayAmount + sapBillingData.LocalDownPayTaxAmount;
+                                        var downPayForeign = sapBillingData.DownPayAmount + sapBillingData.DownPayTaxAmount;
                                         var finalInvoiceAmount = sapBillingData.AmountInvoice > 0
                                             ? sapBillingData.AmountInvoice
-                                            : sapBillingData.AmountLocal;
+                                            : sapBillingData.AmountLocal - downPayLocal;
                                         var finalInvoiceAmountForeign = sapBillingData.AmountForeign > 0
                                             ? sapBillingData.AmountForeign
                                             : finalInvoiceAmount;
@@ -1059,8 +1060,10 @@ public class DeliveriesController : ControllerBase
                                             AmountLocal = finalInvoiceAmount,
                                             BaseAmountForeign = baseAmountForeign,
                                             BaseAmountLocal = baseAmountLocal,
-                                            DownPayAmountForeign = sapBillingData.DownPayAmount,
-                                            DownPayAmountLocal = sapBillingData.LocalDownPayAmount,
+                                            DownPayAmountForeign = downPayForeign,
+                                            DownPayAmountLocal = downPayLocal,
+                                            DownPayTaxAmountForeign = sapBillingData.DownPayTaxAmount,
+                                            DownPayTaxAmountLocal = sapBillingData.LocalDownPayTaxAmount,
                                             Currency = sapBillingData.Currency,
                                             ComplianceCategory = sapBillingData.ComplianceCategory,
                                             InvoicedDate = sapBillingData.BillingDate,
@@ -1878,17 +1881,17 @@ public class DeliveriesController : ControllerBase
 
                 // Create invoice record with dual-currency support
                 // Down payment REDUCES the gross: nett = base - downpay
-                // SAP sends amountInvoice as the final nett amount;
-                // baseAmount (gross) is derived when not provided
-                var downPayLocal = sapBillingData.LocalDownPayAmount;
-                var downPayForeign = sapBillingData.DownPayAmount;
+                // SAP sends amountLocal as gross; amountInvoice as final nett amount
+                // Total down payment = downPayAmount + downPayTaxAmount
+                var downPayLocal = sapBillingData.LocalDownPayAmount + sapBillingData.LocalDownPayTaxAmount;
+                var downPayForeign = sapBillingData.DownPayAmount + sapBillingData.DownPayTaxAmount;
 
                 var baseAmountLocal = sapBillingData.BaseAmount > 0
                     ? sapBillingData.BaseAmount
-                    : (sapBillingData.AmountInvoice > 0 ? sapBillingData.AmountInvoice : sapBillingData.AmountLocal) + downPayLocal;
+                    : sapBillingData.AmountLocal;
                 var baseAmountForeign = sapBillingData.AmountForeign > 0
                     ? sapBillingData.AmountForeign
-                    : (sapBillingData.AmountInvoice > 0 ? sapBillingData.AmountInvoice : sapBillingData.AmountLocal) + downPayForeign;
+                    : sapBillingData.AmountLocal;
 
                 var finalInvoiceAmount = sapBillingData.AmountInvoice > 0
                     ? sapBillingData.AmountInvoice
@@ -1912,6 +1915,8 @@ public class DeliveriesController : ControllerBase
                     BaseAmountLocal = baseAmountLocal,
                     DownPayAmountForeign = downPayForeign,
                     DownPayAmountLocal = downPayLocal,
+                    DownPayTaxAmountForeign = sapBillingData.DownPayTaxAmount,
+                    DownPayTaxAmountLocal = sapBillingData.LocalDownPayTaxAmount,
                     Currency = sapBillingData.Currency,
                     ComplianceCategory = sapBillingData.ComplianceCategory,
                     InvoicedDate = sapBillingData.BillingDate,

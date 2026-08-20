@@ -252,16 +252,18 @@ public class BcInvoiceSyncService
 
                 // Create invoice record with dual-currency support
                 // Updated logic: Down payment REDUCES the gross amount, not increases it
-                // SAP sends: amountInvoice as final net amount (baseAmount - downPayAmount)
+                // SAP sends: amountLocal = gross/base amount, amountInvoice = final net amount (after down payment)
+                // Total down payment = downPayAmount + downPayTaxAmount
                 // We store all components for accurate tracking
 
                 // Use the new SAP response fields
+                // baseAmount (if provided) is the gross; otherwise amountLocal is the gross from SAP
                 var baseAmountLocal = sapBillingData.BaseAmount > 0 ? sapBillingData.BaseAmount : sapBillingData.AmountLocal;
-                var baseAmountForeign = sapBillingData.AmountForeign; // Foreign currency base amount
+                var baseAmountForeign = sapBillingData.AmountForeign > 0 ? sapBillingData.AmountForeign : sapBillingData.AmountLocal; // Foreign currency base amount
 
-                // Down payment amounts (deduct from base to get net)
-                var downPayLocal = sapBillingData.LocalDownPayAmount;
-                var downPayForeign = sapBillingData.DownPayAmount;
+                // Down payment amounts (deduct from base to get net) — includes down payment tax
+                var downPayLocal = sapBillingData.LocalDownPayAmount + sapBillingData.LocalDownPayTaxAmount;
+                var downPayForeign = sapBillingData.DownPayAmount + sapBillingData.DownPayTaxAmount;
 
                 // Tax amounts
                 var taxAmountLocal = sapBillingData.LocalTaxAmount;
@@ -271,9 +273,9 @@ public class BcInvoiceSyncService
                 var downPayTaxAmountLocal = sapBillingData.LocalDownPayTaxAmount;
                 var downPayTaxAmountForeign = sapBillingData.DownPayTaxAmount;
 
-                // Final invoice amount (use amountInvoice if available, otherwise calculate)
-                var finalInvoiceAmount = sapBillingData.AmountInvoice > 0 ? sapBillingData.AmountInvoice : sapBillingData.AmountLocal;
-                var finalInvoiceAmountForeign = sapBillingData.AmountForeign; // Assuming same logic for foreign
+                // Final invoice amount (use amountInvoice if available, otherwise calculate nett)
+                var finalInvoiceAmount = sapBillingData.AmountInvoice > 0 ? sapBillingData.AmountInvoice : sapBillingData.AmountLocal - downPayLocal;
+                var finalInvoiceAmountForeign = sapBillingData.AmountForeign > 0 ? sapBillingData.AmountForeign : finalInvoiceAmount;
 
                 var invoice = new Invoice
                 {

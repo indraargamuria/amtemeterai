@@ -390,21 +390,17 @@ public class DeliveryAutoConfirmService : ManagedBackgroundService
                                             {
                                                 // Create invoice record
                                                 // Down payment REDUCES the gross: nett = base - downpay
-                                                // SAP sends amountInvoice as the final nett amount;
-                                                // baseAmount (gross) is derived when not provided
-                                                var downPayLocal = sapBillingData.LocalDownPayAmount;
-                                                var downPayForeign = sapBillingData.DownPayAmount;
+                                                // SAP sends amountLocal as gross; amountInvoice as final nett amount
+                                                // Total down payment = downPayAmount + downPayTaxAmount
+                                                var downPayLocal = sapBillingData.LocalDownPayAmount + sapBillingData.LocalDownPayTaxAmount;
+                                                var downPayForeign = sapBillingData.DownPayAmount + sapBillingData.DownPayTaxAmount;
 
                                                 var baseAmountLocal = sapBillingData.BaseAmount > 0
                                                     ? sapBillingData.BaseAmount
-                                                    : (sapBillingData.AmountInvoice > 0
-                                                        ? sapBillingData.AmountInvoice
-                                                        : sapBillingData.AmountLocal) + downPayLocal;
+                                                    : sapBillingData.AmountLocal;
                                                 var baseAmountForeign = sapBillingData.AmountForeign > 0
                                                     ? sapBillingData.AmountForeign
-                                                    : (sapBillingData.AmountInvoice > 0
-                                                        ? sapBillingData.AmountInvoice
-                                                        : sapBillingData.AmountLocal) + downPayForeign;
+                                                    : sapBillingData.AmountLocal;
                                                 var finalInvoiceAmount = sapBillingData.AmountInvoice > 0
                                                     ? sapBillingData.AmountInvoice
                                                     : sapBillingData.AmountLocal - downPayLocal;
@@ -425,6 +421,8 @@ public class DeliveryAutoConfirmService : ManagedBackgroundService
                                                     BaseAmountLocal = baseAmountLocal,
                                                     DownPayAmountForeign = downPayForeign,
                                                     DownPayAmountLocal = downPayLocal,
+                                                    DownPayTaxAmountForeign = sapBillingData.DownPayTaxAmount,
+                                                    DownPayTaxAmountLocal = sapBillingData.LocalDownPayTaxAmount,
                                                     Currency = sapBillingData.Currency,
                                                     ComplianceCategory = sapBillingData.ComplianceCategory,
                                                     InvoicedDate = sapBillingData.BillingDate,
