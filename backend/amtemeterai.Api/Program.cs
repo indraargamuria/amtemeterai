@@ -109,9 +109,12 @@ builder.Services.AddScoped<IPdfAnchorService, PdfAnchorService>();
 // Register BC Invoice Sync Service for background job processing
 builder.Services.AddScoped<BcInvoiceSyncService>();
 
+// Managed background job infrastructure
+builder.Services.AddSingleton<IBackgroundJobRegistry, BackgroundJobRegistry>();
+
 // Register Billing Background Service for automatic BC invoice sync
-// DISABLED: Temporarily disabled for maintenance
-// builder.Services.AddHostedService<BillingBackgroundService>();
+// Now managed via BackgroundJobs table (enable/disable + interval from admin page)
+builder.Services.AddHostedService<BillingBackgroundService>();
 
 // Register Delivery Auto Confirm Service for automatic delivery confirmation
 builder.Services.AddHostedService<DeliveryAutoConfirmService>();

@@ -250,3 +250,70 @@ export async function uploadDeliveryPrintout(
   if (!response.ok) throw new Error("Failed to upload printout")
   return await response.json()
 }
+
+// =========================
+// Background Jobs API Functions
+// =========================
+
+export interface BackgroundJob {
+  id: number
+  jobKey: string
+  displayName: string
+  description: string | null
+  intervalMinutes: number
+  isEnabled: boolean
+  lastExecutedAt: string | null
+  lastExecutionStatus: string | null
+  lastExecutionError: string | null
+  isRunning: boolean
+  currentRunStartedAt: string | null
+}
+
+export interface BackgroundJobExecutionLog {
+  id: number
+  startedAt: string
+  finishedAt: string | null
+  status: string
+  durationMs: number | null
+  details: string | null
+  errorMessage: string | null
+}
+
+/**
+ * GET /api/background-jobs
+ */
+export async function getBackgroundJobs(): Promise<BackgroundJob[]> {
+  const response = await authGet("/api/background-jobs")
+  if (!response.ok) throw new Error("Failed to fetch background jobs")
+  return await response.json()
+}
+
+/**
+ * PATCH /api/background-jobs/{key}
+ */
+export async function updateBackgroundJob(
+  jobKey: string,
+  changes: { isEnabled?: boolean; intervalMinutes?: number }
+): Promise<BackgroundJob> {
+  const response = await authPatch(`/api/background-jobs/${jobKey}`, changes)
+  if (!response.ok) throw new Error("Failed to update background job")
+  return await response.json()
+}
+
+/**
+ * POST /api/background-jobs/{key}/run-now
+ */
+export async function runBackgroundJobNow(jobKey: string): Promise<{ message: string; jobKey: string }> {
+  const response = await authPost(`/api/background-jobs/${jobKey}/run-now`)
+  if (!response.ok) throw new Error("Failed to trigger background job run")
+  return await response.json()
+}
+
+/**
+ * GET /api/background-jobs/{key}/logs
+ */
+export async function getBackgroundJobLogs(jobKey: string, page = 1, pageSize = 50): Promise<BackgroundJobExecutionLog[]> {
+  const response = await authGet(`/api/background-jobs/${jobKey}/logs?page=${page}&pageSize=${pageSize}`)
+  if (!response.ok) throw new Error("Failed to fetch background job logs")
+  return await response.json()
+}

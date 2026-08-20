@@ -50,7 +50,11 @@ public static class DbInitializer
 
             // User Management / UAM (Ids: 8, 9)
             new() { Id = 8, PermissionKey = "uam:read", Description = "View system roles and permission matrices", Category = "Access Control", DisplayOrder = 8 },
-            new() { Id = 9, PermissionKey = "uam:sync", Description = "Modify and write role permissions to database", Category = "Access Control", DisplayOrder = 9 }
+            new() { Id = 9, PermissionKey = "uam:sync", Description = "Modify and write role permissions to database", Category = "Access Control", DisplayOrder = 9 },
+
+            // Background Jobs (2026-08-20)
+            new() { Id = 10, PermissionKey = "job:read", Description = "View background jobs and execution history", Category = "Background Jobs", DisplayOrder = 10 },
+            new() { Id = 11, PermissionKey = "job:manage", Description = "Enable/disable background jobs, change intervals, trigger runs", Category = "Background Jobs", DisplayOrder = 11 }
         };
 
         foreach (var perm in defaultPermissions)
@@ -69,7 +73,8 @@ public static class DbInitializer
             new() { Id = 2, MenuKey = "customers", Label = "Customers", Path = "/customers", IconName = "Users", DisplayOrder = 2 },
             new() { Id = 3, MenuKey = "invoices", Label = "Invoices", Path = "/invoices", IconName = "FileText", DisplayOrder = 3 },
             new() { Id = 4, MenuKey = "deliveries", Label = "Deliveries", Path = "/deliveries", IconName = "Package", DisplayOrder = 4 },
-            new() { Id = 5, MenuKey = "uam", Label = "Access Management", Path = "/admin/uam", IconName = "ShieldAlert", DisplayOrder = 5 }
+            new() { Id = 5, MenuKey = "uam", Label = "Access Management", Path = "/admin/uam", IconName = "ShieldAlert", DisplayOrder = 5 },
+            new() { Id = 6, MenuKey = "backgroundjobs", Label = "Background Jobs", Path = "/background-jobs", IconName = "Settings", DisplayOrder = 6 }
         };
 
         foreach (var menu in defaultMenus)
@@ -91,6 +96,16 @@ public static class DbInitializer
             new() { MenuId = 5, PermissionId = 8 }  // Access Management requires uam:read 
         };
 
+        // Menu permission for Background Jobs (Id 6 -> job:read)
+        // Seeded by key lookup to stay idempotent
+        var jobsMenu = await context.ApplicationMenus.FirstOrDefaultAsync(m => m.MenuKey == "backgroundjobs");
+        var jobReadPerm = await context.Permissions.FirstOrDefaultAsync(p => p.PermissionKey == "job:read");
+        if (jobsMenu != null && jobReadPerm != null &&
+            !await context.MenuPermissions.AnyAsync(x => x.MenuId == jobsMenu.Id && x.PermissionId == jobReadPerm.Id))
+        {
+            await context.MenuPermissions.AddAsync(new MenuPermission { MenuId = jobsMenu.Id, PermissionId = jobReadPerm.Id });
+        }
+
         foreach (var mp in menuPermissions)
         {
             if (!await context.MenuPermissions.AnyAsync(x => x.MenuId == mp.MenuId && x.PermissionId == mp.PermissionId))
@@ -103,10 +118,11 @@ public static class DbInitializer
         // 5. SEED INITIAL ROLE PERMISSIONS MATRIX
         if (adminRole != null)
         {
-            // Sysadmin gets all permissions (Ids 1 through 9), showing all menus
-            for (int i = 1; i <= 9; i++)
+            // Sysadmin gets all permissions (showing all menus)
+            var allPermissionIds = await context.Permissions.Select(p => p.Id).ToListAsync();
+            foreach (var permId in allPermissionIds)
             {
-                await AssignPermissionToRoleAsync(context, adminRole.Id, i);
+                await AssignPermissionToRoleAsync(context, adminRole.Id, permId);
             }
         }
 
@@ -129,6 +145,37 @@ public static class DbInitializer
             // Sales only gets access to dashboard and customer
             await AssignPermissionToRoleAsync(context, salesRole.Id, 1); // dashboard:read
             await AssignPermissionToRoleAsync(context, salesRole.Id, 2); // customer:read
+        }
+
+        await context.SaveChangesAsync();
+
+        // 6. SEED MANAGED BACKGROUND JOB DEFINITIONS
+        var defaultJobs = new List<BackgroundJob>
+        {
+            new()
+            {
+                JobKey = "DeliveryAutoConfirm",
+                DisplayName = "Delivery Auto Confirm",
+                Description = "Automatically confirms received deliveries based on PGI date + customer lead time, then triggers SAP sync and NonBC invoice creation.",
+                IntervalMinutes = 60,
+                IsEnabled = true
+            },
+            new()
+            {
+                JobKey = "BillingSync",
+                DisplayName = "BC Invoice Sync",
+                Description = "Checks received BC deliveries with Unbilled status and syncs invoices from SAP.",
+                IntervalMinutes = 3,
+                IsEnabled = true
+            }
+        };
+
+        foreach (var job in defaultJobs)
+        {
+            if (!await context.BackgroundJobs.AnyAsync(j => j.JobKey == job.JobKey))
+            {
+                await context.BackgroundJobs.AddAsync(job);
+            }
         }
 
         await context.SaveChangesAsync();

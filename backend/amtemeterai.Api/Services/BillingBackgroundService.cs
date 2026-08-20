@@ -1,61 +1,42 @@
-using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using amtemeterai.Api.Config;
 using amtemeterai.Api.Data;
 using amtemeterai.Api.Models;
-using Microsoft.Extensions.Options;
 
 namespace amtemeterai.Api.Services;
 
 /// <summary>
-/// Background service that automatically syncs BC invoices from SAP every 3 minutes.
+/// Managed background service that automatically syncs BC invoices from SAP.
 /// Checks for deliveries with BillingStatus = Unbilled (1) and DeliveryType = BC (1)
 /// and calls the invoice creation service to sync billing data.
+///
+/// Schedule and enable/disable state come from the BackgroundJobs table
+/// (manageable from the Background Jobs admin page); the legacy
+/// BillingSyncOptions values are only a fallback.
 /// </summary>
-public class BillingBackgroundService : BackgroundService
+public class BillingBackgroundService : ManagedBackgroundService
 {
-    private readonly IServiceProvider _serviceProvider;
+    private readonly IServiceScopeFactory _scopeFactory;
     private readonly ILogger<BillingBackgroundService> _logger;
     private readonly BillingSyncOptions _options;
 
     public BillingBackgroundService(
-        IServiceProvider serviceProvider,
+        IServiceScopeFactory scopeFactory,
+        IBackgroundJobRegistry registry,
         ILogger<BillingBackgroundService> logger,
         IOptions<BillingSyncOptions> options)
+        : base(scopeFactory, registry, logger)
     {
-        _serviceProvider = serviceProvider;
+        _scopeFactory = scopeFactory;
         _logger = logger;
         _options = options.Value;
     }
 
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
-    {
-        _logger.LogInformation("Billing Background Service is starting. Check Interval: {Interval} minutes", _options.CheckIntervalMinutes);
+    protected override string JobKey => "BillingSync";
+    protected override int FallbackIntervalMinutes => _options.CheckIntervalMinutes > 0 ? _options.CheckIntervalMinutes : 3;
 
-        while (!stoppingToken.IsCancellationRequested)
-        {
-            try
-            {
-                using var scope = _serviceProvider.CreateScope();
-                var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-
-                await ProcessPendingBillingAsync(db);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error in Billing Background Service");
-            }
-
-            // Wait for the configured interval before next check (3 minutes)
-            await Task.Delay(TimeSpan.FromMinutes(_options.CheckIntervalMinutes), stoppingToken);
-        }
-
-        _logger.LogInformation("Billing Background Service is stopping.");
-    }
-
-    private async Task ProcessPendingBillingAsync(AppDbContext db)
+    protected override async Task<JobRunResult> RunOnceAsync(AppDbContext db, CancellationToken stoppingToken)
     {
         // Find deliveries that:
         // 1. Have BillingStatus = Unbilled (1)
@@ -69,25 +50,30 @@ public class BillingBackgroundService : BackgroundService
                 (d.Status.Value == DeliveryHeader.ReceiverStatus.FullyReceived ||
                  d.Status.Value == DeliveryHeader.ReceiverStatus.PartialReceived))
             .Select(d => new { d.DeliveryNumber, d.DeliveryID })
-            .ToListAsync();
+            .ToListAsync(stoppingToken);
 
         if (!pendingDeliveries.Any())
         {
             _logger.LogDebug("No pending BC deliveries found for billing sync.");
-            return;
+            return JobRunResult.Skipped("No pending BC deliveries");
         }
 
         _logger.LogInformation("Found {Count} pending BC deliveries for billing sync.", pendingDeliveries.Count);
 
-        // Process each delivery
+        int syncedCount = 0;
+        int skippedCount = 0;
+        var details = new System.Text.StringBuilder();
+
         foreach (var delivery in pendingDeliveries)
         {
+            stoppingToken.ThrowIfCancellationRequested();
+
             try
             {
                 _logger.LogInformation("Processing invoice sync for BC delivery {DeliveryNumber}", delivery.DeliveryNumber);
 
                 // Create a new scope for each delivery to get fresh service instance
-                using var scope = _serviceProvider.CreateScope();
+                using var scope = _scopeFactory.CreateScope();
                 var bcInvoiceSyncService = scope.ServiceProvider.GetRequiredService<BcInvoiceSyncService>();
 
                 // Call the invoice creation service
@@ -95,6 +81,7 @@ public class BillingBackgroundService : BackgroundService
 
                 if (result != null && result.Success)
                 {
+                    syncedCount++;
                     _logger.LogInformation("Successfully synced invoice for delivery {DeliveryNumber}", delivery.DeliveryNumber);
 
                     // Log success activity
@@ -106,9 +93,11 @@ public class BillingBackgroundService : BackgroundService
                         Severity = "Success"
                     };
                     db.ActivityLogs.Add(activityLog);
+                    details.AppendLine($"Synced {delivery.DeliveryNumber} -> {result.InvoiceNumber}");
                 }
                 else if (result != null && !result.Success)
                 {
+                    skippedCount++;
                     _logger.LogWarning("Invoice sync skipped for delivery {DeliveryNumber}: {Message}", delivery.DeliveryNumber, result.Message);
 
                     // Log warning activity
@@ -123,11 +112,13 @@ public class BillingBackgroundService : BackgroundService
                 }
                 else
                 {
+                    skippedCount++;
                     _logger.LogWarning("Null or failed response when syncing invoice for delivery {DeliveryNumber}", delivery.DeliveryNumber);
                 }
             }
             catch (Exception ex)
             {
+                skippedCount++;
                 _logger.LogError(ex, "Failed to sync invoice for BC delivery {DeliveryNumber}", delivery.DeliveryNumber);
 
                 // Log error activity
@@ -142,6 +133,12 @@ public class BillingBackgroundService : BackgroundService
             }
         }
 
-        await db.SaveChangesAsync();
+        await db.SaveChangesAsync(stoppingToken);
+
+        _logger.LogInformation("Billing sync cycle completed. Synced: {Synced}, Skipped: {Skipped}", syncedCount, skippedCount);
+
+        return syncedCount > 0
+            ? JobRunResult.Success($"Synced {syncedCount} invoice(s), skipped {skippedCount}")
+            : JobRunResult.Skipped($"No invoices synced ({skippedCount} skipped)");
     }
 }

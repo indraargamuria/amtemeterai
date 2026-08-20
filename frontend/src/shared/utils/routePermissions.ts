@@ -10,6 +10,7 @@ export const routePermissions: Record<string, string> = {
   '/invoices': 'invoice:read',
   '/documents': 'invoice:read',
   '/admin/uam': 'uam:read',
+  '/background-jobs': 'job:read',
 }
 
 /**

@@ -28,6 +28,10 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<Plant> Plant { get; set; } = null!;
     public DbSet<UserPlant> UserPlant { get; set; } = null!;
 
+    // Managed background jobs - 2026-08-20
+    public DbSet<BackgroundJob> BackgroundJobs => Set<BackgroundJob>();
+    public DbSet<BackgroundJobExecutionLog> BackgroundJobExecutionLogs => Set<BackgroundJobExecutionLog>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);

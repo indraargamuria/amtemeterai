@@ -11,6 +11,7 @@ import { DeliveryReceivePage } from "./pages/Public"
 import { InvoicesPage } from "./pages/Invoices"
 import { DocumentsPage } from "./pages/Documents"
 import { UserAccessManagementPage } from "./pages/UserAccessManagement"
+import { BackgroundJobsPage } from "./pages/BackgroundJobs"
 import { UnauthorizedPage } from "./pages/Unauthorized"
 import { DashboardLayout } from "./shared/layouts"
 import { SecuritySessionGuard } from "./shared/components/SecuritySessionGuard"
@@ -125,6 +126,19 @@ function AppRoutes() {
             <RouteGuard>
               <DashboardLayout>
                 <UserAccessManagementPage />
+              </DashboardLayout>
+            </RouteGuard>
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/background-jobs"
+        element={
+          <ProtectedRoute>
+            <RouteGuard>
+              <DashboardLayout>
+                <BackgroundJobsPage />
               </DashboardLayout>
             </RouteGuard>
           </ProtectedRoute>

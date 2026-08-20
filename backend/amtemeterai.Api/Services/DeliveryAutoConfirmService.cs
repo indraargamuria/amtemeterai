@@ -1,8 +1,5 @@
-using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using System.Text.Json;
 using amtemeterai.Api.Config;
 using amtemeterai.Api.Data;
@@ -12,59 +9,37 @@ using amtemeterai.Api.Dtos;
 namespace amtemeterai.Api.Services;
 
 /// <summary>
-/// Background service that automatically confirms delivery orders based on PGI date + customer region lead time.
+/// Managed background service that automatically confirms delivery orders
+/// based on PGI date + customer region lead time.
 /// If PGI date is 12 Aug and lead time is 3 days, auto-receive on 15 Aug.
 /// Skips processing if PGI date or lead time is blank/null.
+///
+/// Schedule and enable/disable state come from the BackgroundJobs table
+/// (manageable from the Background Jobs admin page); the legacy
+/// DeliveryAutoConfirmOptions values are only a fallback.
 /// </summary>
-public class DeliveryAutoConfirmService : BackgroundService
+public class DeliveryAutoConfirmService : ManagedBackgroundService
 {
-    private readonly IServiceScopeFactory _scopeFactory;
     private readonly ILogger<DeliveryAutoConfirmService> _logger;
     private readonly DeliveryAutoConfirmOptions _options;
 
     public DeliveryAutoConfirmService(
         IServiceScopeFactory scopeFactory,
+        IBackgroundJobRegistry registry,
         ILogger<DeliveryAutoConfirmService> logger,
         IOptions<DeliveryAutoConfirmOptions> options)
+        : base(scopeFactory, registry, logger)
     {
-        _scopeFactory = scopeFactory;
         _logger = logger;
         _options = options.Value;
     }
 
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    protected override string JobKey => "DeliveryAutoConfirm";
+    protected override int FallbackIntervalMinutes => _options.CheckIntervalMinutes > 0 ? _options.CheckIntervalMinutes : 60;
+
+    protected override async Task<JobRunResult> RunOnceAsync(AppDbContext db, CancellationToken stoppingToken)
     {
-        _logger.LogInformation("Delivery Auto Confirm Service is starting. Check Interval: {Interval} minutes", _options.CheckIntervalMinutes);
-
-        while (!stoppingToken.IsCancellationRequested)
-        {
-            try
-            {
-                _logger.LogInformation("Delivery Auto Confirm cycle starting at: {Timestamp}", DateTime.UtcNow);
-
-                using var scope = _scopeFactory.CreateScope();
-                var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-
-                await ProcessPendingAutoConfirmAsync(db);
-
-                _logger.LogInformation("Delivery Auto Confirm cycle completed at: {Timestamp}", DateTime.UtcNow);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error in Delivery Auto Confirm Service");
-            }
-
-            // Wait for the configured interval before next check (default 60 minutes)
-            await Task.Delay(TimeSpan.FromMinutes(_options.CheckIntervalMinutes), stoppingToken);
-        }
-
-        _logger.LogInformation("Delivery Auto Confirm Service is stopping.");
-    }
-
-    private async Task ProcessPendingAutoConfirmAsync(AppDbContext db)
-    {
-        // Log when auto delivery confirm is invoked
-        _logger.LogInformation("Delivery Auto Confirm Service invoked at: {Timestamp}", DateTime.UtcNow);
+        _logger.LogInformation("Delivery Auto Confirm cycle starting at: {Timestamp}", DateTime.UtcNow);
 
         // Find deliveries that:
         // 1. Have NOT been received yet (Received = false)
@@ -73,9 +48,6 @@ public class DeliveryAutoConfirmService : BackgroundService
         // 4. Expected receive date (PGI date + lead time) is today or in the past
         var today = DateTime.UtcNow.Date;
 
-        _logger.LogInformation(
-            "Auto-confirm criteria: Today = {Today}, looking for deliveries with PGI date + lead time <= today",
-            today.ToString("yyyy-MM-dd"));
         var pendingDeliveries = await db.DeliveryHeaders
             .Include(d => d.Customer)
             .Include(d => d.Lines)
@@ -96,21 +68,21 @@ public class DeliveryAutoConfirmService : BackgroundService
                 d.Type,
                 Lines = d.Lines
             })
-            .ToListAsync();
+            .ToListAsync(stoppingToken);
 
         if (!pendingDeliveries.Any())
         {
             _logger.LogDebug("No pending deliveries found for auto-confirmation.");
-            return;
+            return JobRunResult.Skipped("No pending deliveries found");
         }
 
-        _logger.LogInformation("Found {Count} pending deliveries for auto-confirmation evaluation.", pendingDeliveries.Count);
-
         int confirmedCount = 0;
+        var details = new System.Text.StringBuilder();
 
-        // Process each delivery
         foreach (var delivery in pendingDeliveries)
         {
+            stoppingToken.ThrowIfCancellationRequested();
+
             try
             {
                 // Calculate expected receive date: PGI date + lead time
@@ -119,11 +91,6 @@ public class DeliveryAutoConfirmService : BackgroundService
                 // Only auto-confirm if today is on or after the expected receive date
                 if (today < expectedReceiveDate)
                 {
-                    _logger.LogDebug(
-                        "Delivery {DeliveryNumber} not yet due for auto-confirmation. Expected: {ExpectedDate}, Today: {Today}",
-                        delivery.DeliveryNumber,
-                        expectedReceiveDate.ToString("yyyy-MM-dd"),
-                        today.ToString("yyyy-MM-dd"));
                     continue;
                 }
 
@@ -138,7 +105,7 @@ public class DeliveryAutoConfirmService : BackgroundService
                 var fullDelivery = await db.DeliveryHeaders
                     .Include(d => d.Lines)
                     .Include(d => d.Customer)
-                    .FirstOrDefaultAsync(d => d.DeliveryID == delivery.DeliveryID);
+                    .FirstOrDefaultAsync(d => d.DeliveryID == delivery.DeliveryID, stoppingToken);
 
                 if (fullDelivery == null)
                 {
@@ -165,7 +132,7 @@ public class DeliveryAutoConfirmService : BackgroundService
                     }
                 }
 
-                await db.SaveChangesAsync();
+                await db.SaveChangesAsync(stoppingToken);
 
                 // 🎯 CALL SAP zrest_doconfirm AFTER DATABASE UPDATE
                 // Similar to manual confirmation (UpdateByToken), notify SAP of the delivery confirmation
@@ -307,14 +274,15 @@ public class DeliveryAutoConfirmService : BackgroundService
                 confirmedCount++;
 
                 // Log activity
-                var activityLog = new ActivityLog
+                var activityLogEntry = new ActivityLog
                 {
                     EventType = "DeliveryAutoConfirmed",
                     ReferenceID = delivery.DeliveryNumber,
                     Message = $"Delivery {delivery.DeliveryNumber} auto-confirmed. PGI: {delivery.PostGoodsIssueDate.Value:yyyy-MM-dd}, Lead Time: {delivery.LeadTimeDays} days",
                     Severity = "Info"
                 };
-                db.ActivityLogs.Add(activityLog);
+                db.ActivityLogs.Add(activityLogEntry);
+                details.AppendLine($"Auto-confirmed {delivery.DeliveryNumber}");
 
                 _logger.LogInformation("Successfully auto-confirmed delivery {DeliveryNumber}", delivery.DeliveryNumber);
 
@@ -506,49 +474,22 @@ public class DeliveryAutoConfirmService : BackgroundService
                         catch (Exception ex)
                         {
                             _logger.LogError(ex, "Background invoice creation faulted for Non BC delivery {DeliveryNumber}", delivery.DeliveryNumber);
-
-                            // Log error activity
-                            using (var scope = _scopeFactory.CreateScope())
-                            {
-                                var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-                                var activityLog = new ActivityLog
-                                {
-                                    EventType = "NonBcInvoiceAutoCreationError",
-                                    ReferenceID = delivery.DeliveryNumber,
-                                    Message = $"Error during automatic invoice creation: {ex.Message}",
-                                    Severity = "Error"
-                                };
-                                db.ActivityLogs.Add(activityLog);
-                                await db.SaveChangesAsync();
-                            }
                         }
                     });
                 }
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Failed to auto-confirm delivery {DeliveryNumber}", delivery.DeliveryNumber);
-
-                // Log error activity
-                var activityLog = new ActivityLog
-                {
-                    EventType = "DeliveryAutoConfirmFailed",
-                    ReferenceID = delivery.DeliveryNumber,
-                    Message = $"Failed to auto-confirm delivery: {ex.Message}",
-                    Severity = "Error"
-                };
-                db.ActivityLogs.Add(activityLog);
+                _logger.LogError(ex, "Error processing auto-confirm for delivery {DeliveryNumber}", delivery.DeliveryNumber);
             }
         }
 
-        if (confirmedCount > 0)
-        {
-            await db.SaveChangesAsync();
-            _logger.LogInformation("Delivery Auto Confirm Service completed. Successfully confirmed {Count} deliveries.", confirmedCount);
-        }
-        else
-        {
-            _logger.LogInformation("Delivery Auto Confirm Service completed. No deliveries met the criteria for auto-confirmation.");
-        }
+        await db.SaveChangesAsync();
+
+        _logger.LogInformation("Delivery Auto Confirm cycle completed at: {Timestamp}. Confirmed: {Count}", DateTime.UtcNow, confirmedCount);
+
+        return confirmedCount > 0
+            ? JobRunResult.Success($"Auto-confirmed {confirmedCount} delivery(ies)")
+            : JobRunResult.Skipped("No deliveries due for auto-confirmation");
     }
 }

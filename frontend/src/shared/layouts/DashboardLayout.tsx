@@ -22,6 +22,7 @@ const menuItems: MenuItem[] = [
   { path: "/invoices", label: "Invoices", requiredPermission: "invoice:read" },
   { path: "/documents", label: "Document Hub", requiredPermission: "invoice:read" },
   { path: "/admin/uam", label: "User Management", requiredPermission: "uam:read", sysAdminOnly: true },
+  { path: "/background-jobs", label: "Background Jobs", requiredPermission: "job:read" },
 ]
 
 // Helper to decode JWT payload
