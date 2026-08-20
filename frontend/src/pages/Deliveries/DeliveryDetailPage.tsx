@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, memo } from "react"
 import { useParams, useNavigate } from "react-router-dom"
 import QRCode from "qrcode"
-import { CheckCircle, AlertTriangle, Package, ChevronDown, ChevronUp } from "lucide-react"
+import { CheckCircle, AlertTriangle, Package, ChevronDown, ChevronUp, Eye, EyeOff } from "lucide-react"
 import { Button } from "../../shared/components/ui/Button"
 import { Badge } from "../../shared/components/ui/Badge"
 import { Card, CardContent, CardHeader, CardTitle } from "../../shared/components/ui/Card"
@@ -51,6 +51,7 @@ interface DeliveryDetail {
   shipToAddress?: string | null
   customerCode: string
   customerName: string
+  customerPin?: string | null // 🆕 Sneak Peek PIN from backend (hidden for warehouse role)
   orderNumber?: string | null
   buyerPONumber?: string | null
   receiverToken: string
@@ -584,6 +585,8 @@ export function DeliveryDetailPage() {
   const [copySuccess, setCopySuccess] = useState(false)
   const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null)
   const [linePage, setLinePage] = useState(1)
+  // 🆕 Sneak Peek: reveal/hide customer PIN
+  const [showPin, setShowPin] = useState(false)
 
   // 🆕 SAP invoice generation state
   const [processingBilling, setProcessingBilling] = useState(false)
@@ -629,6 +632,7 @@ export function DeliveryDetailPage() {
   // Reset line page when delivery changes
   useEffect(() => {
     setLinePage(1)
+    setShowPin(false) // 🆕 Sneak Peek: always start hidden on a new delivery
   }, [deliveryId])
 
   // 🆕 Toast auto-dismiss
@@ -937,6 +941,27 @@ export function DeliveryDetailPage() {
                     </Badge>
                     <span className="text-sm text-brand-blue/80">{delivery.customerName}</span>
                   </div>
+                  {/* 🆕 Sneak Peek PIN: initially hidden, reveal on demand */}
+                  {delivery.customerPin && (
+                    <div className="flex items-center gap-2 pt-0.5">
+                      <span className="text-xs font-medium text-brand-blue/50 uppercase tracking-wider">
+                        PIN
+                      </span>
+                      <span className="font-mono text-xs px-2 py-1 rounded bg-slate-100/80 border border-slate-200/40 text-slate-600 tabular-nums">
+                        {showPin ? delivery.customerPin : "••••••"}
+                      </span>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setShowPin(prev => !prev)}
+                        className="h-7 w-7 p-0 rounded-md"
+                        aria-label={showPin ? "Hide customer PIN" : "Show customer PIN"}
+                        title={showPin ? "Hide PIN" : "Sneak peek PIN"}
+                      >
+                        {showPin ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                      </Button>
+                    </div>
+                  )}
                 </div>
               )}
 

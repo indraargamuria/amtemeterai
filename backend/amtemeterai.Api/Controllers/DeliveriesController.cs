@@ -334,6 +334,8 @@ public class DeliveriesController : ControllerBase
             // Conditional: Hide CustomerCode and CustomerName for warehouse role
             CustomerCode = isWarehouseRole ? string.Empty : (delivery.Customer?.CustomerCode ?? "UNKNOWN"),
             CustomerName = isWarehouseRole ? string.Empty : (delivery.Customer?.CustomerName ?? "UNKNOWN"),
+            // 🆕 Sneak Peek PIN: hidden for warehouse role, consistent with customer data hiding
+            CustomerPin = isWarehouseRole ? null : delivery.Customer?.CustomerPin,
             ReceiverToken = delivery.ReceiverToken,
             ReceiverName = delivery.ReceiverName,
             ReceiverNotes = delivery.ReceiverNotes,
