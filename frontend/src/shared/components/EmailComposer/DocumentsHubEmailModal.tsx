@@ -30,43 +30,61 @@ export interface HubEmailItem {
   isReadyToSend?: boolean
 }
 
+/** Per-document editable email draft — recipient, subject, body are ALL per-item. */
+interface EmailDraft {
+  to: string
+  subject: string
+  body: string
+}
+
 interface DocumentsHubEmailModalProps {
   isOpen: boolean
   onClose: () => void
-  /** All documents to email — ONE email per item (per-row subject). */
+  /** All documents to email — ONE email per item, each with its own draft. */
   items: HubEmailItem[]
-  /** Default subject line used unless overridden per item. */
-  defaultSubject: string
 }
 
-/** Default polite body for a document email. */
-const DEFAULT_BODY = `Dear Valued Customer,
+/** Reference line for the transaction number(s), e.g. "Delivery DO-123 & Invoice INV-456". */
+function referenceLine(it: HubEmailItem): string {
+  if (it.type === "delivery-only") return `Delivery ${it.deliveryNumber}`
+  if (it.type === "standalone-invoice") return `Invoice ${it.invoiceNumber}`
+  return `Delivery ${it.deliveryNumber} & Invoice ${it.invoiceNumber}`
+}
 
-Please find attached the document(s) for your reference.
-
-Thank you for your business.`
+/** Default draft per document: customer email as recipient, subject/body carry the transaction number. */
+function makeDraft(it: HubEmailItem): EmailDraft {
+  const ref = referenceLine(it)
+  return {
+    to: it.customerEmail ?? "",
+    subject: `Documents: ${ref}`,
+    body: `Dear Valued Customer,\n\nPlease find attached the document(s) for your reference:\n\n${ref}\n\nThank you for your business.`
+  }
+}
 
 /**
  * 2-level Document Hub email modal:
  *  LEFT: customer → per-document navigation (bookmark style).
- *  RIGHT: email body preview + medium-size attachment preview (click → full doc).
- * Sends ONE email per document (each with its own subject), not one per customer.
+ *  RIGHT: email draft editor (recipient, subject, body) + attachment preview.
+ * Every field is linked to the ACTIVE document individually; defaults are
+ * customer email (recipient) + transaction number (subject & body).
+ * Sends ONE email per document, each with its own draft.
  */
 export function DocumentsHubEmailModal({
   isOpen,
   onClose,
-  items,
-  defaultSubject
+  items
 }: DocumentsHubEmailModalProps) {
   const api = useApi()
-  const [toEmail, setToEmail] = useState("")
-  const [body, setBody] = useState(DEFAULT_BODY)
+
+  // Per-item drafts, initialized once on open (component mounts fresh each time).
+  const [drafts, setDrafts] = useState<Record<string, EmailDraft>>(() =>
+    Object.fromEntries(items.map((it) => [it.key, makeDraft(it)]))
+  )
   const [sending, setSending] = useState(false)
   const [sentCount, setSentCount] = useState(0)
   const [error, setError] = useState("")
   const [expandedCustomer, setExpandedCustomer] = useState<string | null>(null)
   const [activeItemKey, setActiveItemKey] = useState<string | null>(null)
-  const [subjectOverrides, setSubjectOverrides] = useState<Record<string, string>>({})
 
   // Group items by customer for the 2-level nav (bookmark concept)
   const customers = useMemo(() => {
@@ -82,10 +100,15 @@ export function DocumentsHubEmailModal({
   // Default to expanding first customer + selecting first item on open
   const activeKey = activeItemKey ?? items[0]?.key ?? null
   const activeItem = items.find((i) => i.key === activeKey) ?? null
+  const activeDraft = activeItem ? (drafts[activeItem.key] ?? makeDraft(activeItem)) : null
 
-  const subjectText = activeItem
-    ? (subjectOverrides[activeItem.key] ?? defaultSubject)
-    : defaultSubject
+  const updateActiveDraft = (patch: Partial<EmailDraft>) => {
+    if (!activeItem) return
+    setDrafts((prev) => {
+      const current = prev[activeItem.key] ?? makeDraft(activeItem)
+      return { ...prev, [activeItem.key]: { ...current, ...patch } }
+    })
+  }
 
   const buildAttachmentRefs = (item: HubEmailItem): EmailAttachmentRef[] => {
     const refs: EmailAttachmentRef[] = []
@@ -111,8 +134,15 @@ export function DocumentsHubEmailModal({
   }
 
   const handleSend = async () => {
-    if (!toEmail.trim()) {
-      setError("Recipient email is required.")
+    // Validate every draft has a recipient (each doc sends its own email)
+    const missing = items.filter((it) => !(drafts[it.key]?.to ?? "").trim())
+    if (missing.length > 0) {
+      const first = missing[0].key
+      setError(
+        missing.length === 1
+          ? `Recipient email is required for ${first}.`
+          : `Recipient email is required for ${first} and ${missing.length - 1} more.`
+      )
       return
     }
     setSending(true)
@@ -120,17 +150,17 @@ export function DocumentsHubEmailModal({
     setSentCount(0)
 
     try {
-      // ONE email per document, each with its own subject (user requirement)
+      // ONE email per document, each with its own recipient/subject/body
       for (let i = 0; i < items.length; i++) {
         const it = items[i]
-        const subject = subjectOverrides[it.key] ?? defaultSubject
+        const d = drafts[it.key] ?? makeDraft(it)
         const attachments = buildAttachmentRefs(it)
         for (const a of attachments) {
           const response = await api.post("/api/email/send-with-attachments", {
-            toEmail,
+            toEmail: d.to,
             toName: it.customerName,
-            subject,
-            body,
+            subject: d.subject,
+            body: d.body,
             referenceType: a.referenceType,
             referenceNumber: a.referenceNumber,
             ccEmails: ""
@@ -174,7 +204,7 @@ export function DocumentsHubEmailModal({
             <div>
               <h2 className="text-lg font-semibold text-brand-blue dark:text-slate-100">Email Documents</h2>
               <p className="text-xs text-brand-blue dark:text-slate-100/50 dark:text-slate-400">
-                {items.length} document{items.length !== 1 ? "s" : ""} · one email per document
+                {items.length} document{items.length !== 1 ? "s" : ""} · one email per document, fields editable per document
               </p>
             </div>
           </div>
@@ -183,40 +213,38 @@ export function DocumentsHubEmailModal({
           </button>
         </div>
 
-        {/* Recipient + Subject */}
-        <div className="px-6 py-4 border-b border-brand-blue/5 space-y-3">
-          <div className="flex items-center gap-3">
-            <label className="text-xs font-medium text-brand-blue dark:text-slate-100/60 dark:text-slate-400 uppercase tracking-wider w-24">To</label>
-            <input
-              type="email"
-              value={toEmail}
-              onChange={(e) => setToEmail(e.target.value)}
-              placeholder={activeItem?.customerEmail || "recipient@company.com"}
-              className="flex-1 px-3 py-2 rounded-md bg-white dark:bg-slate-800 border border-brand-blue/10 dark:border-slate-700 text-sm text-brand-blue dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/20"
-            />
-            {activeItem?.customerEmail && (
-              <button
-                onClick={() => setToEmail(activeItem.customerEmail!)}
-                className="text-xs text-brand-blue/60 hover:text-brand-blue underline"
-              >
-                Use customer email
-              </button>
-            )}
+        {/* Recipient + Subject (for the ACTIVE document) */}
+        {activeItem && activeDraft && (
+          <div className="px-6 py-4 border-b border-brand-blue/5 space-y-3">
+            <div className="flex items-center gap-3">
+              <label className="text-xs font-medium text-brand-blue dark:text-slate-100/60 dark:text-slate-400 uppercase tracking-wider w-24">To</label>
+              <input
+                type="email"
+                value={activeDraft.to}
+                onChange={(e) => updateActiveDraft({ to: e.target.value })}
+                placeholder={activeItem.customerEmail || "recipient@company.com"}
+                className="flex-1 px-3 py-2 rounded-md bg-white dark:bg-slate-800 border border-brand-blue/10 dark:border-slate-700 text-sm text-brand-blue dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/20"
+              />
+              {activeItem.customerEmail && (
+                <button
+                  onClick={() => updateActiveDraft({ to: activeItem.customerEmail! })}
+                  className="text-xs text-brand-blue/60 hover:text-brand-blue underline shrink-0"
+                >
+                  Use customer email
+                </button>
+              )}
+            </div>
+            <div className="flex items-center gap-3">
+              <label className="text-xs font-medium text-brand-blue dark:text-slate-100/60 dark:text-slate-400 uppercase tracking-wider w-24">Subject</label>
+              <input
+                type="text"
+                value={activeDraft.subject}
+                onChange={(e) => updateActiveDraft({ subject: e.target.value })}
+                className="flex-1 px-3 py-2 rounded-md bg-white dark:bg-slate-800 border border-brand-blue/10 dark:border-slate-700 text-sm text-brand-blue dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/20"
+              />
+            </div>
           </div>
-          <div className="flex items-center gap-3">
-            <label className="text-xs font-medium text-brand-blue dark:text-slate-100/60 dark:text-slate-400 uppercase tracking-wider w-24">Subject</label>
-            <input
-              type="text"
-              value={subjectText}
-              onChange={(e) => {
-                if (activeItem) {
-                  setSubjectOverrides((p) => ({ ...p, [activeItem.key]: e.target.value }))
-                }
-              }}
-              className="flex-1 px-3 py-2 rounded-md bg-white dark:bg-slate-800 border border-brand-blue/10 dark:border-slate-700 text-sm text-brand-blue dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/20"
-            />
-          </div>
-        </div>
+        )}
 
         {/* Body: LEFT nav + RIGHT preview */}
         <div className="flex-1 flex min-h-0">
@@ -261,18 +289,20 @@ export function DocumentsHubEmailModal({
             })}
           </div>
 
-          {/* RIGHT: email body + attachment preview */}
+          {/* RIGHT: email body (active doc) + attachment preview */}
           <div className="flex-1 flex flex-col min-w-0">
-            {/* body editor */}
-            <div className="p-4 border-b border-brand-blue/5">
-              <label className="text-xs font-medium text-brand-blue dark:text-slate-100/60 dark:text-slate-400 uppercase tracking-wider mb-1.5 block">Email Body</label>
-              <textarea
-                value={body}
-                onChange={(e) => setBody(e.target.value)}
-                rows={4}
-                className="w-full px-3 py-2 rounded-md bg-white dark:bg-slate-800 border border-brand-blue/10 dark:border-slate-700 text-sm text-brand-blue dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/20 resize-none"
-              />
-            </div>
+            {/* body editor — active document only */}
+            {activeDraft && (
+              <div className="p-4 border-b border-brand-blue/5">
+                <label className="text-xs font-medium text-brand-blue dark:text-slate-100/60 dark:text-slate-400 uppercase tracking-wider mb-1.5 block">Email Body</label>
+                <textarea
+                  value={activeDraft.body}
+                  onChange={(e) => updateActiveDraft({ body: e.target.value })}
+                  rows={4}
+                  className="w-full px-3 py-2 rounded-md bg-white dark:bg-slate-800 border border-brand-blue/10 dark:border-slate-700 text-sm text-brand-blue dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/20 resize-none"
+                />
+              </div>
+            )}
 
             {/* ready-to-send badge + attachment preview */}
             {activeItem && (

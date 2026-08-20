@@ -549,7 +549,6 @@ export function DocumentsPage() {
           isOpen={emailOpen}
           onClose={() => setEmailOpen(false)}
           items={emailItems}
-          defaultSubject="Documents for your reference"
         />
       )}
     </div>
