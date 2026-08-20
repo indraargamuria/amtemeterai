@@ -16,7 +16,7 @@ namespace amtemeterai.Api.Controllers;
 
 [ApiController]
 [Route("api/deliveries")]
-[Authorize]
+[Authorize(Policy = PermissionKeys.DeliveryRead)]
 public class DeliveriesController : ControllerBase
 {
     private readonly AppDbContext _db;
@@ -543,6 +543,7 @@ public class DeliveriesController : ControllerBase
     }
 
     [HttpPost]
+    [Authorize(Policy = PermissionKeys.DeliverySync)]
     public async Task<ActionResult<DeliveryCreateResponseDto>> Create(DeliveryUpsertDto dto)
     {
         var customer = await _db.Customers
@@ -613,6 +614,7 @@ public class DeliveriesController : ControllerBase
     }
 
     [HttpPatch]
+    [Authorize(Policy = PermissionKeys.DeliverySync)]
     public async Task<IActionResult> Upsert(DeliveryUpsertDto dto)
     {
         var customer = await _db.Customers
@@ -1294,6 +1296,7 @@ public class DeliveriesController : ControllerBase
     }
 
     [HttpPost("dev/seed-deliveries")]
+    [Authorize(Policy = PermissionKeys.DeliverySync)]
     public async Task<IActionResult> SeedDeliveries()
     {
         if (!_env.IsDevelopment())
@@ -1435,6 +1438,7 @@ public class DeliveriesController : ControllerBase
     }
     
     [HttpPost("cancel/{deliveryNumber}")]
+    [Authorize(Policy = PermissionKeys.DeliverySync)]
     public async Task<IActionResult> CancelDelivery(string deliveryNumber, [FromBody] CancelDeliveryDto dto)
     {
         if (string.IsNullOrWhiteSpace(deliveryNumber))
@@ -1478,7 +1482,7 @@ public class DeliveriesController : ControllerBase
     /// Upload delivery printout using internal delivery ID (Legacy endpoint)
     /// </summary>
     [HttpPost("{deliveryId:int}/upload-printout")]
-    [Authorize]
+    [Authorize(Policy = PermissionKeys.DeliverySync)]
     public async Task<IActionResult> UploadDeliveryPrintout(int deliveryId, IFormFile file)
     {
         if (file == null || file.Length == 0)
@@ -1498,7 +1502,7 @@ public class DeliveriesController : ControllerBase
     /// This is the preferred method for integration with SAP systems
     /// </summary>
     [HttpPost("by-number/{deliveryNumber}/upload-printout")]
-    [Authorize]
+    [Authorize(Policy = PermissionKeys.DeliverySync)]
     public async Task<IActionResult> UploadDeliveryPrintoutByNumber(string deliveryNumber, IFormFile file)
     {
         if (string.IsNullOrWhiteSpace(deliveryNumber))
@@ -1595,7 +1599,7 @@ public class DeliveriesController : ControllerBase
     /// Enforces business interlocking rules for billing lifecycle management
     /// </summary>
     [HttpPost("{deliveryNumber}/invoice")]
-    [Authorize]
+    [Authorize(Policy = PermissionKeys.InvoiceSync)]
     public async Task<ActionResult<DeliverySettlementResponseDto>> CreateSapInvoice(string deliveryNumber)
     {
         if (string.IsNullOrWhiteSpace(deliveryNumber))
@@ -1983,7 +1987,7 @@ public class DeliveriesController : ControllerBase
     /// Invoked exclusively by SAP to unlock a delivery for re-billing.
     /// </summary>
     [HttpPost("by-number/{deliveryNumber}/release-rebill")]
-    [Authorize]
+    [Authorize(Policy = PermissionKeys.InvoiceSync)]
     public async Task<IActionResult> ReleaseRebillAuthorization(string deliveryNumber)
     {
         if (string.IsNullOrWhiteSpace(deliveryNumber))

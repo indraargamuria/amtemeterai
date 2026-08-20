@@ -15,7 +15,7 @@ namespace amtemeterai.Api.Controllers;
 
 [ApiController]
 [Route("api/invoices")]
-[Authorize]
+[Authorize(Policy = PermissionKeys.InvoiceRead)]
 public class InvoicesController : ControllerBase
 {
     // Valid compliance categories accepted by the invoice creation API.
@@ -49,6 +49,7 @@ public class InvoicesController : ControllerBase
     }
 
     [HttpPost("{id:int}/stamp")]
+    [Authorize(Policy = PermissionKeys.InvoiceSync)]
     public async Task<IActionResult> StampInvoice(int id)
     {
         var invoice = await _db.Invoices
@@ -160,6 +161,7 @@ public class InvoicesController : ControllerBase
     /// Stamp invoice by SAP invoice number (preferred method for SAP integration)
     /// Uses on-premise Peruri stamping flow if configured
     [HttpPost("by-sap-number/{invoiceNumber}/stamp")]
+    [Authorize(Policy = PermissionKeys.InvoiceSync)]
     public async Task<IActionResult> StampInvoiceByNumber(string invoiceNumber)
     {
         if (string.IsNullOrWhiteSpace(invoiceNumber))
@@ -522,6 +524,7 @@ public class InvoicesController : ControllerBase
     }
 
     [HttpPost]
+    [Authorize(Policy = PermissionKeys.InvoiceSync)]
     public async Task<ActionResult<InvoiceResponseDto>> CreateInvoice(InvoiceCreateDto dto)
     {
         // Validate invoice number is unique
@@ -608,6 +611,7 @@ public class InvoicesController : ControllerBase
     /// Expects a raw JSON body payload. File uploading must be done via a separate endpoint.
     /// </summary>
     [HttpPost("without-delivery")]
+    [Authorize(Policy = PermissionKeys.InvoiceSync)]
     public async Task<ActionResult<InvoiceResponseDto>> CreateInvoiceWithoutDelivery([FromBody] CreateInvoiceWithoutDeliveryDto dto)
     {
         if (string.IsNullOrWhiteSpace(dto.InvoiceNumber))
@@ -699,6 +703,7 @@ public class InvoicesController : ControllerBase
         /// Validation for foreign currency is skipped if BaseAmountForeign is zero.
         /// </summary>
         [HttpPut("{id:int}/downpay")]
+        [Authorize(Policy = PermissionKeys.InvoiceSync)]
     public async Task<ActionResult<InvoiceResponseDto>> UpdateInvoiceDownPay(
         int id,
         [FromBody] UpdateInvoiceDownPayDto dto)
@@ -743,6 +748,7 @@ public class InvoicesController : ControllerBase
     /// Validation for foreign currency is skipped if BaseAmountForeign is zero.
     /// </summary>
     [HttpPut("by-sap-number/{invoiceNumber}/downpay")]
+    [Authorize(Policy = PermissionKeys.InvoiceSync)]
     public async Task<ActionResult<InvoiceResponseDto>> UpdateInvoiceDownPayByNumber(
         string invoiceNumber,
         [FromBody] UpdateInvoiceDownPayDto dto)
@@ -789,6 +795,7 @@ public class InvoicesController : ControllerBase
     /// Upload invoice printout using internal invoice ID (Legacy endpoint)
     /// </summary>
     [HttpPost("{id:int}/upload-printout")]
+    [Authorize(Policy = PermissionKeys.InvoiceSync)]
     public async Task<IActionResult> UploadInvoicePrintout(int id, IFormFile file)
     {
         if (file == null || file.Length == 0)
@@ -808,6 +815,7 @@ public class InvoicesController : ControllerBase
     /// This is the preferred method for SAP integration
     /// </summary>
     [HttpPost("by-number/{invoiceNumber}/upload-printout")]
+    [Authorize(Policy = PermissionKeys.InvoiceSync)]
     public async Task<IActionResult> UploadInvoicePrintoutByNumber(string invoiceNumber, IFormFile file)
     {
         if (string.IsNullOrWhiteSpace(invoiceNumber))
@@ -946,6 +954,7 @@ public class InvoicesController : ControllerBase
     /// Transactional operation that voids the invoice and blocks the delivery from re-billing.
     /// </summary>
     [HttpPost("by-sap-number/{invoiceNumber}/void")]
+    [Authorize(Policy = PermissionKeys.InvoiceSync)]
     public async Task<IActionResult> VoidInvoiceBySapNumber(string invoiceNumber)
     {
         if (string.IsNullOrWhiteSpace(invoiceNumber))
@@ -1012,6 +1021,7 @@ public class InvoicesController : ControllerBase
     /// - If invoice is linked to a DO, deletes the invoice and resets delivery status to allow re-invoicing.
     /// </summary>
     [HttpDelete("by-sap-number/{invoiceNumber}")]
+    [Authorize(Policy = PermissionKeys.InvoiceSync)]
     public async Task<IActionResult> DeleteInvoiceByNumber(string invoiceNumber)
     {
         if (string.IsNullOrWhiteSpace(invoiceNumber))

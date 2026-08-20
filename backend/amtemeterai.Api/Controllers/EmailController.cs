@@ -7,7 +7,7 @@ namespace amtemeterai.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-[Authorize]
+[Authorize(Policy = PermissionKeys.InvoiceRead)]
 public class EmailController : ControllerBase
 {
     private readonly IEmailService _emailService;

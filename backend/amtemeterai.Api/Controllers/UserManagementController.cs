@@ -9,7 +9,7 @@ namespace amtemeterai.Api.Controllers;
 
 [ApiController]
 [Route("api/admin/uam")]
-[Authorize(Roles = "sysadmin")]
+[Authorize(Policy = PermissionKeys.UamRead)]
 public class UserManagementController : ControllerBase
 {
     private readonly UserManager<ApplicationUser> _userManager;
@@ -39,7 +39,9 @@ public class UserManagementController : ControllerBase
                 u.FullName,
                 u.Email,
                 u.LastLoginAt,
-                u.CreatedAt
+                u.CreatedAt,
+                u.IsActive,
+                u.DeactivatedAt
             })
             .OrderBy(u => u.FullName)
             .ToListAsync();
@@ -104,6 +106,7 @@ public class UserManagementController : ControllerBase
     /// Update user's unified assignment matrix (Plants + Roles)
     /// </summary>
     [HttpPost("users/{id}/matrix")]
+    [Authorize(Policy = PermissionKeys.UamSync)]
     public async Task<ActionResult> UpdateUserMatrix(string id, [FromBody] UpdateUserMatrixDto dto)
     {
         var user = await _userManager.FindByIdAsync(id);
@@ -276,6 +279,7 @@ public class UserManagementController : ControllerBase
     /// Update menu assignments for a specific role
     /// </summary>
     [HttpPost("roles/{roleName}/menus")]
+    [Authorize(Policy = PermissionKeys.UamSync)]
     public async Task<ActionResult> UpdateRoleMenus(string roleName, [FromBody] UpdateRoleMenusDto dto)
     {
         // Verify role exists
@@ -388,6 +392,7 @@ public class UserManagementController : ControllerBase
     /// Register a new user with a specific role (Admin Only)
     /// </summary>
     [HttpPost("users/register")]
+    [Authorize(Policy = PermissionKeys.UamSync)]
     public async Task<ActionResult> RegisterUser([FromBody] RegisterUserDto dto)
     {
         // Validate required fields
@@ -472,6 +477,69 @@ public class UserManagementController : ControllerBase
             role = dto.TargetRole,
             createdAt = newUser.CreatedAt
         });
+    }
+
+    /// <summary>
+    /// Deactivate a user account. The user is immediately signed out everywhere:
+    /// their SecurityStamp is rotated (invalidating all existing JWTs) and the
+    /// IsActive flag blocks future logins.
+    /// </summary>
+    [HttpPost("users/{id}/deactivate")]
+    [Authorize(Policy = PermissionKeys.UamSync)]
+    public async Task<ActionResult> DeactivateUser(string id)
+    {
+        var user = await _userManager.FindByIdAsync(id);
+        if (user == null)
+        {
+            return NotFound(new { message = "User not found" });
+        }
+
+        // Prevent self-deactivation (admin locking themselves out)
+        var currentUserId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+        if (currentUserId == id)
+        {
+            return BadRequest(new { message = "You cannot deactivate your own account." });
+        }
+
+        if (!user.IsActive)
+        {
+            return BadRequest(new { message = "User is already deactivated." });
+        }
+
+        user.IsActive = false;
+        user.DeactivatedAt = DateTime.UtcNow;
+
+        // Rotate security stamp to invalidate all existing tokens immediately
+        await _userManager.UpdateSecurityStampAsync(user);
+        await _userManager.UpdateAsync(user);
+
+        return Ok(new { message = $"User '{user.UserName}' has been deactivated." });
+    }
+
+    /// <summary>
+    /// Reactivate a previously deactivated user account.
+    /// </summary>
+    [HttpPost("users/{id}/reactivate")]
+    [Authorize(Policy = PermissionKeys.UamSync)]
+    public async Task<ActionResult> ReactivateUser(string id)
+    {
+        var user = await _userManager.FindByIdAsync(id);
+        if (user == null)
+        {
+            return NotFound(new { message = "User not found" });
+        }
+
+        if (user.IsActive)
+        {
+            return BadRequest(new { message = "User is already active." });
+        }
+
+        user.IsActive = true;
+        user.DeactivatedAt = null;
+
+        await _userManager.UpdateAsync(user);
+
+        return Ok(new { message = $"User '{user.UserName}' has been reactivated." });
     }
 
     #endregion

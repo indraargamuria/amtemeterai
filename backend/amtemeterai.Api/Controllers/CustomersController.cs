@@ -10,7 +10,7 @@ namespace amtemeterai.Api.Controllers;
 
 [ApiController]
 [Route("api/customers")]
-[Authorize]
+[Authorize(Policy = PermissionKeys.CustomerRead)]
 public class CustomersController : ControllerBase
 {
     private readonly AppDbContext _db;
@@ -63,6 +63,7 @@ public class CustomersController : ControllerBase
 
     //2026-05-06 - Customer Sync Endpoint
     [HttpPost("sync")]
+    [Authorize(Policy = PermissionKeys.CustomerSync)]
     public async Task<IActionResult> SyncCustomers()
     {
         var externalCustomers = await _customerSource.GetCustomersAsync();
@@ -88,6 +89,7 @@ public class CustomersController : ControllerBase
 
     [HttpPost]
     [HttpPatch]
+    [Authorize(Policy = PermissionKeys.CustomerSync)]
     public async Task<IActionResult> Upsert(CustomerUpsertDto dto)
     {
         var existing = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions

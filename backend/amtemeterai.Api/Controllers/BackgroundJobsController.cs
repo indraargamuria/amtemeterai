@@ -13,7 +13,7 @@ namespace amtemeterai.Api.Controllers;
 /// </summary>
 [ApiController]
 [Route("api/background-jobs")]
-[Authorize]
+[Authorize(Policy = PermissionKeys.JobRead)]
 public class BackgroundJobsController : ControllerBase
 {
     private readonly AppDbContext _db;
@@ -44,6 +44,7 @@ public class BackgroundJobsController : ControllerBase
 
     /// <summary>Update a job's enabled state and/or interval (minutes).</summary>
     [HttpPatch("{key}")]
+    [Authorize(Policy = PermissionKeys.JobManage)]
     public async Task<IActionResult> Update(string key, [FromBody] UpdateBackgroundJobDto dto)
     {
         var job = await _db.BackgroundJobs.FirstOrDefaultAsync(j => j.JobKey == key);
@@ -67,6 +68,7 @@ public class BackgroundJobsController : ControllerBase
 
     /// <summary>Trigger an immediate run of a job (next loop wake-up).</summary>
     [HttpPost("{key}/run-now")]
+    [Authorize(Policy = PermissionKeys.JobManage)]
     public async Task<IActionResult> RunNow(string key)
     {
         var job = await _db.BackgroundJobs.AsNoTracking().FirstOrDefaultAsync(j => j.JobKey == key);

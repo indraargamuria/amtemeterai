@@ -134,23 +134,26 @@ public static class DbInitializer
 
         if (financeRole != null)
         {
-            // Finance gets access to dashboard, customer, and invoices
+            // Finance: dashboard, customer read, invoice read + sync
             await AssignPermissionToRoleAsync(context, financeRole.Id, 1); // dashboard:read
             await AssignPermissionToRoleAsync(context, financeRole.Id, 2); // customer:read
             await AssignPermissionToRoleAsync(context, financeRole.Id, 4); // invoice:read
+            await AssignPermissionToRoleAsync(context, financeRole.Id, 5); // invoice:sync
         }
 
         if (warehouseRole != null)
         {
-            // Warehouse only gets access to delivery
+            // Warehouse: delivery read only (no customer/invoice visibility)
             await AssignPermissionToRoleAsync(context, warehouseRole.Id, 6); // delivery:read
         }
 
         if (salesRole != null)
         {
-            // Sales only gets access to dashboard and customer
+            // Sales: dashboard, customer read + sync, delivery read
             await AssignPermissionToRoleAsync(context, salesRole.Id, 1); // dashboard:read
             await AssignPermissionToRoleAsync(context, salesRole.Id, 2); // customer:read
+            await AssignPermissionToRoleAsync(context, salesRole.Id, 3); // customer:sync
+            await AssignPermissionToRoleAsync(context, salesRole.Id, 6); // delivery:read
         }
 
         await context.SaveChangesAsync();

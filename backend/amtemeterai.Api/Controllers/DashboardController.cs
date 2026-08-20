@@ -8,7 +8,7 @@ namespace amtemeterai.Api.Controllers;
 
 [ApiController]
 [Route("api/dashboard")]
-[Authorize]
+[Authorize(Policy = PermissionKeys.DashboardRead)]
 public class DashboardController : ControllerBase
 {
     private readonly AppDbContext _db;

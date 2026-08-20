@@ -13,6 +13,8 @@ interface User {
   email: string
   lastLoginAt: string | null
   createdAt: string
+  isActive: boolean
+  deactivatedAt: string | null
 }
 
 interface Plant {
@@ -103,6 +105,7 @@ export function UserAccessManagementPage() {
   const [loading, setLoading] = useState(true)
   const [matrixLoading, setMatrixLoading] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [togglingUserId, setTogglingUserId] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState("")
   const [saveMessage, setSaveMessage] = useState<string | null>(null)
   const [activeMainTab, setActiveMainTab] = useState<MainTabValue>("user-mapping")
@@ -292,6 +295,46 @@ export function UserAccessManagementPage() {
       u.email?.toLowerCase().includes(searchQuery.toLowerCase())
   )
 
+  const handleToggleActivation = async (user: User) => {
+    if (togglingUserId) return
+    const nextActive = !user.isActive
+    const actionLabel = nextActive ? "activate" : "deactivate"
+    if (!window.confirm(`Are you sure you want to ${actionLabel} ${user.fullName || user.email}?`)) {
+      return
+    }
+    setTogglingUserId(user.id)
+    try {
+      const res = await api.post(
+        `/api/admin/uam/users/${user.id}/${nextActive ? "reactivate" : "deactivate"}`
+      )
+      if (!res.ok) {
+        const err = await res.json().catch(() => null)
+        throw new Error(err?.message || `Failed to ${actionLabel} user`)
+      }
+      // Refresh user list + matrix in place
+      setUsers((prev) =>
+        prev.map((u) =>
+          u.id === user.id
+            ? { ...u, isActive: nextActive, deactivatedAt: nextActive ? null : new Date().toISOString() }
+            : u
+        )
+      )
+      if (selectedUserId === user.id && matrixData) {
+        setMatrixData({ ...matrixData })
+      }
+      setSaveMessage(
+        nextActive
+          ? `${user.fullName || user.email} has been activated`
+          : `${user.fullName || user.email} has been deactivated`
+      )
+    } catch (err) {
+      console.error(err)
+      setSaveMessage(err instanceof Error ? err.message : "Failed to update user status")
+    } finally {
+      setTogglingUserId(null)
+    }
+  }
+
   const hasUserChanges = matrixData
     ? selectedPlants.size !== matrixData.assignedPlants.length ||
       selectedRoles.size !== matrixData.assignedRoles.length ||
@@ -409,15 +452,15 @@ export function UserAccessManagementPage() {
                           No users found
                         </div>
                       ) : (
-                        <div className="divide-y divide-slate-100">
+                        <div className="divide-y divide-slate-100 dark:divide-slate-800">
                           {filteredUsers.map((user) => (
-                            <button
+                            <div
                               key={user.id}
                               onClick={() => {
                                 setSelectedUserId(user.id)
                                 setActiveUserTab("plants")
                               }}
-                              className={`w-full text-left p-4 hover:bg-brand-blue/[0.02] transition-colors ${
+                              className={`w-full text-left p-4 hover:bg-brand-blue/[0.02] transition-colors cursor-pointer ${
                                 selectedUserId === user.id
                                   ? "bg-brand-blue/10 border-l-2 border-brand-blue"
                                   : ""
@@ -431,9 +474,20 @@ export function UserAccessManagementPage() {
                                   </span>
                                 </div>
                                 <div className="flex-1 min-w-0">
-                                  <p className="text-sm font-medium text-brand-blue dark:text-slate-100 truncate">
-                                    {user.fullName || "Unknown User"}
-                                  </p>
+                                  <div className="flex items-center gap-2">
+                                    <p className="text-sm font-medium text-brand-blue dark:text-slate-100 truncate">
+                                      {user.fullName || "Unknown User"}
+                                    </p>
+                                    <Badge
+                                      className={`${
+                                        user.isActive
+                                          ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
+                                          : "bg-brand-red/10 text-brand-red"
+                                      }`}
+                                    >
+                                      {user.isActive ? "Active" : "Inactive"}
+                                    </Badge>
+                                  </div>
                                   <p className="text-xs text-brand-blue dark:text-slate-100/50 dark:text-slate-400 truncate">
                                     {user.email}
                                   </p>
@@ -444,8 +498,26 @@ export function UserAccessManagementPage() {
                                       : "Never"}
                                   </p>
                                 </div>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    handleToggleActivation(user)
+                                  }}
+                                  disabled={togglingUserId === user.id}
+                                  className={`flex-shrink-0 px-2.5 py-1.5 rounded-md text-xs font-medium transition-colors border ${
+                                    user.isActive
+                                      ? "border-brand-red/30 text-brand-red hover:bg-brand-red/5"
+                                      : "border-emerald-500/30 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/5"
+                                  } disabled:opacity-50 disabled:cursor-not-allowed`}
+                                >
+                                  {togglingUserId === user.id
+                                    ? "..."
+                                    : user.isActive
+                                      ? "Deactivate"
+                                      : "Activate"}
+                                </button>
                               </div>
-                            </button>
+                            </div>
                           ))}
                         </div>
                       )}
@@ -495,6 +567,21 @@ export function UserAccessManagementPage() {
                           </p>
                         </div>
                         <div className="flex gap-2">
+                          {(() => {
+                            const selectedUser = users.find((u) => u.id === matrixData.userId)
+                            if (!selectedUser) return null
+                            return (
+                              <Badge
+                                className={`${
+                                  selectedUser.isActive
+                                    ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
+                                    : "bg-brand-red/10 text-brand-red"
+                                }`}
+                              >
+                                {selectedUser.isActive ? "Active" : "Inactive"}
+                              </Badge>
+                            )
+                          })()}
                           <Badge
                             variant="outline"
                             className="border-brand-blue/20 text-brand-blue dark:text-slate-100/70 dark:text-slate-300"

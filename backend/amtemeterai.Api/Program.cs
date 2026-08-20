@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
@@ -9,6 +10,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using amtemeterai.Api.Config;
 using Microsoft.AspNetCore.Http.Features;
+using System.Security.Claims;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -187,12 +189,68 @@ builder.Services.AddAuthentication(options =>
         IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"]!)),
         ClockSkew = TimeSpan.Zero
     };
+
+    // 🔐 SESSION REVOCATION: compare the token's embedded security_stamp claim
+    // against the live user. Rotating a user's SecurityStamp (e.g. on
+    // deactivation) invalidates every outstanding JWT immediately — no need to
+    // wait for expiry. Also blocks deactivated accounts from API access.
+    options.Events = new JwtBearerEvents
+    {
+        OnTokenValidated = async context =>
+        {
+            var userId = context.Principal?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+            if (string.IsNullOrEmpty(userId))
+            {
+                context.Fail("Missing user identifier");
+                return;
+            }
+
+            var db = context.HttpContext.RequestServices.GetRequiredService<AppDbContext>();
+            var user = await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == userId);
+            if (user == null)
+            {
+                context.Fail("User no longer exists");
+                return;
+            }
+
+            if (!user.IsActive)
+            {
+                context.Fail("Account has been deactivated");
+                return;
+            }
+
+            var tokenStamp = context.Principal?.FindFirst("security_stamp")?.Value;
+            if (string.IsNullOrEmpty(tokenStamp) || tokenStamp != user.SecurityStamp)
+            {
+                context.Fail("Security stamp mismatch — session has been revoked");
+            }
+        }
+    };
 });
 
 // Bind JWT options for service injection (used by services that need JWT config)
 builder.Services.Configure<JwtOptions>(builder.Configuration.GetSection(JwtOptions.SectionName));
 
-builder.Services.AddAuthorization();
+// 🚀 POLICY-BASED AUTHORIZATION
+// Mirrors DbInitializer seed list — the canonical RBAC permission registry.
+// Endpoints use [Authorize(Policy = "permission:key")] which auto-grants
+// sysadmin (bypass) and requires a matching "permission" JWT claim otherwise.
+// Adding a new permission requires updating this list AND DbInitializer.
+builder.Services.AddAuthorization(options =>
+{
+    options.DefaultPolicy = new AuthorizationPolicyBuilder()
+        .RequireAuthenticatedUser()
+        .Build();
+
+    foreach (var key in PermissionKeys.All)
+    {
+        options.AddPolicy(key, policy => policy
+            .RequireAuthenticatedUser()
+            .RequireAssertion(ctx =>
+                ctx.User.IsInRole("sysadmin") ||
+                ctx.User.HasClaim(c => c.Type == "permission" && c.Value == key)));
+    }
+});
 
 var app = builder.Build();
 
@@ -378,3 +436,30 @@ app.UseAuthorization(); // Single clean authorization check
 app.MapControllers();
 
 app.Run();
+
+/// <summary>
+/// Central registry of permission keys. Keep in sync with DbInitializer seeds.
+/// </summary>
+public static class PermissionKeys
+{
+    // Read permissions
+    public const string DashboardRead = "dashboard:read";
+    public const string CustomerRead = "customer:read";
+    public const string InvoiceRead = "invoice:read";
+    public const string DeliveryRead = "delivery:read";
+    public const string UamRead = "uam:read";
+    public const string JobRead = "job:read";
+
+    // Write/sync permissions
+    public const string CustomerSync = "customer:sync";
+    public const string InvoiceSync = "invoice:sync";
+    public const string DeliverySync = "delivery:sync";
+    public const string UamSync = "uam:sync";
+    public const string JobManage = "job:manage";
+
+    public static readonly IReadOnlyList<string> All = new[]
+    {
+        DashboardRead, CustomerRead, InvoiceRead, DeliveryRead, UamRead, JobRead,
+        CustomerSync, InvoiceSync, DeliverySync, UamSync, JobManage,
+    };
+}

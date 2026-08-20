@@ -15,7 +15,7 @@ namespace amtemeterai.Api.Controllers;
 /// </summary>
 [ApiController]
 [Route("api/sap-sim")]
-[Authorize]
+[Authorize(Roles = "sysadmin")]
 public class SapSimulationController : ControllerBase
 {
     private readonly AppDbContext _db;

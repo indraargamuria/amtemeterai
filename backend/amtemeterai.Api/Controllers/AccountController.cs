@@ -92,6 +92,11 @@ public class AccountController : ControllerBase
             return Unauthorized(new { message = "Invalid email or password" });
         }
 
+        if (!user.IsActive)
+        {
+            return Unauthorized(new { message = "Account has been deactivated. Contact your administrator." });
+        }
+
         var token = await GenerateJwtTokenAsync(user);
 
         // Update last login
@@ -125,6 +130,11 @@ public class AccountController : ControllerBase
         if (user == null)
         {
             return NotFound();
+        }
+
+        if (!user.IsActive)
+        {
+            return Unauthorized(new { message = "Account has been deactivated." });
         }
 
         // Generate a new token for the current user containing up-to-date claims
