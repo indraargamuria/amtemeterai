@@ -230,6 +230,237 @@ public class DeliveriesController : ControllerBase
         return Ok(result);
     }
 
+    /// <summary>
+    /// Document Hub: customer-grouped view of all billable documents.
+    /// Each row is one business object: delivery-with-invoice, delivery-only (unbilled), or standalone invoice.
+    /// </summary>
+    [HttpGet("documents-hub")]
+    public async Task<ActionResult<IEnumerable<object>>> GetDocumentsHub()
+    {
+        var baseApiUrl = _appOptions.ApiBaseUrl ?? "http://localhost:8080";
+        var dl = (string type, string num) => $"{baseApiUrl.TrimEnd('/')}/api/deliveries/files/download?key={Uri.EscapeDataString(num)}";
+
+        // 1. Deliveries (with their active invoice + customer)
+        var deliveries = await _db.DeliveryHeaders
+            .Include(d => d.Customer)
+            .Select(d => new
+            {
+                d.DeliveryID,
+                d.DeliveryNumber,
+                d.DeliveryDate,
+                d.Received,
+                d.ReceiveDate,
+                d.Invoiced,
+                d.BillingStatus,
+                d.Status,
+                d.CustomerID,
+                CustomerCode = d.Customer != null ? d.Customer.CustomerCode : "UNKNOWN",
+                CustomerName = d.Customer != null ? d.Customer.CustomerName : "UNKNOWN",
+                CustomerEmail = d.Customer != null ? d.Customer.CustomerEmail : null,
+                ActiveInvoiceNumber = d.Invoices
+                    .Where(i => i.Status != Invoice.InvoiceStatus.Canceled && i.Status != Invoice.InvoiceStatus.Voided)
+                    .OrderByDescending(i => i.InvoicedDate)
+                    .Select(i => i.InvoiceNumber)
+                    .FirstOrDefault(),
+                ActiveInvoiceStampingStatus = d.Invoices
+                    .Where(i => i.Status != Invoice.InvoiceStatus.Canceled && i.Status != Invoice.InvoiceStatus.Voided)
+                    .OrderByDescending(i => i.InvoicedDate)
+                    .Select(i => i.StampingStatus)
+                    .FirstOrDefault(),
+                ActiveInvoiceSerial = d.Invoices
+                    .Where(i => i.Status != Invoice.InvoiceStatus.Canceled && i.Status != Invoice.InvoiceStatus.Voided)
+                    .OrderByDescending(i => i.InvoicedDate)
+                    .Select(i => i.SerialNumber)
+                    .FirstOrDefault(),
+                ActiveInvoiceDate = d.Invoices
+                    .Where(i => i.Status != Invoice.InvoiceStatus.Canceled && i.Status != Invoice.InvoiceStatus.Voided)
+                    .OrderByDescending(i => i.InvoicedDate)
+                    .Select(i => (DateTime?)i.InvoicedDate)
+                    .FirstOrDefault()
+            })
+            .Where(d => d.Status != DeliveryHeader.ReceiverStatus.Canceled || d.Invoiced)
+            .ToListAsync();
+
+        // 2. Standalone invoices (no delivery)
+        var standaloneInvoices = await _db.Invoices
+            .Where(i => i.DeliveryHeaderId == null &&
+                        i.Status != Invoice.InvoiceStatus.Canceled &&
+                        i.Status != Invoice.InvoiceStatus.Voided)
+            .Select(i => new
+            {
+                i.InvoiceID,
+                i.InvoiceNumber,
+                i.InvoicedDate,
+                i.CustomerNumber,
+                i.StampingStatus,
+                i.SerialNumber,
+                CustomerName = _db.Customers
+                    .Where(c => c.CustomerCode == i.CustomerNumber)
+                    .Select(c => c.CustomerName)
+                    .FirstOrDefault() ?? "UNKNOWN",
+                CustomerEmail = _db.Customers
+                    .Where(c => c.CustomerCode == i.CustomerNumber)
+                    .Select(c => c.CustomerEmail)
+                    .FirstOrDefault()
+            })
+            .ToListAsync();
+
+        // 3. Email send counts per reference
+        var emailStats = await _db.EmailSends
+            .GroupBy(e => new { e.ReferenceType, e.ReferenceNumber })
+            .Select(g => new
+            {
+                g.Key.ReferenceType,
+                g.Key.ReferenceNumber,
+                Count = g.Count(),
+                LastSentAt = g.Max(x => x.SentAt)
+            })
+            .ToListAsync();
+
+        // 4. Document storage keys (download URLs) for each delivery / invoice
+        var docKeys = await _db.Documents
+            .Where(d => d.Type == DocumentType.DeliveryPrintOut || d.Type == DocumentType.InvoicePrintOut)
+            .Select(d => new
+            {
+                d.DeliveryID,
+                d.InvoiceID,
+                d.Type,
+                d.StorageKey
+            })
+            .ToListAsync();
+
+        var result = new List<DocumentsHubItem>();
+        // ... deliveries & invoices populated above
+        var docLookup = docKeys;
+
+        foreach (var d in deliveries)
+        {
+            var invNum = d.ActiveInvoiceNumber;
+            var hasInvoice = !string.IsNullOrEmpty(invNum);
+            var type = hasInvoice ? "delivery-with-invoice" : "delivery-only";
+
+            var doPrintoutKey = docLookup
+                .Where(x => x.DeliveryID == d.DeliveryID && x.Type == DocumentType.DeliveryPrintOut)
+                .OrderByDescending(x => x.StorageKey)
+                .Select(x => x.StorageKey)
+                .FirstOrDefault();
+            var stampedKey = docLookup
+                .Where(x => x.DeliveryID == d.DeliveryID && x.Type == DocumentType.InvoicePrintOut && x.StorageKey.Contains("/stamped/"))
+                .Select(x => x.StorageKey)
+                .FirstOrDefault();
+
+            var ready = d.Received && hasInvoice && d.ActiveInvoiceStampingStatus == Invoice.InvoiceStampingStatus.Stamped;
+
+            result.Add(new DocumentsHubItem
+            {
+                Type = type,
+                Id = d.DeliveryID,
+                KeyNumber = hasInvoice ? $"{d.DeliveryNumber} / {invNum}" : d.DeliveryNumber!,
+                DeliveryNumber = d.DeliveryNumber,
+                InvoiceNumber = invNum,
+                CustomerCode = d.CustomerCode,
+                CustomerName = d.CustomerName,
+                CustomerEmail = d.CustomerEmail,
+                InvoicedDate = hasInvoice ? d.ActiveInvoiceDate : null,
+                DeliveryDate = d.DeliveryDate,
+                IsReceived = d.Received,
+                IsInvoiceStamped = hasInvoice && d.ActiveInvoiceStampingStatus == Invoice.InvoiceStampingStatus.Stamped,
+                InvoiceStampingStatusText = hasInvoice ? GetStampingStatusText(d.ActiveInvoiceStampingStatus) : null,
+                IsReadyToSend = ready,
+                EmailCount = emailStats.FirstOrDefault(e => e.ReferenceType == "delivery" && e.ReferenceNumber == d.DeliveryNumber)?.Count ?? 0,
+                LastSentAt = emailStats.FirstOrDefault(e => e.ReferenceType == "delivery" && e.ReferenceNumber == d.DeliveryNumber)?.LastSentAt,
+                DeliveryPrintoutUrl = !string.IsNullOrEmpty(doPrintoutKey) ? dl("delivery", doPrintoutKey) : null,
+                InvoicePrintoutUrl = !string.IsNullOrEmpty(stampedKey) ? dl("invoice", stampedKey) : null
+            });
+        }
+
+        foreach (var inv in standaloneInvoices)
+        {
+            var stampedKey = docLookup
+                .Where(x => x.InvoiceID == inv.InvoiceID && x.Type == DocumentType.InvoicePrintOut && x.StorageKey.Contains("/stamped/"))
+                .Select(x => x.StorageKey)
+                .FirstOrDefault();
+
+            result.Add(new DocumentsHubItem
+            {
+                Type = "standalone-invoice",
+                Id = inv.InvoiceID,
+                KeyNumber = inv.InvoiceNumber,
+                DeliveryNumber = null,
+                InvoiceNumber = inv.InvoiceNumber,
+                CustomerCode = inv.CustomerNumber,
+                CustomerName = inv.CustomerName,
+                CustomerEmail = inv.CustomerEmail,
+                InvoicedDate = inv.InvoicedDate,
+                DeliveryDate = null,
+                IsReceived = null,
+                IsInvoiceStamped = inv.StampingStatus == Invoice.InvoiceStampingStatus.Stamped,
+                InvoiceStampingStatusText = GetStampingStatusText(inv.StampingStatus),
+                IsReadyToSend = inv.StampingStatus == Invoice.InvoiceStampingStatus.Stamped,
+                EmailCount = emailStats.FirstOrDefault(e => e.ReferenceType == "invoice" && e.ReferenceNumber == inv.InvoiceNumber)?.Count ?? 0,
+                LastSentAt = emailStats.FirstOrDefault(e => e.ReferenceType == "invoice" && e.ReferenceNumber == inv.InvoiceNumber)?.LastSentAt,
+                DeliveryPrintoutUrl = null,
+                InvoicePrintoutUrl = !string.IsNullOrEmpty(stampedKey) ? dl("invoice", stampedKey) : null
+            });
+        }
+
+        // Group by customer (typed projection — no reflection / dynamic)
+        var grouped = result
+            .GroupBy(r => (r.CustomerCode, r.CustomerName))
+            .Select(g => new DocumentsHubGroup
+            {
+                CustomerCode = g.Key.Item1,
+                CustomerName = g.Key.Item2,
+                CustomerEmail = g.FirstOrDefault()?.CustomerEmail,
+                Items = g.ToList()
+            })
+            .OrderBy(c => c.CustomerName)
+            .ToList();
+
+        return Ok(grouped);
+    }
+
+    /// <summary>One row in the Document Hub (one delivery+invoice / delivery-only / standalone invoice).</summary>
+    public class DocumentsHubItem
+    {
+        public string Type { get; set; } = string.Empty;
+        public int Id { get; set; }
+        public string KeyNumber { get; set; } = string.Empty;
+        public string? DeliveryNumber { get; set; }
+        public string? InvoiceNumber { get; set; }
+        public string CustomerCode { get; set; } = string.Empty;
+        public string CustomerName { get; set; } = string.Empty;
+        public string? CustomerEmail { get; set; }
+        public DateTime? InvoicedDate { get; set; }
+        public DateTime? DeliveryDate { get; set; }
+        public bool? IsReceived { get; set; }
+        public bool IsInvoiceStamped { get; set; }
+        public string? InvoiceStampingStatusText { get; set; }
+        public bool IsReadyToSend { get; set; }
+        public int EmailCount { get; set; }
+        public DateTime? LastSentAt { get; set; }
+        public string? DeliveryPrintoutUrl { get; set; }
+        public string? InvoicePrintoutUrl { get; set; }
+    }
+
+    public class DocumentsHubGroup
+    {
+        public string CustomerCode { get; set; } = string.Empty;
+        public string CustomerName { get; set; } = string.Empty;
+        public string? CustomerEmail { get; set; }
+        public List<DocumentsHubItem> Items { get; set; } = new();
+    }
+
+    /// <summary>Mirror of InvoicesController.GetStampingStatusText.</summary>
+    private static string GetStampingStatusText(Invoice.InvoiceStampingStatus s) => s switch
+    {
+        Invoice.InvoiceStampingStatus.NotStamped => "Not Stamped",
+        Invoice.InvoiceStampingStatus.Pending => "Pending",
+        Invoice.InvoiceStampingStatus.Stamped => "Stamped",
+        Invoice.InvoiceStampingStatus.Failed => "Failed",
+        _ => "Unknown"
+    };
+
     [HttpGet("{deliveryId:int}")]
     public async Task<ActionResult<DeliveryResponseDto>> GetDeliveryById(int deliveryId)
     {

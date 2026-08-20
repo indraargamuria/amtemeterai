@@ -3,212 +3,142 @@ import { Card, CardContent } from "../../shared/components/ui/Card"
 import { Button } from "../../shared/components/ui/Button"
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "../../shared/components/ui/Table"
 import { Badge } from "../../shared/components/ui/Badge"
-import { getInvoices } from "../../shared/utils/api"
+import { getDocumentsHub, type DocumentHubGroup, type DocumentHubItem } from "../../shared/utils/api"
 import { cn } from "../../shared/utils/cn"
-import { FileText, Truck, Package, AlertCircle, ChevronRight, X, Loader2, Mail, CheckSquare } from "lucide-react"
-import { EmailComposerModal, type EmailAttachmentRef } from "../../shared/components/EmailComposer"
+import { FileText, Truck, Package, AlertCircle, ChevronRight, ChevronDown, X, Loader2, Mail, CheckSquare, CheckCircle2, Clock } from "lucide-react"
+import { DocumentsHubEmailModal, type HubEmailItem } from "../../shared/components/EmailComposer/DocumentsHubEmailModal"
 
-type FilterType = "all" | "delivery-centric" | "invoice-centric"
+type FilterType = "all" | "delivery-with-invoice" | "delivery-only" | "standalone-invoice"
 
-interface DocumentRow {
-  id: number
-  invoiceNumber: string
-  deliveryNumber: string | null
-  customerNumber: string
-  customerName?: string
-  customerEmail?: string
-  invoiceAmount: number
-  invoicedDate: string
-  statusText: string
-  stampingStatusText: string
-  serialNumber?: string
-  stampedDocumentUrl?: string
-  deliveryPrintoutUrl?: string
-  hasPrintoutDocument: boolean
-  isStandalone: boolean
+const TYPE_META: Record<DocumentHubItem["type"], { label: string; icon: React.ReactNode; color: string }> = {
+  "delivery-with-invoice": {
+    label: "Delivery + Invoice",
+    icon: <Truck className="w-3.5 h-3.5" />,
+    color: "bg-emerald-50 text-emerald-700 border-emerald-200"
+  },
+  "delivery-only": {
+    label: "Delivery (Unbilled)",
+    icon: <Package className="w-3.5 h-3.5" />,
+    color: "bg-slate-100 text-slate-600 border-slate-200"
+  },
+  "standalone-invoice": {
+    label: "Misc. Invoice",
+    icon: <FileText className="w-3.5 h-3.5" />,
+    color: "bg-brand-blue/10 text-brand-blue border-brand-blue/20"
+  }
 }
 
-type ViewTab = "delivery" | "invoice"
-
 export function DocumentsPage() {
-  const [documents, setDocuments] = useState<DocumentRow[]>([])
+  const [groups, setGroups] = useState<DocumentHubGroup[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState("")
   const [filter, setFilter] = useState<FilterType>("all")
-  const [selectedDoc, setSelectedDoc] = useState<DocumentRow | null>(null)
-  const [activeTab, setActiveTab] = useState<ViewTab>("invoice")
+  const [expanded, setExpanded] = useState<Set<string>>(new Set())
+  const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set())
   const [sheetOpen, setSheetOpen] = useState(false)
-  const [emailComposerOpen, setEmailComposerOpen] = useState(false)
-  const [emailDoc, setEmailDoc] = useState<DocumentRow | null>(null)
-  const [emailAttachments, setEmailAttachments] = useState<EmailAttachmentRef[]>([])
-  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
+  const [selectedDoc, setSelectedDoc] = useState<DocumentHubItem | null>(null)
+  const [emailOpen, setEmailOpen] = useState(false)
+  const [emailItems, setEmailItems] = useState<HubEmailItem[]>([])
 
   useEffect(() => {
-    fetchDocuments()
+    fetchHub()
   }, [])
 
-  const fetchDocuments = async () => {
+  const fetchHub = async () => {
     try {
       setLoading(true)
-      const invoices = await getInvoices()
-
-      // Transform invoices into document rows
-      const docRows: DocumentRow[] = invoices.map((inv) => ({
-        id: inv.invoiceID,
-        invoiceNumber: inv.invoiceNumber,
-        deliveryNumber: inv.deliveryNumber || null,
-        customerNumber: inv.customerNumber,
-        customerName: inv.customerName,
-        customerEmail: inv.customerEmail,
-        invoiceAmount: inv.invoiceAmount,
-        invoicedDate: inv.invoicedDate,
-        statusText: inv.statusText,
-        stampingStatusText: inv.stampingStatusText,
-        serialNumber: inv.serialNumber,
-        stampedDocumentUrl: inv.stampedDocumentUrl,
-        deliveryPrintoutUrl: inv.deliveryPrintoutUrl,
-        hasPrintoutDocument: inv.hasPrintoutDocument,
-        isStandalone: !inv.deliveryNumber,
-      }))
-
-      setDocuments(docRows)
+      setError("")
+      const data = await getDocumentsHub()
+      setGroups(data)
+      // Expand first customer by default
+      if (data.length > 0) setExpanded(new Set([`${data[0].customerCode}`]))
     } catch (err) {
-      console.error("Failed to fetch documents:", err)
+      console.error("Failed to fetch document hub:", err)
+      setError("Failed to load document hub. Please try again.")
     } finally {
       setLoading(false)
     }
   }
 
-  // Filter documents based on selected filter
-  const filteredDocuments = useMemo(() => {
-    switch (filter) {
-      case "delivery-centric":
-        return documents.filter((d) => !d.isStandalone)
-      case "invoice-centric":
-        return documents.filter((d) => d.isStandalone)
-      default:
-        return documents
+  // Filter items by type
+  const filteredGroups = useMemo(() => {
+    if (filter === "all") return groups
+    return groups
+      .map((g) => ({ ...g, items: g.items.filter((i) => i.type === filter) }))
+      .filter((g) => g.items.length > 0)
+  }, [groups, filter])
+
+  const allItems = useMemo(() => filteredGroups.flatMap((g) => g.items), [filteredGroups])
+
+  // Stats
+  const stats = useMemo(() => {
+    const items = groups.flatMap((g) => g.items)
+    return {
+      total: items.length,
+      customers: groups.length,
+      ready: items.filter((i) => i.isReadyToSend).length,
+      stamped: items.filter((i) => i.isInvoiceStamped).length,
+      pending: items.filter((i) => i.invoiceStampingStatusText === "Pending").length,
+      sent: items.filter((i) => i.emailCount > 0).length
     }
-  }, [documents, filter])
+  }, [groups])
 
-  // Summary stats
-  const stats = useMemo(() => ({
-    total: documents.length,
-    standalone: documents.filter((d) => d.isStandalone).length,
-    linked: documents.filter((d) => !d.isStandalone).length,
-    stamped: documents.filter((d) => d.stampingStatusText === "Stamped").length,
-    pending: documents.filter((d) => d.stampingStatusText === "Not Stamped" || d.stampingStatusText === "Pending").length,
-  }), [documents])
-
-  // Format currency
-  const formatRp = (amount: number) => {
-    return new Intl.NumberFormat("id-ID", {
-      style: "currency",
-      currency: "IDR",
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(amount)
+  // Selection helpers
+  const toggleSelect = (key: string) => {
+    setSelectedKeys((prev) => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
   }
 
-  // Get status badge styling
-  const getComplianceBadge = (status: string) => {
-    switch (status) {
-      case "Stamped":
-        return "bg-emerald-50 text-emerald-700 border-emerald-200"
-      case "Not Stamped":
-      case "Draft":
-        return "bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700"
-      case "Pending":
-        return "bg-amber-50 text-amber-700 border-amber-200"
-      case "Failed":
-      case "Sync Failed":
-        return "bg-brand-red/10 text-brand-red border-brand-red/20"
-      default:
-        return "bg-slate-50 text-slate-500 border-slate-100 dark:bg-slate-800/50 dark:text-slate-400 dark:border-slate-700/50"
-    }
+  const toggleSelectCustomer = (code: string) => {
+    const itemKeys = filteredGroups.find((g) => g.customerCode === code)?.items.map((i) => i.keyNumber) ?? []
+    setSelectedKeys((prev) => {
+      const next = new Set(prev)
+      const allSelected = itemKeys.every((k) => next.has(k))
+      itemKeys.forEach((k) => (allSelected ? next.delete(k) : next.add(k)))
+      return next
+    })
   }
 
-  // Open sheet with document details
-  const openSheet = (doc: DocumentRow) => {
+  const toggleExpand = (code: string) => {
+    setExpanded((prev) => {
+      const next = new Set(prev)
+      if (next.has(code)) next.delete(code)
+      else next.add(code)
+      return next
+    })
+  }
+
+  const selectedItems = allItems.filter((i) => selectedKeys.has(i.keyNumber))
+
+  const openEmail = () => {
+    if (selectedItems.length === 0) return
+    setEmailItems(
+      selectedItems.map((i) => ({
+        key: i.keyNumber,
+        type: i.type,
+        customerCode: i.customerCode,
+        customerName: i.customerName,
+        customerEmail: i.customerEmail,
+        deliveryNumber: i.deliveryNumber,
+        invoiceNumber: i.invoiceNumber,
+        deliveryPrintoutUrl: i.deliveryPrintoutUrl,
+        invoicePrintoutUrl: i.invoicePrintoutUrl,
+        isReadyToSend: i.isReadyToSend
+      }))
+    )
+    setEmailOpen(true)
+  }
+
+  const openSheet = (doc: DocumentHubItem) => {
     setSelectedDoc(doc)
-    setActiveTab(doc.isStandalone ? "invoice" : "invoice")
     setSheetOpen(true)
   }
 
-  // Close sheet
-  const closeSheet = () => {
-    setSheetOpen(false)
-    // Delay clearing selected doc for animation
-    setTimeout(() => setSelectedDoc(null), 300)
-  }
-
-  // Build attachment references for a document (DO printout + stamped invoice PDF)
-  const buildAttachments = (doc: DocumentRow): EmailAttachmentRef[] => {
-    const refs: EmailAttachmentRef[] = []
-    if (!doc.isStandalone && doc.deliveryNumber) {
-      refs.push({
-        referenceType: "delivery",
-        referenceNumber: doc.deliveryNumber,
-        label: `DO ${doc.deliveryNumber}`,
-        previewUrl: doc.deliveryPrintoutUrl,
-        hasPreview: !!doc.deliveryPrintoutUrl
-      })
-    }
-    refs.push({
-      referenceType: "invoice",
-      referenceNumber: doc.invoiceNumber,
-      label: `Invoice ${doc.invoiceNumber}`,
-      previewUrl: doc.stampedDocumentUrl,
-      hasPreview: !!doc.stampedDocumentUrl
-    })
-    return refs
-  }
-
-  // Open email composer for a single document
-  const openEmailComposer = (doc: DocumentRow, e: React.MouseEvent) => {
-    e.stopPropagation()
-    setEmailDoc(doc)
-    setEmailAttachments(buildAttachments(doc))
-    setEmailComposerOpen(true)
-  }
-
-  // Open email composer for multiple selected documents
-  const openBulkEmailComposer = () => {
-    const selected = documents.filter((d) => selectedIds.has(d.id))
-    if (selected.length === 0) return
-    setEmailDoc(null)
-    setEmailAttachments(selected.flatMap(buildAttachments))
-    setEmailComposerOpen(true)
-  }
-
-  // Close email composer
-  const closeEmailComposer = () => {
-    setEmailComposerOpen(false)
-    setEmailDoc(null)
-    setEmailAttachments([])
-  }
-
-  // Selection helpers
-  const toggleSelect = (id: number) => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
-      return next
-    })
-  }
-
-  const toggleSelectAll = () => {
-    const visibleIds = filteredDocuments.map((d) => d.id)
-    setSelectedIds((prev) => {
-      const allVisibleSelected = visibleIds.every((id) => prev.has(id))
-      const next = new Set(prev)
-      if (allVisibleSelected) visibleIds.forEach((id) => next.delete(id))
-      else visibleIds.forEach((id) => next.add(id))
-      return next
-    })
-  }
-
-  const selectedCount = selectedIds.size
+  const typeIcon = (t: DocumentHubItem["type"]) => TYPE_META[t].icon
 
   return (
     <div className="space-y-6">
@@ -218,317 +148,371 @@ export function DocumentsPage() {
           <div>
             <h1 className="text-2xl font-semibold text-brand-blue dark:text-slate-100 tracking-tight">Document Hub</h1>
             <p className="text-sm text-brand-blue dark:text-slate-100/60 dark:text-slate-300 mt-1">
-              Unified view of invoices and delivery documents
+              All customer documents — grouped by customer, ready for emailing
             </p>
           </div>
+          <Button variant="outline" size="sm" onClick={fetchHub} className="gap-2">
+            <Loader2 className={cn("w-3.5 h-3.5", loading && "animate-spin")} />
+            Refresh
+          </Button>
         </div>
       </div>
 
       {/* Summary Stats */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 sm:gap-4">
-        <StatCard label="Total Documents" value={stats.total} color="brand-blue" />
-        <StatCard label="Linked Flow" value={stats.linked} color="emerald" />
-        <StatCard label="Standalone" value={stats.standalone} color="slate" />
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3 sm:gap-4">
+        <StatCard label="Customers" value={stats.customers} color="brand-blue" />
+        <StatCard label="Total Documents" value={stats.total} color="slate" />
+        <StatCard label="Ready to Send" value={stats.ready} color="emerald" />
         <StatCard label="Stamped" value={stats.stamped} color="emerald" />
         <StatCard label="Pending Stamp" value={stats.pending} color="amber" alert />
+        <StatCard label="Emailed" value={stats.sent} color="brand-blue" />
       </div>
 
       {/* Filter Toggles */}
       <div className="flex items-center gap-2 bg-brand-blue/[0.02] p-1.5 rounded-lg border border-brand-blue/5 w-fit">
-        <FilterButton
-          active={filter === "all"}
-          onClick={() => setFilter("all")}
-          icon={<FileText className="w-4 h-4" />}
-          label="All Documents"
-        />
-        <FilterButton
-          active={filter === "delivery-centric"}
-          onClick={() => setFilter("delivery-centric")}
-          icon={<Truck className="w-4 h-4" />}
-          label="Delivery-Centric"
-        />
-        <FilterButton
-          active={filter === "invoice-centric"}
-          onClick={() => setFilter("invoice-centric")}
-          icon={<Package className="w-4 h-4" />}
-          label="Invoice-Centric"
-        />
+        <FilterButton active={filter === "all"} onClick={() => setFilter("all")} label={`All (${groups.flatMap((g) => g.items).length})`} />
+        <FilterButton active={filter === "delivery-with-invoice"} onClick={() => setFilter("delivery-with-invoice")} label="Delivery + Invoice" />
+        <FilterButton active={filter === "delivery-only"} onClick={() => setFilter("delivery-only")} label="Delivery Only" />
+        <FilterButton active={filter === "standalone-invoice"} onClick={() => setFilter("standalone-invoice")} label="Misc. Invoice" />
       </div>
 
       {/* Bulk selection bar */}
-      {selectedCount > 0 && (
+      {selectedKeys.size > 0 && (
         <div className="flex flex-wrap items-center gap-3 p-3 rounded-lg bg-brand-blue/[0.03] border border-brand-blue/10 dark:bg-slate-800/50 dark:border-slate-700">
           <CheckSquare className="w-4 h-4 text-brand-blue dark:text-slate-300" />
           <span className="text-sm font-medium text-brand-blue dark:text-slate-200">
-            {selectedCount} selected
+            {selectedKeys.size} selected
           </span>
-          <Button
-            variant="default"
-            size="sm"
-            onClick={openBulkEmailComposer}
-            className="min-w-[140px]"
-          >
+          <Button variant="default" size="sm" onClick={openEmail} className="min-w-[160px]">
             <Mail className="w-3.5 h-3.5" />
-            Email {selectedCount} Document{selectedCount > 1 ? "s" : ""}
+            Email {selectedKeys.size} Document{selectedKeys.size > 1 ? "s" : ""}
           </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setSelectedIds(new Set())}
-          >
+          <Button variant="outline" size="sm" onClick={() => setSelectedKeys(new Set())}>
             Clear
           </Button>
           <span className="text-xs text-brand-blue/50 dark:text-slate-400 ml-auto">
-            Each document sends a separate email with its own DO + invoice attachments
+            Each document sends a separate email with its own subject
           </span>
         </div>
       )}
 
-      {/* Documents Table */}
-      <Card className="overflow-hidden">
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow className="bg-brand-blue/[0.02]">
-                <TableHead className="w-10 py-3 px-4">
+      {/* Customer Grid */}
+      {error && (
+        <div className="flex items-center gap-2 p-3 rounded-lg bg-brand-red/10 border border-brand-red/20 text-brand-red text-sm">
+          <AlertCircle className="w-4 h-4" /> {error}
+        </div>
+      )}
+
+      {loading ? (
+        <Card>
+          <CardContent className="p-12 text-center">
+            <Loader2 className="w-6 h-6 text-brand-blue dark:text-slate-100/40 dark:text-slate-400 animate-spin mx-auto" />
+            <p className="text-sm text-brand-blue dark:text-slate-100/40 dark:text-slate-400 mt-3">Loading document hub...</p>
+          </CardContent>
+        </Card>
+      ) : filteredGroups.length === 0 ? (
+        <Card>
+          <CardContent className="p-12 text-center">
+            <div className="w-12 h-12 rounded-full bg-brand-blue/5 flex items-center justify-center mx-auto">
+              <AlertCircle className="w-6 h-6 text-brand-blue dark:text-slate-100/30 dark:text-slate-500" />
+            </div>
+            <p className="text-sm text-brand-blue dark:text-slate-100/40 dark:text-slate-400 mt-3">No documents found</p>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="space-y-3">
+          {filteredGroups.map((group) => {
+            const isExpanded = expanded.has(group.customerCode)
+            const customerSelected = group.items.every((i) => selectedKeys.has(i.keyNumber))
+            const customerPartial = !customerSelected && group.items.some((i) => selectedKeys.has(i.keyNumber))
+            return (
+              <Card key={group.customerCode} className="overflow-hidden">
+                {/* Customer header row */}
+                <div
+                  className={cn(
+                    "flex items-center gap-3 px-4 py-3 cursor-pointer select-none transition-colors",
+                    "hover:bg-brand-blue/[0.02] border-b",
+                    isExpanded ? "border-brand-blue/10 bg-brand-blue/[0.02]" : "border-brand-blue/5"
+                  )}
+                  onClick={() => toggleExpand(group.customerCode)}
+                >
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      toggleExpand(group.customerCode)
+                    }}
+                    className="p-1 rounded-md text-brand-blue dark:text-slate-100/50 dark:text-slate-400 hover:bg-brand-blue/5 transition-colors"
+                  >
+                    {isExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                  </button>
                   <input
                     type="checkbox"
-                    checked={filteredDocuments.length > 0 && filteredDocuments.every((d) => selectedIds.has(d.id))}
-                    onChange={toggleSelectAll}
+                    checked={customerSelected}
+                    ref={(el) => {
+                      if (el) el.indeterminate = customerPartial
+                    }}
+                    onChange={(e) => {
+                      e.stopPropagation()
+                      toggleSelectCustomer(group.customerCode)
+                    }}
                     className="w-4 h-4 rounded border-brand-blue/20 accent-brand-blue cursor-pointer"
-                    title="Select all filtered"
+                    title="Select all for this customer"
                   />
-                </TableHead>
-                <TableHead className="py-3 px-4 text-xs font-semibold text-brand-blue dark:text-slate-100/60 dark:text-slate-300 uppercase tracking-wider">
-                  Invoice Ref
-                </TableHead>
-                <TableHead className="py-3 px-4 text-xs font-semibold text-brand-blue dark:text-slate-100/60 dark:text-slate-300 uppercase tracking-wider">
-                  Fulfillment
-                </TableHead>
-                <TableHead className="py-3 px-4 text-xs font-semibold text-brand-blue dark:text-slate-100/60 dark:text-slate-300 uppercase tracking-wider text-right">
-                  Amount
-                </TableHead>
-                <TableHead className="py-3 px-4 text-xs font-semibold text-brand-blue dark:text-slate-100/60 dark:text-slate-300 uppercase tracking-wider">
-                  Status
-                </TableHead>
-                <TableHead className="py-3 px-4 text-xs font-semibold text-brand-blue dark:text-slate-100/60 dark:text-slate-300 uppercase tracking-wider text-right">
-                  Actions
-                </TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {loading ? (
-                <TableRow>
-                  <TableCell colSpan={6} className="text-center py-12">
-                    <div className="flex flex-col items-center gap-3">
-                      <Loader2 className="w-6 h-6 text-brand-blue dark:text-slate-100/40 dark:text-slate-400 animate-spin" />
-                      <p className="text-sm text-brand-blue dark:text-slate-100/40 dark:text-slate-400">Loading documents...</p>
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <div className="w-8 h-8 rounded-md bg-brand-blue/10 flex items-center justify-center shrink-0">
+                      <FileText className="w-4 h-4 text-brand-blue dark:text-slate-100" />
                     </div>
-                  </TableCell>
-                </TableRow>
-              ) : filteredDocuments.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={6} className="text-center py-12">
-                    <div className="flex flex-col items-center gap-3">
-                      <div className="w-12 h-12 rounded-full bg-brand-blue/5 flex items-center justify-center">
-                    <AlertCircle className="w-6 h-6 text-brand-blue dark:text-slate-100/30 dark:text-slate-500" />
-                      </div>
-                      <p className="text-sm text-brand-blue dark:text-slate-100/40 dark:text-slate-400">No documents found</p>
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-brand-blue dark:text-slate-100 truncate">{group.customerName}</p>
+                      <p className="text-xs text-brand-blue/50 dark:text-slate-400 truncate">
+                        {group.customerCode}
+                        {group.customerEmail ? ` · ${group.customerEmail}` : ""}
+                      </p>
                     </div>
-                  </TableCell>
-                </TableRow>
-              ) : (
-                filteredDocuments.map((doc) => (
-                  <TableRow
-                    key={doc.id}
-                    className="hover:bg-brand-blue/[0.02] transition-colors cursor-pointer group"
-                    onClick={() => openSheet(doc)}
-                  >
-                    {/* Select */}
-                    <TableCell className="py-2.5 px-4" onClick={(e) => e.stopPropagation()}>
-                      <input
-                        type="checkbox"
-                        checked={selectedIds.has(doc.id)}
-                        onChange={() => toggleSelect(doc.id)}
-                        className="w-4 h-4 rounded border-brand-blue/20 accent-brand-blue cursor-pointer"
-                        title={`Select ${doc.invoiceNumber}`}
-                      />
-                    </TableCell>
+                  </div>
+                  <div className="ml-auto flex items-center gap-2 shrink-0">
+                    <Badge variant="outline" className="border-brand-blue/10 bg-brand-blue/[0.02] text-brand-blue/70 dark:text-slate-300">
+                      {group.items.length} doc{group.items.length !== 1 ? "s" : ""}
+                    </Badge>
+                  </div>
+                </div>
 
-                    {/* Invoice Ref - Monospace */}
-                    <TableCell className="py-2.5 px-4">
-                      <div className="flex items-center gap-2">
-                        <div className="w-8 h-8 rounded-md bg-brand-blue/10 flex items-center justify-center">
-                          <FileText className="w-4 h-4 text-brand-blue dark:text-slate-100" />
-                        </div>
-                        <code className="text-sm font-mono text-brand-blue dark:text-slate-100 tracking-tight">
-                          {doc.invoiceNumber}
-                        </code>
-                      </div>
-                    </TableCell>
-
-                    {/* Fulfillment Tracking */}
-                    <TableCell className="py-2.5 px-4">
-                      {doc.isStandalone ? (
-                        <Badge
-                          variant="outline"
-                          className="border-dashed border-slate-300 bg-slate-50/50 text-slate-500 dark:border-slate-600 dark:bg-slate-800/50 dark:text-slate-400"
+                {/* Expandable rows */}
+                {isExpanded && (
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="bg-brand-blue/[0.02]">
+                        <TableHead className="w-10 py-2 px-4" />
+                        <TableHead className="py-2 px-4 text-xs font-semibold text-brand-blue dark:text-slate-100/60 dark:text-slate-300 uppercase tracking-wider">Reference</TableHead>
+                        <TableHead className="py-2 px-4 text-xs font-semibold text-brand-blue dark:text-slate-100/60 dark:text-slate-300 uppercase tracking-wider">Type</TableHead>
+                        <TableHead className="py-2 px-4 text-xs font-semibold text-brand-blue dark:text-slate-100/60 dark:text-slate-300 uppercase tracking-wider">Status</TableHead>
+                        <TableHead className="py-2 px-4 text-xs font-semibold text-brand-blue dark:text-slate-100/60 dark:text-slate-300 uppercase tracking-wider">Email</TableHead>
+                        <TableHead className="py-2 px-4 text-right text-xs font-semibold text-brand-blue dark:text-slate-100/60 dark:text-slate-300 uppercase tracking-wider">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {group.items.map((item) => (
+                        <TableRow
+                          key={item.keyNumber}
+                          className="hover:bg-brand-blue/[0.02] transition-colors cursor-pointer group"
+                          onClick={() => openSheet(item)}
                         >
-                          Direct Standalone Bill
-                        </Badge>
-                      ) : (
-                        <div className="flex items-center gap-2">
-                          <div className="w-7 h-7 rounded-md bg-emerald-50 flex items-center justify-center">
-                            <Truck className="w-3.5 h-3.5 text-emerald-600" />
-                          </div>
-                          <code className="text-xs font-mono text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded">
-                            {doc.deliveryNumber}
-                          </code>
-                        </div>
-                      )}
-                    </TableCell>
+                          {/* Select */}
+                          <TableCell className="py-2.5 px-4" onClick={(e) => e.stopPropagation()}>
+                            <input
+                              type="checkbox"
+                              checked={selectedKeys.has(item.keyNumber)}
+                              onChange={() => toggleSelect(item.keyNumber)}
+                              className="w-4 h-4 rounded border-brand-blue/20 accent-brand-blue cursor-pointer"
+                              title={`Select ${item.keyNumber}`}
+                            />
+                          </TableCell>
 
-                    {/* Financial Weight */}
-                    <TableCell className="py-2.5 px-4 text-right">
-                      <span className="text-sm font-mono font-medium text-brand-blue dark:text-slate-100">
-                        {formatRp(doc.invoiceAmount)}
-                      </span>
-                    </TableCell>
+                          {/* Key column — dynamic: DO#+INV# | DO# | INV# */}
+                          <TableCell className="py-2.5 px-4">
+                            <div className="flex items-center gap-2">
+                              <div className="w-8 h-8 rounded-md bg-brand-blue/10 flex items-center justify-center">
+                                {typeIcon(item.type)}
+                              </div>
+                              <code className="text-sm font-mono text-brand-blue dark:text-slate-100 tracking-tight">
+                                {item.keyNumber}
+                              </code>
+                            </div>
+                          </TableCell>
 
-                    {/* Compliance Status */}
-                    <TableCell className="py-2.5 px-4">
-                      <Badge className={getComplianceBadge(doc.stampingStatusText)}>
-                        {doc.stampingStatusText}
-                      </Badge>
-                    </TableCell>
+                          {/* Type */}
+                          <TableCell className="py-2.5 px-4">
+                            <Badge variant="outline" className={TYPE_META[item.type].color}>
+                              {TYPE_META[item.type].label}
+                            </Badge>
+                          </TableCell>
 
-                    {/* Operations Matrix */}
-                    <TableCell className="py-2.5 px-4 text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        {/* Email Button - Send email with attachments */}
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={(e) => openEmailComposer(doc, e)}
-                          className="min-w-[90px]"
-                          title="Send email with attachments"
-                        >
-                          <Mail className="w-3.5 h-3.5" />
-                          Email
-                        </Button>
+                          {/* Status: stamped / confirmed */}
+                          <TableCell className="py-2.5 px-4">
+                            <div className="flex flex-wrap gap-1.5">
+                              {item.type !== "delivery-only" && (
+                                <Badge className={cn(
+                                  "gap-1",
+                                  item.isInvoiceStamped
+                                    ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                                    : "bg-amber-50 text-amber-700 border-amber-200"
+                                )}>
+                                  {item.isInvoiceStamped ? <CheckCircle2 className="w-3 h-3" /> : <Clock className="w-3 h-3" />}
+                                  {item.invoiceStampingStatusText ?? "Invoice"}
+                                </Badge>
+                              )}
+                              {item.type !== "standalone-invoice" && item.isReceived !== null && (
+                                <Badge className={cn(
+                                  "gap-1",
+                                  item.isReceived
+                                    ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                                    : "bg-slate-100 text-slate-600 border-slate-200"
+                                )}>
+                                  {item.isReceived ? <CheckCircle2 className="w-3 h-3" /> : <Clock className="w-3 h-3" />}
+                                  {item.isReceived ? "Confirmed" : "Not Confirmed"}
+                                </Badge>
+                              )}
+                            </div>
+                          </TableCell>
 
-                        {/* DO Button - Disabled for standalone */}
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          disabled={doc.isStandalone}
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            // Navigate to delivery details
-                            if (doc.deliveryNumber) {
-                              window.location.href = `/deliveries?search=${doc.deliveryNumber}`
-                            }
-                          }}
-                          className={cn(
-                            "min-w-[80px]",
-                            doc.isStandalone && "opacity-50 cursor-not-allowed"
-                          )}
-                          title={doc.isStandalone ? "No upstream delivery manifest" : "View delivery order"}
-                        >
-                          <Truck className="w-3.5 h-3.5" />
-                          DO
-                        </Button>
+                          {/* Email state: count */}
+                          <TableCell className="py-2.5 px-4">
+                            {item.emailCount > 0 ? (
+                              <div className="flex items-center gap-1.5">
+                                <Mail className="w-3.5 h-3.5 text-emerald-600" />
+                                <span className="text-xs font-medium text-emerald-700">
+                                  {item.emailCount}× sent
+                                </span>
+                              </div>
+                            ) : (
+                              <span className="text-xs text-slate-400">Never</span>
+                            )}
+                          </TableCell>
 
-                        {/* Inspect Workspace - Primary Action */}
-                        <Button
-                          variant="default"
-                          size="sm"
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            openSheet(doc)
-                          }}
-                          className="min-w-[120px]"
-                        >
-                          Inspect
-                          <ChevronRight className="w-3.5 h-3.5" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+                          {/* Actions */}
+                          <TableCell className="py-2.5 px-4 text-right">
+                            <div className="flex items-center justify-end gap-2">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  setEmailItems([{
+                                    key: item.keyNumber,
+                                    type: item.type,
+                                    customerCode: item.customerCode,
+                                    customerName: item.customerName,
+                                    customerEmail: item.customerEmail,
+                                    deliveryNumber: item.deliveryNumber,
+                                    invoiceNumber: item.invoiceNumber,
+                                    deliveryPrintoutUrl: item.deliveryPrintoutUrl,
+                                    invoicePrintoutUrl: item.invoicePrintoutUrl,
+                                    isReadyToSend: item.isReadyToSend
+                                  }])
+                                  setEmailOpen(true)
+                                }}
+                                className="min-w-[80px]"
+                                title="Send email with attachments"
+                              >
+                                <Mail className="w-3.5 h-3.5" /> Email
+                              </Button>
+                              <Button
+                                variant="default"
+                                size="sm"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  openSheet(item)
+                                }}
+                                className="min-w-[90px]"
+                              >
+                                Inspect <ChevronRight className="w-3.5 h-3.5" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
+              </Card>
+            )
+          })}
+        </div>
+      )}
 
       {/* Sliding Sheet Overlay */}
       {sheetOpen && selectedDoc && (
         <>
-          {/* Backdrop */}
-          <div
-            className="fixed inset-0 bg-brand-blue/20 backdrop-blur-sm z-40 transition-opacity duration-300"
-            onClick={closeSheet}
-          />
-
-          {/* Sheet Panel */}
+          <div className="fixed inset-0 bg-brand-blue/20 backdrop-blur-sm z-40 transition-opacity duration-300" onClick={() => setSheetOpen(false)} />
           <div className="fixed top-0 right-0 bottom-0 w-full sm:w-[480px] bg-white shadow-2xl z-50 transform transition-transform duration-300 ease-out dark:bg-slate-900">
             <div className="h-full flex flex-col">
-              {/* Sheet Header */}
               <div className="flex items-center justify-between px-6 py-4 border-b border-brand-blue/5 bg-brand-blue/[0.02] dark:border-slate-800">
                 <div>
                   <h2 className="text-lg font-semibold text-brand-blue dark:text-slate-100">Document Workspace</h2>
-                  <p className="text-xs text-brand-blue dark:text-slate-100/50 dark:text-slate-400 mt-0.5">
-                    {selectedDoc.invoiceNumber}
-                  </p>
+                  <p className="text-xs text-brand-blue dark:text-slate-100/50 dark:text-slate-400 mt-0.5">{selectedDoc.keyNumber}</p>
                 </div>
-                <button
-                  onClick={closeSheet}
-                  className="p-2 rounded-md text-brand-blue dark:text-slate-100/50 dark:text-slate-400 hover:bg-brand-blue/5 hover:text-brand-blue dark:text-slate-100 transition-colors"
-                >
+                <button onClick={() => setSheetOpen(false)} className="p-2 rounded-md text-brand-blue dark:text-slate-100/50 dark:text-slate-400 hover:bg-brand-blue/5 hover:text-brand-blue transition-colors">
                   <X className="w-5 h-5" />
                 </button>
               </div>
-
-              {/* View Tabs */}
-              {!selectedDoc.isStandalone && (
-                <div className="flex items-center gap-1 px-6 py-3 border-b border-brand-blue/5 bg-white dark:bg-slate-900 dark:border-slate-800">
-                  <TabButton
-                    active={activeTab === "delivery"}
-                    onClick={() => setActiveTab("delivery")}
-                    icon={<Truck className="w-4 h-4" />}
-                    label="Delivery Order"
-                  />
-                  <TabButton
-                    active={activeTab === "invoice"}
-                    onClick={() => setActiveTab("invoice")}
-                    icon={<FileText className="w-4 h-4" />}
-                    label="Invoice PDF"
-                  />
+              <div className="flex-1 overflow-y-auto p-6 space-y-6">
+                <div className="bg-brand-blue/[0.02] rounded-lg p-5 border border-brand-blue/5">
+                  <h3 className="text-sm font-semibold text-brand-blue dark:text-slate-100/70 dark:text-slate-300 mb-4">Document Details</h3>
+                  <div className="grid grid-cols-2 gap-4">
+                    <DetailRow label="Reference" value={selectedDoc.keyNumber} mono />
+                    <DetailRow label="Type" value={TYPE_META[selectedDoc.type].label} />
+                    <DetailRow label="Customer" value={`${selectedDoc.customerCode} — ${selectedDoc.customerName}`} />
+                    {selectedDoc.deliveryDate && <DetailRow label="Delivery Date" value={formatDate(selectedDoc.deliveryDate)} />}
+                    {selectedDoc.invoicedDate && <DetailRow label="Invoice Date" value={formatDate(selectedDoc.invoicedDate)} />}
+                  </div>
                 </div>
-              )}
 
-              {/* Sheet Content */}
-              <div className="flex-1 overflow-y-auto p-6">
-                {activeTab === "delivery" && selectedDoc.deliveryNumber ? (
-                  <DeliveryTabContent doc={selectedDoc} />
-                ) : (
-                  <InvoiceTabContent doc={selectedDoc} />
-                )}
+                <div className="bg-brand-blue/[0.02] rounded-lg p-5 border border-brand-blue/5">
+                  <h3 className="text-sm font-semibold text-brand-blue dark:text-slate-100/70 dark:text-slate-300 mb-4">Status</h3>
+                  <div className="flex flex-wrap gap-2">
+                    {selectedDoc.invoiceStampingStatusText && (
+                      <Badge className={cn(
+                        "gap-1",
+                        selectedDoc.isInvoiceStamped
+                          ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                          : "bg-amber-50 text-amber-700 border-amber-200"
+                      )}>
+                        {selectedDoc.isInvoiceStamped ? <CheckCircle2 className="w-3 h-3" /> : <Clock className="w-3 h-3" />}
+                        {selectedDoc.invoiceStampingStatusText}
+                      </Badge>
+                    )}
+                    {selectedDoc.isReceived !== null && (
+                      <Badge className={cn(
+                        "gap-1",
+                        selectedDoc.isReceived
+                          ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                          : "bg-slate-100 text-slate-600 border-slate-200"
+                      )}>
+                        {selectedDoc.isReceived ? "Confirmed by Customer" : "Not Confirmed"}
+                      </Badge>
+                    )}
+                    {selectedDoc.emailCount > 0 && (
+                      <Badge variant="outline" className="gap-1 border-emerald-200 bg-emerald-50 text-emerald-700">
+                        <Mail className="w-3 h-3" /> Emailed {selectedDoc.emailCount}×
+                      </Badge>
+                    )}
+                    {selectedDoc.isReadyToSend && (
+                      <Badge className="gap-1 bg-emerald-50 text-emerald-700 border-emerald-200">
+                        <CheckCircle2 className="w-3 h-3" /> Ready to Send
+                      </Badge>
+                    )}
+                  </div>
+                </div>
+
+                <div className="bg-brand-blue/[0.02] rounded-lg p-5 border border-brand-blue/5">
+                  <h3 className="text-sm font-semibold text-brand-blue dark:text-slate-100/70 dark:text-slate-300 mb-4">Document Links</h3>
+                  <div className="space-y-3">
+                    {selectedDoc.deliveryPrintoutUrl && (
+                      <DocumentLink label="Delivery Order PDF" url={selectedDoc.deliveryPrintoutUrl} />
+                    )}
+                    {selectedDoc.invoicePrintoutUrl ? (
+                      <DocumentLink label="Stamped Invoice PDF" url={selectedDoc.invoicePrintoutUrl} />
+                    ) : (
+                      <div className="flex items-center gap-3 p-3 rounded-md bg-slate-50/50 border border-slate-200 dark:bg-slate-800/50 dark:border-slate-700">
+                        <AlertCircle className="w-4 h-4 text-slate-400" />
+                        <span className="text-sm text-slate-500">No stamped document available</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
             </div>
           </div>
         </>
       )}
 
-      {/* Email Composer Modal */}
-      {emailComposerOpen && (
-        <EmailComposerModal
-          isOpen={emailComposerOpen}
-          onClose={closeEmailComposer}
-          attachments={emailAttachments}
-          customerName={emailDoc?.customerName || (emailAttachments[0] ? documents.find((d) => d.invoiceNumber === emailAttachments[0].referenceNumber)?.customerName || "" : "")}
-          customerEmail={emailDoc?.customerEmail || (emailAttachments[0] ? documents.find((d) => d.invoiceNumber === emailAttachments[0].referenceNumber)?.customerEmail || "" : "")}
+      {/* Email Composer Modal (2-level) */}
+      {emailOpen && (
+        <DocumentsHubEmailModal
+          isOpen={emailOpen}
+          onClose={() => setEmailOpen(false)}
+          items={emailItems}
+          defaultSubject="Documents for your reference"
         />
       )}
     </div>
@@ -537,12 +521,7 @@ export function DocumentsPage() {
 
 // ============== Sub-Components ==============
 
-function StatCard({
-  label,
-  value,
-  color,
-  alert
-}: {
+function StatCard({ label, value, color, alert }: {
   label: string
   value: number
   color: "brand-blue" | "emerald" | "slate" | "amber"
@@ -554,30 +533,17 @@ function StatCard({
     "slate": "text-slate-600 bg-slate-100",
     "amber": "text-amber-700 bg-amber-50",
   }
-
   return (
-    <div className={cn(
-      "p-4 rounded-lg border",
-      alert ? "border-amber/30 bg-amber-[0.02]" : "border-brand-blue/5"
-    )}>
+    <div className={cn("p-4 rounded-lg border", alert ? "border-amber/30 bg-amber-[0.02]" : "border-brand-blue/5")}>
       <p className="text-xs font-medium text-brand-blue dark:text-slate-100/50 dark:text-slate-400 uppercase tracking-wider">{label}</p>
-      <p className={cn(
-        "text-2xl font-bold tracking-tight mt-1.5",
-        colorMap[color]
-      )}>{value}</p>
+      <p className={cn("text-2xl font-bold tracking-tight mt-1.5", colorMap[color])}>{value}</p>
     </div>
   )
 }
 
-function FilterButton({
-  active,
-  onClick,
-  icon,
-  label
-}: {
+function FilterButton({ active, onClick, label }: {
   active: boolean
   onClick: () => void
-  icon: React.ReactNode
   label: string
 }) {
   return (
@@ -587,201 +553,24 @@ function FilterButton({
         "flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all duration-200",
         active
           ? "bg-white text-brand-blue dark:text-slate-100 shadow-sm dark:bg-slate-800 dark:text-slate-200"
-          : "text-brand-blue dark:text-slate-100/60 dark:text-slate-300 hover:text-brand-blue dark:text-slate-100 hover:bg-white/50 dark:text-slate-400 dark:hover:text-slate-200 dark:hover:bg-slate-800/50"
+          : "text-brand-blue dark:text-slate-100/60 dark:text-slate-300 hover:text-brand-blue hover:bg-white/50 dark:hover:text-slate-200 dark:hover:bg-slate-800/50"
       )}
     >
-      {icon}
       {label}
     </button>
   )
 }
 
-function TabButton({
-  active,
-  onClick,
-  icon,
-  label
-}: {
-  active: boolean
-  onClick: () => void
-  icon: React.ReactNode
-  label: string
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className={cn(
-        "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200",
-        active
-          ? "bg-brand-blue/10 text-brand-blue dark:text-slate-100 border border-brand-blue/20"
-          : "text-brand-blue dark:text-slate-100/50 dark:text-slate-400 hover:text-brand-blue dark:text-slate-100 hover:bg-brand-blue/5"
-      )}
-    >
-      {icon}
-      {label}
-    </button>
-  )
-}
-
-function InvoiceTabContent({ doc }: { doc: DocumentRow }) {
-  return (
-    <div className="space-y-6">
-      {/* Invoice Details Card */}
-      <div className="bg-brand-blue/[0.02] rounded-lg p-5 border border-brand-blue/5">
-        <h3 className="text-sm font-semibold text-brand-blue dark:text-slate-100/70 dark:text-slate-300 mb-4">Invoice Details</h3>
-        <div className="grid grid-cols-2 gap-4">
-          <DetailRow label="Invoice Number" value={doc.invoiceNumber} mono />
-          <DetailRow label="Customer" value={`${doc.customerNumber} — ${doc.customerName || "N/A"}`} />
-          <DetailRow label="Invoice Date" value={new Date(doc.invoicedDate).toLocaleDateString("id-ID", {
-            year: "numeric",
-            month: "long",
-            day: "numeric"
-          })} />
-          <DetailRow label="Amount" value={new Intl.NumberFormat("id-ID", {
-            style: "currency",
-            currency: "IDR",
-            minimumFractionDigits: 0
-          }).format(doc.invoiceAmount)} mono />
-        </div>
-      </div>
-
-      {/* e-Meterai Status */}
-      <div className="bg-brand-blue/[0.02] rounded-lg p-5 border border-brand-blue/5">
-        <h3 className="text-sm font-semibold text-brand-blue dark:text-slate-100/70 dark:text-slate-300 mb-4">e-Meterai Status</h3>
-        <div className="flex items-center gap-3">
-          <div className={cn(
-            "w-3 h-3 rounded-full",
-            doc.stampingStatusText === "Stamped" ? "bg-emerald-500" :
-            doc.stampingStatusText === "Pending" ? "bg-amber-500 animate-pulse" :
-            "bg-slate-300"
-          )} />
-          <span className="text-sm font-medium text-brand-blue dark:text-slate-100">
-            {doc.stampingStatusText}
-          </span>
-        </div>
-        {doc.serialNumber && (
-          <div className="mt-4">
-            <p className="text-xs text-brand-blue dark:text-slate-100/50 dark:text-slate-400 uppercase tracking-wider mb-1">Serial Number</p>
-            <code className="text-sm font-mono text-brand-blue dark:text-slate-100 bg-brand-blue/5 px-2 py-1 rounded">
-              {doc.serialNumber}
-            </code>
-          </div>
-        )}
-      </div>
-
-      {/* Document Links */}
-      <div className="bg-brand-blue/[0.02] rounded-lg p-5 border border-brand-blue/5">
-        <h3 className="text-sm font-semibold text-brand-blue dark:text-slate-100/70 dark:text-slate-300 mb-4">Document Links</h3>
-        <div className="space-y-3">
-          {doc.stampedDocumentUrl ? (
-            <DocumentLink
-              label="Stamped Invoice PDF"
-              url={doc.stampedDocumentUrl}
-              status="available"
-            />
-          ) : (
-            <div className="flex items-center gap-3 p-3 rounded-md bg-slate-50/50 border border-slate-200 dark:bg-slate-800/50 dark:border-slate-700">
-              <AlertCircle className="w-4 h-4 text-slate-400" />
-              <span className="text-sm text-slate-500">No stamped document available</span>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Standalone Indicator */}
-      {doc.isStandalone && (
-        <div className="flex items-start gap-3 p-4 rounded-lg bg-slate-50 dark:bg-slate-800/50 border border-dashed border-slate-300 dark:border-slate-600">
-          <Package className="w-5 h-5 text-slate-400 mt-0.5" />
-          <div>
-            <p className="text-sm font-medium text-slate-700 dark:text-slate-300">Direct Standalone Invoice</p>
-            <p className="text-xs text-slate-500 mt-1">
-              This invoice originated directly from ERP billing without an upstream delivery order.
-            </p>
-          </div>
-        </div>
-      )}
-    </div>
-  )
-}
-
-function DeliveryTabContent({ doc }: { doc: DocumentRow }) {
-  return (
-    <div className="space-y-6">
-      <div className="bg-emerald-50 rounded-lg p-5 border border-emerald-100">
-        <h3 className="text-sm font-semibold text-emerald-700 mb-4">Linked Delivery Flow</h3>
-        <div className="flex items-center gap-3 mb-4">
-          <div className="w-10 h-10 rounded-md bg-emerald-100 flex items-center justify-center">
-            <Truck className="w-5 h-5 text-emerald-600" />
-          </div>
-          <div>
-            <p className="text-xs text-emerald-600 uppercase tracking-wider">Delivery Number</p>
-            <code className="text-sm font-mono text-emerald-800 bg-emerald-100 px-2 py-1 rounded mt-0.5 inline-block">
-              {doc.deliveryNumber}
-            </code>
-          </div>
-        </div>
-        <div className="text-xs text-emerald-600/70">
-          This invoice has an associated delivery order in the system.
-        </div>
-      </div>
-
-      <div className="bg-brand-blue/[0.02] rounded-lg p-5 border border-brand-blue/5">
-        <h3 className="text-sm font-semibold text-brand-blue dark:text-slate-100/70 dark:text-slate-300 mb-4">Customer Information</h3>
-        <div className="space-y-3">
-          <DetailRow label="Customer Number" value={doc.customerNumber} mono />
-          <DetailRow label="Customer Name" value={doc.customerName || "N/A"} />
-        </div>
-      </div>
-
-      <div className="bg-brand-blue/[0.02] rounded-lg p-5 border border-brand-blue/5">
-        <h3 className="text-sm font-semibold text-brand-blue dark:text-slate-100/70 dark:text-slate-300 mb-4">Document Links</h3>
-        <div className="space-y-3">
-          {doc.stampedDocumentUrl ? (
-            <DocumentLink
-              label="Stamped Invoice PDF"
-              url={doc.stampedDocumentUrl}
-              status="available"
-            />
-          ) : (
-            <div className="flex items-center gap-3 p-3 rounded-md bg-slate-50/50 border border-slate-200 dark:bg-slate-800/50 dark:border-slate-700">
-              <AlertCircle className="w-4 h-4 text-slate-400" />
-              <span className="text-sm text-slate-500">No stamped document available</span>
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  )
-}
-
-function DetailRow({
-  label,
-  value,
-  mono
-}: {
-  label: string
-  value: string | number
-  mono?: boolean
-}) {
+function DetailRow({ label, value, mono }: { label: string; value: string | number; mono?: boolean }) {
   return (
     <div>
       <p className="text-xs text-brand-blue dark:text-slate-100/50 dark:text-slate-400 uppercase tracking-wider">{label}</p>
-      <p className={cn(
-        "text-sm font-medium text-brand-blue dark:text-slate-100 mt-0.5",
-        mono && "font-mono"
-      )}>{value}</p>
+      <p className={cn("text-sm font-medium text-brand-blue dark:text-slate-100 mt-0.5", mono && "font-mono")}>{value}</p>
     </div>
   )
 }
 
-function DocumentLink({
-  label,
-  url
-}: {
-  label: string
-  url: string
-  status: "available" | "pending"
-}) {
+function DocumentLink({ label, url }: { label: string; url: string }) {
   return (
     <a
       href={url}
@@ -793,11 +582,13 @@ function DocumentLink({
         <div className="w-8 h-8 rounded-md bg-brand-blue/10 flex items-center justify-center">
           <FileText className="w-4 h-4 text-brand-blue dark:text-slate-100" />
         </div>
-        <span className="text-sm font-medium text-brand-blue dark:text-slate-100 group-hover:text-brand-blue dark:text-slate-100/80 dark:text-slate-200">
-          {label}
-        </span>
+        <span className="text-sm font-medium text-brand-blue dark:text-slate-100 group-hover:text-brand-blue dark:text-slate-100/80 dark:text-slate-200">{label}</span>
       </div>
       <ChevronRight className="w-4 h-4 text-brand-blue dark:text-slate-100/40 dark:text-slate-400 group-hover:text-brand-blue dark:text-slate-100/60 dark:text-slate-300 transition-colors" />
     </a>
   )
+}
+
+function formatDate(d: string) {
+  return new Date(d).toLocaleDateString("id-ID", { year: "numeric", month: "long", day: "numeric" })
 }

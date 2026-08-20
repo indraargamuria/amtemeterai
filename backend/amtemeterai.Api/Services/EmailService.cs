@@ -502,6 +502,26 @@ namespace amtemeterai.Api.Services
                     await client.AuthenticateAsync(_smtpSettings.Username, _smtpSettings.Password);
                     await client.SendAsync(message);
 
+                    // Document Hub send tracking (count / last-sent per reference)
+                    try
+                    {
+                        _db.EmailSends.Add(new EmailSend
+                        {
+                            ReferenceType = request.ReferenceType,
+                            ReferenceNumber = request.ReferenceNumber,
+                            ToEmail = targetToEmail,
+                            Subject = request.Subject,
+                            StagingMode = _routingOptions.EnableStagingMode,
+                            SentAt = DateTime.UtcNow
+                        });
+                        await _db.SaveChangesAsync();
+                    }
+                    catch (Exception logEx)
+                    {
+                        _logger.LogWarning(logEx, "Failed to record EmailSend tracking row for {Type} {Number}",
+                            request.ReferenceType, request.ReferenceNumber);
+                    }
+
                     string ccTraceList = string.Join(", ", targetCcEmails);
                     _logger.LogInformation("Email with {AttachmentCount} attachments successfully dispatched to {Email} (CC: [{Cc}]) for {Type} {Number}",
                         documents.Count, targetToEmail, ccTraceList, request.ReferenceType, request.ReferenceNumber);

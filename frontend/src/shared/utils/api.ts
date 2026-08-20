@@ -356,6 +356,50 @@ export interface BackgroundJobExecutionLog {
   errorMessage: string | null
 }
 
+// =========================
+// Document Hub API (v2)
+// =========================
+
+export type DocumentHubItemType = "delivery-with-invoice" | "delivery-only" | "standalone-invoice"
+
+export interface DocumentHubItem {
+  type: DocumentHubItemType
+  id: number
+  keyNumber: string
+  deliveryNumber: string | null
+  invoiceNumber: string | null
+  customerCode: string
+  customerName: string
+  customerEmail: string | null
+  invoicedDate: string | null
+  deliveryDate: string | null
+  isReceived: boolean | null
+  isInvoiceStamped: boolean
+  invoiceStampingStatusText: string | null
+  isReadyToSend: boolean
+  emailCount: number
+  lastSentAt: string | null
+  deliveryPrintoutUrl: string | null
+  invoicePrintoutUrl: string | null
+}
+
+export interface DocumentHubGroup {
+  customerCode: string
+  customerName: string
+  customerEmail: string | null
+  items: DocumentHubItem[]
+}
+
+/**
+ * GET /api/deliveries/documents-hub
+ * Returns all billable documents grouped by customer for the Document Hub.
+ */
+export async function getDocumentsHub(): Promise<DocumentHubGroup[]> {
+  const response = await authGet("/api/deliveries/documents-hub")
+  if (!response.ok) throw new Error("Failed to fetch document hub")
+  return await response.json()
+}
+
 /**
  * GET /api/background-jobs
  */

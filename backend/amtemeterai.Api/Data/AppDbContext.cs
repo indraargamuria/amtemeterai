@@ -32,6 +32,9 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<BackgroundJob> BackgroundJobs => Set<BackgroundJob>();
     public DbSet<BackgroundJobExecutionLog> BackgroundJobExecutionLogs => Set<BackgroundJobExecutionLog>();
 
+    // Document Hub email send tracking - 2026-08-21
+    public DbSet<EmailSend> EmailSends => Set<EmailSend>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
