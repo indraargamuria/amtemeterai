@@ -126,19 +126,19 @@ export function DashboardPage() {
       {/* Premium Dashboard Header layout with live infrastructure status indicator */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-brand-blue/5 pb-5">
         <div className="space-y-1">
-          <h1 className="text-2xl font-semibold text-brand-blue tracking-tight">Dashboard</h1>
-          <p className="text-sm text-brand-blue/60">Real-time logistics matrix and automation tracking</p>
+          <h1 className="text-2xl font-semibold text-brand-blue dark:text-slate-100 tracking-tight">Dashboard</h1>
+          <p className="text-sm text-brand-blue dark:text-slate-100/60 dark:text-slate-300">Real-time logistics matrix and automation tracking</p>
         </div>
         
         {/* Connection pipeline node visualization badge */}
-        <div className="flex items-center gap-2 text-[11px] font-medium text-emerald-700 bg-emerald-500/5 border border-emerald-500/10 px-3 py-1 rounded-full w-fit">
+        <div className="flex items-center gap-2 text-[11px] font-medium text-emerald-700 dark:text-emerald-400 bg-emerald-500/5 border border-emerald-500/10 px-3 py-1 rounded-full w-fit">
           <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
           ERP Connectivity Link Active
         </div>
       </div>
 
       {loading ? (
-        <Card><CardContent className="p-12 text-center text-brand-blue/50">Querying database engine records...</CardContent></Card>
+        <Card><CardContent className="p-12 text-center text-brand-blue dark:text-slate-100/50 dark:text-slate-400">Querying database engine records...</CardContent></Card>
       ) : error ? (
         <Card><CardContent className="p-12 text-center text-brand-red/60">{error}</CardContent></Card>
       ) : (
@@ -153,40 +153,40 @@ export function DashboardPage() {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Left Panel: Delivery Chart Engine with subtle details */}
             <div className="space-y-3">
-              <h2 className="text-sm font-semibold text-brand-blue/70 uppercase tracking-wider">Delivery Trends</h2>
+              <h2 className="text-sm font-semibold text-brand-blue dark:text-slate-100/70 dark:text-slate-400 uppercase tracking-wider">Delivery Trends</h2>
               <Card className="shadow-none">
                 <CardContent className="p-6 h-64">
                   <ResponsiveContainer width="100%" height="100%">
                     <AreaChart data={chartsData} margin={{ top: 10, right: 5, left: -35, bottom: 0 }}>
                       <defs>
                         <linearGradient id="colorCount" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#1d2351" stopOpacity={0.12}/>
-                          <stop offset="95%" stopColor="#1d2351" stopOpacity={0}/>
+                          <stop offset="5%" stopColor="var(--chart-ink)" stopOpacity={0.12}/>
+                          <stop offset="95%" stopColor="var(--chart-ink)" stopOpacity={0}/>
                         </linearGradient>
                       </defs>
                       {/* Clean minimalist styling helper ticks */}
                       <XAxis 
                         dataKey="date" 
-                        stroke="#1d2351" 
+                        stroke="var(--chart-ink)" 
                         opacity={0.2} 
                         style={{ fontSize: '10px', fontFamily: 'monospace' }} 
                         dy={8}
                       />
                       <YAxis 
-                        stroke="#1d2351" 
+                        stroke="var(--chart-ink)" 
                         opacity={0.2} 
                         style={{ fontSize: '10px', fontFamily: 'monospace' }} 
                       />
                       <Tooltip 
                         contentStyle={{ 
-                          background: '#fff', 
-                          border: '1px solid rgba(29,35,81,0.08)', 
+                          background: 'var(--chart-tooltip-bg)', 
+                          border: '1px solid var(--chart-tooltip-border)', 
                           borderRadius: '6px',
                           fontSize: '12px',
-                          color: '#1d2351'
+                          color: 'var(--chart-tooltip-color)'
                         }} 
                       />
-                      <Area type="monotone" dataKey="count" stroke="#1d2351" strokeWidth={2} fillOpacity={1} fill="url(#colorCount)" />
+                      <Area type="monotone" dataKey="count" stroke="var(--chart-ink)" strokeWidth={2} fillOpacity={1} fill="url(#colorCount)" />
                     </AreaChart>
                   </ResponsiveContainer>
                 </CardContent>
@@ -195,7 +195,7 @@ export function DashboardPage() {
 
             {/* Right Panel: Clean Activity Feed Component without trailing hyphens */}
             <div className="space-y-3">
-              <h2 className="text-sm font-semibold text-brand-blue/70 uppercase tracking-wider">Recent Activity</h2>
+              <h2 className="text-sm font-semibold text-brand-blue dark:text-slate-100/70 dark:text-slate-400 uppercase tracking-wider">Recent Activity</h2>
               <Card className="shadow-none overflow-hidden">
                 <CardContent className="p-0 max-h-64 overflow-y-auto">
                   {logs.length > 0 ? (
@@ -205,20 +205,20 @@ export function DashboardPage() {
                           <div className="flex items-center gap-3">
                             <div className={`w-1.5 h-1.5 rounded-full ${getSeverityColor(log.severity)} shrink-0`} />
                             <div>
-                              <p className="text-sm font-semibold text-brand-blue">
+                              <p className="text-sm font-semibold text-brand-blue dark:text-slate-100">
                                 {resolveLogTitle(log)}
                               </p>
-                              <p className="text-xs text-brand-blue/60 mt-0.5">{log.message}</p>
+                              <p className="text-xs text-brand-blue dark:text-slate-100/60 dark:text-slate-300 mt-0.5">{log.message}</p>
                             </div>
                           </div>
-                          <span className="text-xs text-brand-blue/40 font-mono pl-2 whitespace-nowrap">
+                          <span className="text-xs text-brand-blue dark:text-slate-100/40 dark:text-slate-400 font-mono pl-2 whitespace-nowrap">
                             {formatTimestamp(log.timestamp)}
                           </span>
                         </div>
                       ))}
                     </div>
                   ) : (
-                    <p className="p-8 text-center text-sm text-brand-blue/40">No records found on recent communication logs.</p>
+                    <p className="p-8 text-center text-sm text-brand-blue dark:text-slate-100/40 dark:text-slate-400">No records found on recent communication logs.</p>
                   )}
                 </CardContent>
               </Card>
@@ -234,9 +234,9 @@ function MetricCard({ title, value, subtitle, isAlert }: { title: string, value:
   return (
     <Card className="shadow-none">
       <CardContent className="p-6">
-        <p className="text-xs font-medium text-brand-blue/50 uppercase tracking-wider">{title}</p>
-        <p className={`text-3xl font-bold tracking-tight mt-1.5 ${isAlert ? 'text-brand-red' : 'text-brand-blue'}`}>{value}</p>
-        <p className="text-xs text-brand-blue/40 mt-1">{subtitle}</p>
+        <p className="text-xs font-medium text-brand-blue dark:text-slate-100/50 dark:text-slate-400 uppercase tracking-wider">{title}</p>
+        <p className={`text-3xl font-bold tracking-tight mt-1.5 ${isAlert ? 'text-brand-red' : 'text-brand-blue dark:text-slate-100'}`}>{value}</p>
+        <p className="text-xs text-brand-blue dark:text-slate-100/40 dark:text-slate-400 mt-1">{subtitle}</p>
       </CardContent>
     </Card>
   )

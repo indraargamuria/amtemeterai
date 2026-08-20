@@ -281,8 +281,8 @@ export function InvoicesPage() {
     <div className="space-y-5">
       {/* Header */}
       <div className="border-b border-brand-blue/5 pb-4">
-        <h1 className="text-2xl font-semibold text-brand-blue tracking-tight">Invoices Workbench</h1>
-        <p className="text-sm text-brand-blue/60 mt-0.5">High-density invoice processing and e-Meterai management</p>
+        <h1 className="text-2xl font-semibold text-brand-blue dark:text-slate-100 tracking-tight">Invoices Workbench</h1>
+        <p className="text-sm text-brand-blue dark:text-slate-100/60 dark:text-slate-300 mt-0.5">High-density invoice processing and e-Meterai management</p>
       </div>
 
       {/* Summary Cards */}
@@ -321,10 +321,10 @@ export function InvoicesPage() {
                   placeholder="Search invoice, customer, serial..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-9 pr-4 py-2 text-sm border border-brand-blue/10 rounded-md bg-white text-brand-blue placeholder:text-brand-blue/40 focus:outline-none focus:ring-2 focus:ring-brand-blue/10 focus:border-brand-blue/20"
+                  className="w-full pl-9 pr-4 py-2 text-sm border border-brand-blue/10 rounded-md bg-white text-brand-blue dark:text-slate-100 placeholder:text-brand-blue dark:text-slate-100/40 dark:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-blue/10 focus:border-brand-blue/20 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-200 dark:placeholder:text-slate-500"
                 />
                 <svg
-                  className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-brand-blue/40 pointer-events-none"
+                  className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-brand-blue dark:text-slate-100/40 dark:text-slate-400 pointer-events-none"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -334,7 +334,7 @@ export function InvoicesPage() {
                 {searchQuery && (
                   <button
                     onClick={() => setSearchQuery("")}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-brand-blue/40 hover:text-brand-blue/60"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-brand-blue dark:text-slate-100/40 dark:text-slate-400 hover:text-brand-blue dark:text-slate-100/60 dark:text-slate-300"
                   >
                     <X className="w-4 h-4" />
                   </button>
@@ -359,7 +359,7 @@ export function InvoicesPage() {
             <div className="flex flex-wrap items-center gap-2">
               {/* Compliance Filter */}
               <div className="flex items-center bg-brand-blue/5 rounded-lg px-3 py-2">
-                <span className="text-xs text-brand-blue/60 whitespace-nowrap mr-2">Type:</span>
+                <span className="text-xs text-brand-blue dark:text-slate-100/60 dark:text-slate-300 whitespace-nowrap mr-2">Type:</span>
                 <div className="flex gap-1">
                   {[
                     { value: "all", label: "All" },
@@ -374,7 +374,7 @@ export function InvoicesPage() {
                         "px-2 py-1 text-xs rounded-md transition-colors",
                         complianceFilter === option.value
                           ? "bg-brand-blue text-white"
-                          : "text-brand-blue/70 hover:bg-brand-blue/10"
+                          : "text-brand-blue dark:text-slate-100/70 dark:text-slate-300 hover:bg-brand-blue/10"
                       )}
                     >
                       {option.label}
@@ -385,7 +385,7 @@ export function InvoicesPage() {
 
               {/* Status Filter */}
               <div className="flex items-center bg-brand-blue/5 rounded-lg px-3 py-2">
-                <span className="text-xs text-brand-blue/60 whitespace-nowrap mr-2">Status:</span>
+                <span className="text-xs text-brand-blue dark:text-slate-100/60 dark:text-slate-300 whitespace-nowrap mr-2">Status:</span>
                 <div className="flex gap-1">
                   {[
                     { value: "all", label: "All" },
@@ -401,7 +401,7 @@ export function InvoicesPage() {
                         "px-2 py-1 text-xs rounded-md transition-colors",
                         statusFilter === option.value
                           ? "bg-brand-blue text-white"
-                          : "text-brand-blue/70 hover:bg-brand-blue/10"
+                          : "text-brand-blue dark:text-slate-100/70 dark:text-slate-300 hover:bg-brand-blue/10"
                       )}
                     >
                       {option.label}
@@ -416,7 +416,7 @@ export function InvoicesPage() {
                   variant="ghost"
                   size="sm"
                   onClick={clearAllFilters}
-                  className="h-8 px-3 text-xs text-brand-blue/60 hover:text-brand-blue"
+                  className="h-8 px-3 text-xs text-brand-blue dark:text-slate-100/60 dark:text-slate-300 hover:text-brand-blue dark:text-slate-100"
                 >
                   <Filter className="w-3.5 h-3.5 mr-1.5" />
                   Clear
@@ -434,19 +434,19 @@ export function InvoicesPage() {
             <Table>
               <TableHeader>
                 <TableRow className="bg-brand-blue/5">
-                  <TableHead className="font-semibold text-brand-blue text-xs uppercase tracking-wider py-2 px-3 whitespace-nowrap">Invoice</TableHead>
-                  <TableHead className="font-semibold text-brand-blue text-xs uppercase tracking-wider py-2 px-3 whitespace-nowrap">Customer</TableHead>
-                  <TableHead className="font-semibold text-brand-blue text-xs uppercase tracking-wider py-2 px-3 whitespace-nowrap">Date</TableHead>
-                  <TableHead className="font-semibold text-brand-blue text-xs uppercase tracking-wider py-2 px-3 text-right whitespace-nowrap">Amount</TableHead>
-                  <TableHead className="font-semibold text-brand-blue text-xs uppercase tracking-wider py-2 px-3 whitespace-nowrap">Type</TableHead>
-                  <TableHead className="font-semibold text-brand-blue text-xs uppercase tracking-wider py-2 px-3 whitespace-nowrap">Status</TableHead>
-                  <TableHead className="font-semibold text-brand-blue text-xs uppercase tracking-wider py-2 px-3 text-right whitespace-nowrap">Actions</TableHead>
+                  <TableHead className="font-semibold text-brand-blue dark:text-slate-100 text-xs uppercase tracking-wider py-2 px-3 whitespace-nowrap">Invoice</TableHead>
+                  <TableHead className="font-semibold text-brand-blue dark:text-slate-100 text-xs uppercase tracking-wider py-2 px-3 whitespace-nowrap">Customer</TableHead>
+                  <TableHead className="font-semibold text-brand-blue dark:text-slate-100 text-xs uppercase tracking-wider py-2 px-3 whitespace-nowrap">Date</TableHead>
+                  <TableHead className="font-semibold text-brand-blue dark:text-slate-100 text-xs uppercase tracking-wider py-2 px-3 text-right whitespace-nowrap">Amount</TableHead>
+                  <TableHead className="font-semibold text-brand-blue dark:text-slate-100 text-xs uppercase tracking-wider py-2 px-3 whitespace-nowrap">Type</TableHead>
+                  <TableHead className="font-semibold text-brand-blue dark:text-slate-100 text-xs uppercase tracking-wider py-2 px-3 whitespace-nowrap">Status</TableHead>
+                  <TableHead className="font-semibold text-brand-blue dark:text-slate-100 text-xs uppercase tracking-wider py-2 px-3 text-right whitespace-nowrap">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center text-brand-blue/50 py-16">
+                    <TableCell colSpan={7} className="text-center text-brand-blue dark:text-slate-100/50 dark:text-slate-400 py-16">
                       <div className="flex items-center justify-center gap-2">
                         <div className="w-4 h-4 border-2 border-brand-blue/20 border-t-brand-blue/80 rounded-full animate-spin" />
                         Loading invoices...
@@ -455,7 +455,7 @@ export function InvoicesPage() {
                   </TableRow>
                 ) : filteredInvoices.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center text-brand-blue/50 py-16">
+                    <TableCell colSpan={7} className="text-center text-brand-blue dark:text-slate-100/50 dark:text-slate-400 py-16">
                       {invoices.length === 0 ? "No invoices found" : "No invoices match your filters"}
                     </TableCell>
                   </TableRow>
@@ -468,11 +468,11 @@ export function InvoicesPage() {
                       {/* Invoice Number with DO Number below */}
                       <TableCell className="py-2 px-3 whitespace-nowrap">
                         <div>
-                          <span className="font-mono text-sm font-semibold text-brand-blue tracking-tight">
+                          <span className="font-mono text-sm font-semibold text-brand-blue dark:text-slate-100 tracking-tight">
                             {invoice.invoiceNumber}
                           </span>
                           {invoice.deliveryNumber && (
-                            <div className="font-mono text-xs text-brand-blue/60 mt-0.5">
+                            <div className="font-mono text-xs text-brand-blue dark:text-slate-100/60 dark:text-slate-300 mt-0.5">
                               DO: {invoice.deliveryNumber}
                             </div>
                           )}
@@ -482,10 +482,10 @@ export function InvoicesPage() {
                       {/* Customer */}
                       <TableCell className="py-2 px-3 whitespace-nowrap">
                         <div className="min-w-[140px] max-w-[200px]">
-                          <p className="text-sm font-medium text-brand-blue truncate" title={invoice.customerName || undefined}>
+                          <p className="text-sm font-medium text-brand-blue dark:text-slate-100 truncate" title={invoice.customerName || undefined}>
                             {invoice.customerName || "-"}
                           </p>
-                          <p className="text-xs text-brand-blue/50 font-mono truncate" title={invoice.customerNumber}>
+                          <p className="text-xs text-brand-blue dark:text-slate-100/50 dark:text-slate-400 font-mono truncate" title={invoice.customerNumber}>
                             {invoice.customerNumber}
                           </p>
                         </div>
@@ -493,7 +493,7 @@ export function InvoicesPage() {
 
                       {/* Invoice Date */}
                       <TableCell className="py-2 px-3 whitespace-nowrap">
-                        <span className="text-sm text-brand-blue/70">
+                        <span className="text-sm text-brand-blue dark:text-slate-100/70 dark:text-slate-300">
                           {formatDate(invoice.invoicedDate)}
                         </span>
                       </TableCell>
@@ -506,11 +506,11 @@ export function InvoicesPage() {
                             {invoice.downPayAmountLocal > 0 ? (
                               <>
                                 {/* Nett Amount (prominent) */}
-                                <span className="text-sm font-semibold text-brand-blue tabular-nums block">
+                                <span className="text-sm font-semibold text-brand-blue dark:text-slate-100 tabular-nums block">
                                   {formatCurrency(invoice.amountLocal)}
                                 </span>
                                 {/* Base and DownPay (smaller) */}
-                                <div className="flex items-center justify-end gap-1 text-xs text-brand-blue/50">
+                                <div className="flex items-center justify-end gap-1 text-xs text-brand-blue dark:text-slate-100/50 dark:text-slate-400">
                                   <span>{formatCurrency(invoice.baseAmountLocal)}</span>
                                   <span>−</span>
                                   <span>{formatCurrency(invoice.downPayAmountLocal)}</span>
@@ -518,7 +518,7 @@ export function InvoicesPage() {
                               </>
                             ) : (
                               // No downpay - just show nett/base (they're the same)
-                              <span className="text-sm font-semibold text-brand-blue tabular-nums block">
+                              <span className="text-sm font-semibold text-brand-blue dark:text-slate-100 tabular-nums block">
                                 {formatCurrency(invoice.amountLocal)}
                               </span>
                             )}
@@ -529,17 +529,17 @@ export function InvoicesPage() {
                             {/* Local Amount */}
                             {invoice.downPayAmountLocal > 0 ? (
                               <>
-                                <span className="text-sm font-semibold text-brand-blue tabular-nums block">
+                                <span className="text-sm font-semibold text-brand-blue dark:text-slate-100 tabular-nums block">
                                   {formatCurrency(invoice.amountLocal)}
                                 </span>
-                                <div className="flex items-center justify-end gap-1 text-xs text-brand-blue/50">
+                                <div className="flex items-center justify-end gap-1 text-xs text-brand-blue dark:text-slate-100/50 dark:text-slate-400">
                                   <span>{formatCurrency(invoice.baseAmountLocal)}</span>
                                   <span>−</span>
                                   <span>{formatCurrency(invoice.downPayAmountLocal)}</span>
                                 </div>
                               </>
                             ) : (
-                              <span className="text-sm font-semibold text-brand-blue tabular-nums block">
+                              <span className="text-sm font-semibold text-brand-blue dark:text-slate-100 tabular-nums block">
                                 {formatCurrency(invoice.amountLocal)}
                               </span>
                             )}
@@ -548,17 +548,17 @@ export function InvoicesPage() {
                               <>
                                 {invoice.downPayAmountForeign > 0 ? (
                                   <>
-                                    <span className="text-xs text-brand-blue/60 tabular-nums font-medium block mt-0.5">
+                                    <span className="text-xs text-brand-blue dark:text-slate-100/60 dark:text-slate-300 tabular-nums font-medium block mt-0.5">
                                       {formatForeignCurrency(invoice.amountForeign, invoice.currency)}
                                     </span>
-                                    <div className="flex items-center justify-end gap-1 text-xs text-brand-blue/40">
+                                    <div className="flex items-center justify-end gap-1 text-xs text-brand-blue dark:text-slate-100/40 dark:text-slate-400">
                                       <span>{formatForeignCurrency(invoice.baseAmountForeign, invoice.currency)}</span>
                                       <span>−</span>
                                       <span>{formatForeignCurrency(invoice.downPayAmountForeign, invoice.currency)}</span>
                                     </div>
                                   </>
                                 ) : (
-                                  <span className="text-xs text-brand-blue/50 tabular-nums font-medium block mt-0.5">
+                                  <span className="text-xs text-brand-blue dark:text-slate-100/50 dark:text-slate-400 tabular-nums font-medium block mt-0.5">
                                     {formatForeignCurrency(invoice.amountForeign, invoice.currency)}
                                   </span>
                                 )}
@@ -578,7 +578,7 @@ export function InvoicesPage() {
                             {getComplianceLabel(invoice.complianceCategory)}
                           </Badge>
                         ) : (
-                          <span className="text-xs text-brand-blue/30">—</span>
+                          <span className="text-xs text-brand-blue dark:text-slate-100/30 dark:text-slate-500">—</span>
                         )}
                       </TableCell>
 
@@ -620,7 +620,7 @@ export function InvoicesPage() {
                               }}
                               disabled={!invoice.unstampedDocumentUrl && !invoice.stampedDocumentUrl}
                               title="Download invoice documents"
-                              className="h-7 px-2 text-xs text-brand-blue/70 hover:text-brand-blue hover:bg-brand-blue/5 disabled:text-brand-blue/30 disabled:hover:bg-transparent"
+                              className="h-7 px-2 text-xs text-brand-blue dark:text-slate-100/70 dark:text-slate-300 hover:text-brand-blue dark:text-slate-100 hover:bg-brand-blue/5 disabled:text-brand-blue dark:text-slate-100/30 dark:text-slate-500 disabled:hover:bg-transparent"
                             >
                               <FileTextIcon className="w-3 h-3 mr-1" />
                               Invoice
@@ -630,7 +630,7 @@ export function InvoicesPage() {
                             </Button>
                             {openDropdownId === invoice.invoiceID && (
                               <div
-                                className="absolute right-0 top-full mt-1 bg-white rounded-md shadow-lg border border-brand-blue/10 py-1 z-10 min-w-[120px]"
+                                className="absolute right-0 top-full mt-1 bg-white rounded-md shadow-lg border border-brand-blue/10 py-1 z-10 min-w-[120px] dark:bg-slate-800 dark:border-slate-700"
                                 onClick={(e) => e.stopPropagation()}
                               >
                                 {invoice.unstampedDocumentUrl && (
@@ -639,7 +639,7 @@ export function InvoicesPage() {
                                       handleDownload(invoice.unstampedDocumentUrl)
                                       setOpenDropdownId(null)
                                     }}
-                                    className="w-full text-left px-3 py-1.5 text-xs text-brand-blue/70 hover:bg-brand-blue/5 hover:text-brand-blue flex items-center gap-2"
+                                    className="w-full text-left px-3 py-1.5 text-xs text-brand-blue dark:text-slate-100/70 dark:text-slate-300 hover:bg-brand-blue/5 hover:text-brand-blue dark:text-slate-100 flex items-center gap-2"
                                   >
                                     <Download className="w-3 h-3" />
                                     Raw Invoice
@@ -668,7 +668,7 @@ export function InvoicesPage() {
                             onClick={() => handleDownload(invoice.deliveryPrintoutUrl)}
                             disabled={!invoice.deliveryPrintoutUrl}
                             title="Download delivery order document"
-                            className="h-7 px-2 text-xs text-brand-blue/70 hover:text-brand-blue hover:bg-brand-blue/5 disabled:text-brand-blue/30 disabled:hover:bg-transparent"
+                            className="h-7 px-2 text-xs text-brand-blue dark:text-slate-100/70 dark:text-slate-300 hover:text-brand-blue dark:text-slate-100 hover:bg-brand-blue/5 disabled:text-brand-blue dark:text-slate-100/30 dark:text-slate-500 disabled:hover:bg-transparent"
                           >
                             <File className="w-3 h-3 mr-1" />
                             DO
@@ -686,11 +686,11 @@ export function InvoicesPage() {
 
       {/* Results Summary & Pagination */}
       <div className="flex flex-col sm:flex-row justify-between items-center gap-3">
-        <p className="text-sm text-brand-blue/50">
-          Showing <span className="font-medium text-brand-blue/70">{currentInvoices.length}</span> of{" "}
-          <span className="font-medium text-brand-blue/70">{filteredInvoices.length}</span> invoices
+        <p className="text-sm text-brand-blue dark:text-slate-100/50 dark:text-slate-400">
+          Showing <span className="font-medium text-brand-blue dark:text-slate-100/70 dark:text-slate-300">{currentInvoices.length}</span> of{" "}
+          <span className="font-medium text-brand-blue dark:text-slate-100/70 dark:text-slate-300">{filteredInvoices.length}</span> invoices
           {hasActiveFilters && (
-            <span className="text-brand-blue/40"> (filtered)</span>
+            <span className="text-brand-blue dark:text-slate-100/40 dark:text-slate-400"> (filtered)</span>
           )}
         </p>
         {totalPages > 1 && (
@@ -704,7 +704,7 @@ export function InvoicesPage() {
             >
               Previous
             </Button>
-            <span className="text-sm text-brand-blue/70 px-1">
+            <span className="text-sm text-brand-blue dark:text-slate-100/70 dark:text-slate-300 px-1">
               <span className="font-medium">{currentPage}</span> / {totalPages}
             </span>
             <Button
@@ -741,16 +741,16 @@ function SummaryCard({
       <CardContent className="p-4">
         <div className="flex items-start justify-between gap-3">
           <div className="flex-1">
-            <p className="text-xs font-medium text-brand-blue/50 uppercase tracking-wider">{title}</p>
-            <p className={`text-2xl font-bold tracking-tight ${isAlert ? 'text-brand-red' : 'text-brand-blue'}`}>
+            <p className="text-xs font-medium text-brand-blue dark:text-slate-100/50 dark:text-slate-400 uppercase tracking-wider">{title}</p>
+            <p className={`text-2xl font-bold tracking-tight ${isAlert ? 'text-brand-red' : 'text-brand-blue dark:text-slate-100'}`}>
               {value}
             </p>
-            <p className="text-xs text-brand-blue/40 mt-0.5">{subtitle}</p>
+            <p className="text-xs text-brand-blue dark:text-slate-100/40 dark:text-slate-400 mt-0.5">{subtitle}</p>
           </div>
           {icon && (
             <div className={cn(
               "p-2 rounded-lg flex-shrink-0",
-              isAlert ? "bg-brand-red/10 text-brand-red" : "bg-brand-blue/10 text-brand-blue"
+              isAlert ? "bg-brand-red/10 text-brand-red" : "bg-brand-blue/10 text-brand-blue dark:text-slate-100"
             )}>
               {icon}
             </div>

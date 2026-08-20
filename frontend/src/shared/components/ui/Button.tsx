@@ -7,9 +7,9 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        default: "bg-brand-blue text-white hover:bg-brand-blue/90 shadow-sm hover:shadow",
-        outline: "border border-brand-blue/20 text-brand-blue hover:bg-brand-blue/5 hover:border-brand-blue/30",
-        ghost: "text-brand-blue/70 hover:bg-brand-blue/5 hover:text-brand-blue",
+        default: "bg-brand-blue text-white hover:bg-brand-blue/90 shadow-sm hover:shadow dark:bg-brand-blue dark:hover:bg-brand-blue/80",
+        outline: "border border-brand-blue/20 text-brand-blue hover:bg-brand-blue/5 hover:border-brand-blue/30 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800 dark:hover:border-slate-500",
+        ghost: "text-brand-blue/70 hover:bg-brand-blue/5 hover:text-brand-blue dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-slate-100",
       },
       size: {
         default: "h-10 px-4 py-2",

@@ -158,10 +158,10 @@ export function CustomersPage() {
       {/* Aligned Page Header layout */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="space-y-1">
-          <h1 className="text-2xl font-semibold text-brand-blue tracking-tight">
+          <h1 className="text-2xl font-semibold text-brand-blue dark:text-slate-100 tracking-tight">
             Customers
           </h1>
-          <p className="text-sm text-brand-blue/60">
+          <p className="text-sm text-brand-blue dark:text-slate-100/60 dark:text-slate-300">
             Track and manage synced customer master directory listings
           </p>
         </div>
@@ -176,21 +176,21 @@ export function CustomersPage() {
 
       {/* Overview Analytics Matrix using Deliveries styles */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <Card className="border border-slate-100">
+        <Card className="border border-slate-100 dark:border-slate-800">
           <CardContent className="p-4 flex flex-col justify-center">
-            <span className="text-xs font-medium text-brand-blue/50 uppercase tracking-wider">Total Customers</span>
-            <span className="text-2xl font-semibold text-brand-blue mt-1">{loading ? "..." : metrics.total}</span>
+            <span className="text-xs font-medium text-brand-blue dark:text-slate-100/50 dark:text-slate-400 uppercase tracking-wider">Total Customers</span>
+            <span className="text-2xl font-semibold text-brand-blue dark:text-slate-100 mt-1">{loading ? "..." : metrics.total}</span>
           </CardContent>
         </Card>
-        <Card className="border border-slate-100">
+        <Card className="border border-slate-100 dark:border-slate-800">
           <CardContent className="p-4 flex flex-col justify-center">
-            <span className="text-xs font-medium text-brand-blue/50 uppercase tracking-wider">Verified Domains</span>
-            <span className="text-2xl font-semibold text-brand-blue mt-1">{loading ? "..." : metrics.uniqueDomains}</span>
+            <span className="text-xs font-medium text-brand-blue dark:text-slate-100/50 dark:text-slate-400 uppercase tracking-wider">Verified Domains</span>
+            <span className="text-2xl font-semibold text-brand-blue dark:text-slate-100 mt-1">{loading ? "..." : metrics.uniqueDomains}</span>
           </CardContent>
         </Card>
-        <Card className="border border-slate-100">
+        <Card className="border border-slate-100 dark:border-slate-800">
           <CardContent className="p-4 flex flex-col justify-center">
-            <span className="text-xs font-medium text-brand-blue/50 uppercase tracking-wider">Missing Communications</span>
+            <span className="text-xs font-medium text-brand-blue dark:text-slate-100/50 dark:text-slate-400 uppercase tracking-wider">Missing Communications</span>
             <span className="text-2xl font-semibold text-amber-600 mt-1">{loading ? "..." : metrics.missingEmails}</span>
           </CardContent>
         </Card>
@@ -215,7 +215,7 @@ export function CustomersPage() {
             <div className="flex-1">
               <div className="relative">
                 <svg
-                  className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-brand-blue/40"
+                  className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-brand-blue dark:text-slate-100/40 dark:text-slate-400"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -245,37 +245,37 @@ export function CustomersPage() {
           <TableHeader>
             <TableRow>
               <TableHead
-                className="font-medium text-brand-blue/50 uppercase text-xs tracking-wider cursor-pointer hover:text-brand-blue/70 transition-colors"
+                className="font-medium text-brand-blue dark:text-slate-100/50 dark:text-slate-400 uppercase text-xs tracking-wider cursor-pointer hover:text-brand-blue dark:text-slate-100/70 dark:text-slate-300 transition-colors"
                 onClick={() => handleSort("customerCode")}
               >
                 Code {getSortIcon("customerCode")}
               </TableHead>
               <TableHead
-                className="font-medium text-brand-blue/50 uppercase text-xs tracking-wider cursor-pointer hover:text-brand-blue/70 transition-colors"
+                className="font-medium text-brand-blue dark:text-slate-100/50 dark:text-slate-400 uppercase text-xs tracking-wider cursor-pointer hover:text-brand-blue dark:text-slate-100/70 dark:text-slate-300 transition-colors"
                 onClick={() => handleSort("customerName")}
               >
                 Name {getSortIcon("customerName")}
               </TableHead>
               <TableHead
-                className="font-medium text-brand-blue/50 uppercase text-xs tracking-wider cursor-pointer hover:text-brand-blue/70 transition-colors"
+                className="font-medium text-brand-blue dark:text-slate-100/50 dark:text-slate-400 uppercase text-xs tracking-wider cursor-pointer hover:text-brand-blue dark:text-slate-100/70 dark:text-slate-300 transition-colors"
                 onClick={() => handleSort("customerEmail")}
               >
                 Email {getSortIcon("customerEmail")}
               </TableHead>
               <TableHead
-                className="font-medium text-brand-blue/50 uppercase text-xs tracking-wider cursor-pointer hover:text-brand-blue/70 transition-colors"
+                className="font-medium text-brand-blue dark:text-slate-100/50 dark:text-slate-400 uppercase text-xs tracking-wider cursor-pointer hover:text-brand-blue dark:text-slate-100/70 dark:text-slate-300 transition-colors"
                 onClick={() => handleSort("region")}
               >
                 Region {getSortIcon("region")}
               </TableHead>
               <TableHead
-                className="font-medium text-brand-blue/50 uppercase text-xs tracking-wider cursor-pointer hover:text-brand-blue/70 transition-colors text-right"
+                className="font-medium text-brand-blue dark:text-slate-100/50 dark:text-slate-400 uppercase text-xs tracking-wider cursor-pointer hover:text-brand-blue dark:text-slate-100/70 dark:text-slate-300 transition-colors text-right"
                 onClick={() => handleSort("leadTimeDays")}
               >
                 Lead Time {getSortIcon("leadTimeDays")}
               </TableHead>
               <TableHead
-                className="font-medium text-brand-blue/50 uppercase text-xs tracking-wider cursor-pointer hover:text-brand-blue/70 transition-colors"
+                className="font-medium text-brand-blue dark:text-slate-100/50 dark:text-slate-400 uppercase text-xs tracking-wider cursor-pointer hover:text-brand-blue dark:text-slate-100/70 dark:text-slate-300 transition-colors"
                 onClick={() => handleSort("customerPin")}
               >
                 PIN {getSortIcon("customerPin")}
@@ -285,13 +285,13 @@ export function CustomersPage() {
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={6} className="text-center text-brand-blue/60 py-12">
+                <TableCell colSpan={6} className="text-center text-brand-blue dark:text-slate-100/60 dark:text-slate-300 py-12">
                   Loading customers...
                 </TableCell>
               </TableRow>
             ) : filteredAndSortedCustomers.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6} className="text-center text-brand-blue/60 py-12">
+                <TableCell colSpan={6} className="text-center text-brand-blue dark:text-slate-100/60 dark:text-slate-300 py-12">
                   {customers.length === 0
                     ? "No customers found"
                     : "No customers match your filter criteria"}
@@ -305,24 +305,24 @@ export function CustomersPage() {
                 >
                   {/* Customer Code Column matching DeliveriesPage badge pattern */}
                   <TableCell className="py-4">
-                    <Badge variant="badge" className="text-brand-blue/70 font-normal">
+                    <Badge variant="badge" className="text-brand-blue dark:text-slate-100/70 dark:text-slate-300 font-normal">
                       {customer.customerCode}
                     </Badge>
                   </TableCell>
 
                   {/* Customer Name Column */}
-                  <TableCell className="py-4 font-semibold text-brand-blue">
+                  <TableCell className="py-4 font-semibold text-brand-blue dark:text-slate-100">
                     {customer.customerName}
                   </TableCell>
 
                   {/* Customer Email Address Layout with empty fallbacks */}
                   <TableCell className="py-4">
                     {customer.customerEmail ? (
-                      <span className="text-sm text-brand-blue/70">
+                      <span className="text-sm text-brand-blue dark:text-slate-100/70 dark:text-slate-300">
                         {customer.customerEmail}
                       </span>
                     ) : (
-                      <Badge variant="outline" className="border-dashed border-slate-300 text-slate-400">
+                      <Badge variant="outline" className="border-dashed border-slate-300 text-slate-400 dark:border-slate-600 dark:text-slate-500">
                         No Email
                       </Badge>
                     )}
@@ -331,7 +331,7 @@ export function CustomersPage() {
                   {/* Region Column */}
                   <TableCell className="py-4">
                     {customer.region ? (
-                      <span className="text-sm text-brand-blue/70 bg-brand-blue/5 px-2 py-1 rounded">
+                      <span className="text-sm text-brand-blue dark:text-slate-100/70 dark:text-slate-300 bg-brand-blue/5 px-2 py-1 rounded">
                         {customer.region}
                       </span>
                     ) : (
@@ -343,10 +343,10 @@ export function CustomersPage() {
                   <TableCell className="py-4 text-right">
                     {customer.leadTimeDays != null ? (
                       <span className="inline-flex items-center gap-1">
-                        <span className="text-sm font-semibold text-brand-blue">
+                        <span className="text-sm font-semibold text-brand-blue dark:text-slate-100">
                           {customer.leadTimeDays}
                         </span>
-                        <span className="text-xs text-brand-blue/50">days</span>
+                        <span className="text-xs text-brand-blue dark:text-slate-100/50 dark:text-slate-400">days</span>
                       </span>
                     ) : (
                       <span className="text-slate-400 italic text-sm">—</span>
@@ -356,7 +356,7 @@ export function CustomersPage() {
                   {/* Customer PIN Layout with styled fallbacks */}
                   <TableCell className="py-4 font-mono text-xs">
                     {customer.customerPin ? (
-                      <span className="bg-slate-100/80 px-2 py-1 rounded text-slate-600 border border-slate-200/40">
+                      <span className="bg-slate-100/80 px-2 py-1 rounded text-slate-600 border border-slate-200/40 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700">
                         {customer.customerPin}
                       </span>
                     ) : (
@@ -372,7 +372,7 @@ export function CustomersPage() {
 
       {/* Results Summary & Pagination Alignment */}
       <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
-        <p className="text-sm text-brand-blue/50">
+        <p className="text-sm text-brand-blue dark:text-slate-100/50 dark:text-slate-400">
           Showing {currentCustomers.length} of {filteredAndSortedCustomers.length} customers
         </p>
         {totalPages > 1 && (

@@ -199,7 +199,7 @@ export function BackgroundJobsPage() {
                         } ${busyKey === job.jobKey ? "opacity-50" : ""}`}
                       >
                         <span
-                          className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                          className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform dark:bg-slate-200 ${
                             job.isEnabled ? "translate-x-6" : "translate-x-1"
                           }`}
                         />
@@ -243,7 +243,7 @@ export function BackgroundJobsPage() {
       {/* Logs drawer */}
       {logsJob && (
         <div className="fixed inset-0 z-50 flex justify-end bg-black/40">
-          <div className="h-full w-full max-w-2xl bg-white shadow-xl flex flex-col">
+          <div className="h-full w-full max-w-2xl bg-white shadow-xl flex flex-col dark:bg-slate-900 dark:border dark:border-slate-800">
             <div className="flex items-center justify-between border-b px-5 py-4">
               <div>
                 <h2 className="text-lg font-semibold">{logsJob.displayName} — Execution Logs</h2>

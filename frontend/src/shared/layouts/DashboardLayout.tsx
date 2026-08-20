@@ -8,11 +8,14 @@ import {
   FolderOpen,
   ShieldAlert,
   Settings,
+  Sun,
+  Moon,
   type LucideIcon,
 } from "lucide-react"
 import { cn } from "../utils/cn"
 import Logo from '../../assets/amtlogo.png';
 import { useAuth } from "../contexts/AuthContext"
+import { useTheme } from "../hooks/useTheme"
 
 interface DashboardLayoutProps {
   children: React.ReactNode
@@ -92,6 +95,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   const navigate = useNavigate()
   const { user, logout } = useAuth()
   const [sidebarOpen, setSidebarOpen] = React.useState(false)
+  const { theme, toggleTheme } = useTheme()
 
   const handleLogout = () => {
     logout()
@@ -115,7 +119,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   const userEmail = user?.email || "admin@amtemeterai.com"
 
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-screen bg-white dark:bg-slate-950">
       {/* Mobile overlay - click to close sidebar */}
       {sidebarOpen && (
         <div
@@ -127,14 +131,14 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
       {/* Sidebar - Fixed to viewport (off-canvas on mobile, static on lg+) */}
       <aside
         className={cn(
-          "fixed top-0 left-0 bottom-0 z-40 w-64 h-screen border-r border-brand-blue/5 bg-white flex flex-col transition-transform duration-200 ease-in-out",
+          "fixed top-0 left-0 bottom-0 z-40 w-64 h-screen border-r border-brand-blue/5 bg-white dark:bg-slate-900 dark:border-slate-800 flex flex-col transition-transform duration-200 ease-in-out",
           sidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
         )}
       >
         {/* Logo */}
         <div className="p-6">
           <Link to="/" className="block">
-            <h1 className="text-lg font-bold text-brand-blue tracking-tight">
+            <h1 className="text-lg font-bold text-brand-blue dark:text-slate-100 tracking-tight">
               <img src={Logo} alt="Logo" className="w-24 h-auto" />
             </h1>
           </Link>
@@ -152,8 +156,8 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                     className={cn(
                       "flex items-center px-4 py-2.5 rounded-md text-sm font-medium transition-all",
                       isActive
-                        ? "bg-brand-blue/10 text-brand-blue border-l-2 border-brand-blue"
-                        : "text-brand-blue/70 hover:bg-brand-blue/5 hover:text-brand-blue border-l-2 border-transparent"
+                        ? "bg-brand-blue/10 text-brand-blue border-l-2 border-brand-blue dark:bg-brand-blue/30 dark:text-slate-100 dark:border-brand-blue"
+                        : "text-brand-blue/70 hover:bg-brand-blue/5 hover:text-brand-blue border-l-2 border-transparent dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200"
                     )}
                   >
                     <item.icon className="w-4 h-4 mr-3 shrink-0" />
@@ -166,18 +170,25 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
         </nav>
 
         {/* User section - Always visible at bottom */}
-        <div className="p-4 border-t border-brand-blue/5 bg-white">
+        <div className="p-4 border-t border-brand-blue/5 bg-white dark:bg-slate-900 dark:border-slate-800">
           <div className="flex items-center gap-3 px-2">
             <div className="w-8 h-8 rounded-full bg-brand-blue/10 flex items-center justify-center">
-              <span className="text-xs font-semibold text-brand-blue">{userInitial}</span>
+              <span className="text-xs font-semibold text-brand-blue dark:text-slate-100">{userInitial}</span>
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-brand-blue truncate">{userName}</p>
-              <p className="text-xs text-brand-blue/50 truncate">{userEmail}</p>
+              <p className="text-sm font-medium text-brand-blue truncate dark:text-slate-200">{userName}</p>
+              <p className="text-xs text-brand-blue/50 truncate dark:text-slate-400">{userEmail}</p>
             </div>
             <button
+              onClick={toggleTheme}
+              className="p-2 rounded-md text-brand-blue/50 hover:bg-brand-blue/5 hover:text-brand-blue transition-colors dark:text-slate-400 dark:hover:bg-slate-800"
+              title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+            >
+              {theme === "dark" ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+            </button>
+            <button
               onClick={handleLogout}
-              className="p-2 rounded-md text-brand-blue/50 hover:bg-brand-blue/5 hover:text-brand-red transition-colors"
+              className="p-2 rounded-md text-brand-blue/50 hover:bg-brand-blue/5 hover:text-brand-red transition-colors dark:text-slate-400 dark:hover:bg-slate-800"
               title="Sign out"
             >
               <svg
@@ -199,10 +210,10 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
       </aside>
 
       {/* Mobile top bar with menu toggle */}
-      <div className="lg:hidden sticky top-0 z-20 flex items-center gap-3 px-4 py-3 bg-white/95 backdrop-blur border-b border-brand-blue/5">
+      <div className="lg:hidden sticky top-0 z-20 flex items-center gap-3 px-4 py-3 bg-white/95 backdrop-blur border-b border-brand-blue/5 dark:bg-slate-900/95 dark:border-slate-800">
         <button
           onClick={() => setSidebarOpen(true)}
-          className="p-2 rounded-md text-brand-blue/70 hover:bg-brand-blue/5 hover:text-brand-blue transition-colors"
+          className="p-2 rounded-md text-brand-blue/70 hover:bg-brand-blue/5 hover:text-brand-blue transition-colors dark:text-slate-300 dark:hover:bg-slate-800"
           aria-label="Open menu"
         >
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -213,7 +224,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
       </div>
 
       {/* Main Content - With left margin to account for fixed sidebar */}
-      <main className="lg:ml-64 min-h-screen overflow-auto bg-brand-blue/[0.02]">
+      <main className="lg:ml-64 min-h-screen overflow-auto bg-brand-blue/[0.02] dark:bg-slate-950">
         <div className="p-4 sm:p-6 lg:p-8 max-w-6xl mx-auto">{children}</div>
       </main>
     </div>

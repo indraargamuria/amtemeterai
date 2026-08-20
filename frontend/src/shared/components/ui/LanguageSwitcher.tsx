@@ -18,14 +18,14 @@ export function LanguageSwitcher({ className }: LanguageSwitcherProps) {
     <button
       onClick={toggleLanguage}
       className={cn(
-        "flex items-center gap-2 px-3 py-2 rounded-md bg-white border border-brand-blue/10 hover:border-brand-blue/20 transition-colors",
+        "flex items-center gap-2 px-3 py-2 rounded-md bg-white border border-brand-blue/10 hover:border-brand-blue/20 transition-colors dark:bg-slate-800 dark:border-slate-700 dark:hover:border-slate-600",
         className
       )}
       type="button"
       aria-label="Toggle language"
     >
-      <Globe className="w-4 h-4 text-brand-blue" />
-      <span className="text-sm font-medium text-brand-blue">
+      <Globe className="w-4 h-4 text-brand-blue dark:text-slate-300" />
+      <span className="text-sm font-medium text-brand-blue dark:text-slate-200">
         {i18n.language === 'en' ? 'EN' : 'ID'}
       </span>
     </button>

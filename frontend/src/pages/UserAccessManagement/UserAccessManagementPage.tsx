@@ -55,7 +55,7 @@ const roleDescriptions: Record<string, { title: string; description: string; col
   sales: {
     title: "Sales User",
     description: "Access to customer management and delivery operations",
-    color: "text-brand-blue"
+    color: "text-brand-blue dark:text-slate-100"
   },
   finance: {
     title: "Finance User",
@@ -304,10 +304,10 @@ export function UserAccessManagementPage() {
       {/* Page Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="space-y-1">
-          <h1 className="text-2xl font-semibold text-brand-blue tracking-tight">
+          <h1 className="text-2xl font-semibold text-brand-blue dark:text-slate-100 tracking-tight">
             User Access Management
           </h1>
-          <p className="text-sm text-brand-blue/60">
+          <p className="text-sm text-brand-blue dark:text-slate-100/60 dark:text-slate-300">
             Manage plant-level data access, system roles, and menu permissions
           </p>
         </div>
@@ -334,7 +334,7 @@ export function UserAccessManagementPage() {
             </p>
             <button
               onClick={() => setSaveMessage(null)}
-              className="text-xs text-slate-400 hover:text-slate-600 font-medium"
+              className="text-xs text-slate-400 hover:text-slate-600 font-medium dark:text-slate-500 dark:hover:text-slate-300"
             >
               Dismiss
             </button>
@@ -344,14 +344,14 @@ export function UserAccessManagementPage() {
 
       {/* Main Tabs */}
       <Card>
-        <div className="border-b border-slate-100">
+        <div className="border-b border-slate-100 dark:border-slate-800">
           <div className="flex">
             <button
               onClick={() => setActiveMainTab("user-mapping")}
               className={`px-6 py-3 text-sm font-medium transition-colors border-b-2 ${
                 activeMainTab === "user-mapping"
-                  ? "border-brand-blue text-brand-blue"
-                  : "border-transparent text-brand-blue/50 hover:text-brand-blue/70"
+                  ? "border-brand-blue text-brand-blue dark:text-slate-100"
+                  : "border-transparent text-brand-blue dark:text-slate-100/50 dark:text-slate-400 hover:text-brand-blue dark:text-slate-100/70 dark:text-slate-300"
               }`}
             >
               User Mapping
@@ -360,8 +360,8 @@ export function UserAccessManagementPage() {
               onClick={() => setActiveMainTab("user-registration")}
               className={`px-6 py-3 text-sm font-medium transition-colors border-b-2 ${
                 activeMainTab === "user-registration"
-                  ? "border-brand-blue text-brand-blue"
-                  : "border-transparent text-brand-blue/50 hover:text-brand-blue/70"
+                  ? "border-brand-blue text-brand-blue dark:text-slate-100"
+                  : "border-transparent text-brand-blue dark:text-slate-100/50 dark:text-slate-400 hover:text-brand-blue dark:text-slate-100/70 dark:text-slate-300"
               }`}
             >
               User Registration
@@ -370,8 +370,8 @@ export function UserAccessManagementPage() {
               onClick={() => setActiveMainTab("role-menu-matrix")}
               className={`px-6 py-3 text-sm font-medium transition-colors border-b-2 ${
                 activeMainTab === "role-menu-matrix"
-                  ? "border-brand-blue text-brand-blue"
-                  : "border-transparent text-brand-blue/50 hover:text-brand-blue/70"
+                  ? "border-brand-blue text-brand-blue dark:text-slate-100"
+                  : "border-transparent text-brand-blue dark:text-slate-100/50 dark:text-slate-400 hover:text-brand-blue dark:text-slate-100/70 dark:text-slate-300"
               }`}
             >
               Role Menu Matrix
@@ -386,7 +386,7 @@ export function UserAccessManagementPage() {
               {/* Left Column - User List */}
               <div className="lg:col-span-1 space-y-4">
                 <div className="space-y-3">
-                  <Label className="text-sm font-medium text-brand-blue/70">
+                  <Label className="text-sm font-medium text-brand-blue dark:text-slate-100/70 dark:text-slate-300">
                     Search Users
                   </Label>
                   <Input
@@ -401,11 +401,11 @@ export function UserAccessManagementPage() {
                   <CardContent className="p-0">
                     <div className="max-h-[400px] overflow-y-auto">
                       {loading ? (
-                        <div className="p-8 text-center text-brand-blue/60">
+                        <div className="p-8 text-center text-brand-blue dark:text-slate-100/60 dark:text-slate-300">
                           Loading users...
                         </div>
                       ) : filteredUsers.length === 0 ? (
-                        <div className="p-8 text-center text-brand-blue/60">
+                        <div className="p-8 text-center text-brand-blue dark:text-slate-100/60 dark:text-slate-300">
                           No users found
                         </div>
                       ) : (
@@ -425,19 +425,19 @@ export function UserAccessManagementPage() {
                             >
                               <div className="flex items-start gap-3">
                                 <div className="w-8 h-8 rounded-full bg-brand-blue/10 flex items-center justify-center flex-shrink-0">
-                                  <span className="text-xs font-semibold text-brand-blue">
+                                  <span className="text-xs font-semibold text-brand-blue dark:text-slate-100">
                                     {user.fullName?.charAt(0).toUpperCase() ||
                                       user.email.charAt(0).toUpperCase()}
                                   </span>
                                 </div>
                                 <div className="flex-1 min-w-0">
-                                  <p className="text-sm font-medium text-brand-blue truncate">
+                                  <p className="text-sm font-medium text-brand-blue dark:text-slate-100 truncate">
                                     {user.fullName || "Unknown User"}
                                   </p>
-                                  <p className="text-xs text-brand-blue/50 truncate">
+                                  <p className="text-xs text-brand-blue dark:text-slate-100/50 dark:text-slate-400 truncate">
                                     {user.email}
                                   </p>
-                                  <p className="text-xs text-brand-blue/40 mt-1">
+                                  <p className="text-xs text-brand-blue dark:text-slate-100/40 dark:text-slate-400 mt-1">
                                     Last login:{" "}
                                     {user.lastLoginAt
                                       ? new Date(user.lastLoginAt).toLocaleDateString()
@@ -458,15 +458,15 @@ export function UserAccessManagementPage() {
               <div className="lg:col-span-2">
                 {matrixLoading ? (
                   <Card>
-                    <CardContent className="p-12 text-center text-brand-blue/60">
+                    <CardContent className="p-12 text-center text-brand-blue dark:text-slate-100/60 dark:text-slate-300">
                       Loading permissions...
                     </CardContent>
                   </Card>
                 ) : !matrixData ? (
                   <Card>
-                    <CardContent className="p-12 text-center text-brand-blue/60">
+                    <CardContent className="p-12 text-center text-brand-blue dark:text-slate-100/60 dark:text-slate-300">
                       <svg
-                        className="w-12 h-12 mx-auto mb-4 text-brand-blue/30"
+                        className="w-12 h-12 mx-auto mb-4 text-brand-blue dark:text-slate-100/30 dark:text-slate-500"
                         fill="none"
                         stroke="currentColor"
                         viewBox="0 0 24 24"
@@ -484,27 +484,27 @@ export function UserAccessManagementPage() {
                 ) : (
                   <Card>
                     {/* User Info Header */}
-                    <div className="p-6 border-b border-slate-100">
+                    <div className="p-6 border-b border-slate-100 dark:border-slate-800">
                       <div className="flex items-center justify-between">
                         <div>
-                          <h2 className="text-lg font-semibold text-brand-blue">
+                          <h2 className="text-lg font-semibold text-brand-blue dark:text-slate-100">
                             {matrixData.fullName || "Unknown User"}
                           </h2>
-                          <p className="text-sm text-brand-blue/50">
+                          <p className="text-sm text-brand-blue dark:text-slate-100/50 dark:text-slate-400">
                             {matrixData.email}
                           </p>
                         </div>
                         <div className="flex gap-2">
                           <Badge
                             variant="outline"
-                            className="border-brand-blue/20 text-brand-blue/70"
+                            className="border-brand-blue/20 text-brand-blue dark:text-slate-100/70 dark:text-slate-300"
                           >
                             {selectedPlants.size} plant
                             {selectedPlants.size !== 1 ? "s" : ""}
                           </Badge>
                           <Badge
                             variant="outline"
-                            className={selectedRoles.size > 0 ? "border-brand-red/20 text-brand-red/70" : "border-slate-200 text-slate-500"}
+                            className={selectedRoles.size > 0 ? "border-brand-red/20 text-brand-red/70" : "border-slate-200 text-slate-500 dark:border-slate-600 dark:text-slate-400"}
                           >
                             {selectedRoles.size} role
                             {selectedRoles.size !== 1 ? "s" : ""}
@@ -514,14 +514,14 @@ export function UserAccessManagementPage() {
                     </div>
 
                     {/* User Sub-Tabs */}
-                    <div className="border-b border-slate-100">
+                    <div className="border-b border-slate-100 dark:border-slate-800">
                       <div className="flex">
                         <button
                           onClick={() => setActiveUserTab("plants")}
                           className={`px-6 py-3 text-sm font-medium transition-colors border-b-2 ${
                             activeUserTab === "plants"
-                              ? "border-brand-blue text-brand-blue"
-                              : "border-transparent text-brand-blue/50 hover:text-brand-blue/70"
+                              ? "border-brand-blue text-brand-blue dark:text-slate-100"
+                              : "border-transparent text-brand-blue dark:text-slate-100/50 dark:text-slate-400 hover:text-brand-blue dark:text-slate-100/70 dark:text-slate-300"
                           }`}
                         >
                           Plant Authorizations
@@ -530,8 +530,8 @@ export function UserAccessManagementPage() {
                           onClick={() => setActiveUserTab("roles")}
                           className={`px-6 py-3 text-sm font-medium transition-colors border-b-2 ${
                             activeUserTab === "roles"
-                              ? "border-brand-blue text-brand-blue"
-                              : "border-transparent text-brand-blue/50 hover:text-brand-blue/70"
+                              ? "border-brand-blue text-brand-blue dark:text-slate-100"
+                              : "border-transparent text-brand-blue dark:text-slate-100/50 dark:text-slate-400 hover:text-brand-blue dark:text-slate-100/70 dark:text-slate-300"
                           }`}
                         >
                           System Role Access
@@ -555,12 +555,12 @@ export function UserAccessManagementPage() {
                               />
                               <Label
                                 htmlFor="select-all-plants"
-                                className="cursor-pointer text-sm font-medium text-brand-blue"
+                                className="cursor-pointer text-sm font-medium text-brand-blue dark:text-slate-100"
                               >
                                 Select All Plants
                               </Label>
                             </div>
-                            <span className="text-xs text-brand-blue/50">
+                            <span className="text-xs text-brand-blue dark:text-slate-100/50 dark:text-slate-400">
                               {selectedPlants.size} / {matrixData.allPlants.length} selected
                             </span>
                           </div>
@@ -572,7 +572,7 @@ export function UserAccessManagementPage() {
                                 className={`flex items-center gap-3 p-4 rounded-lg border transition-all ${
                                   selectedPlants.has(plant.plantCode)
                                     ? "bg-brand-blue/5 border-brand-blue/30"
-                                    : "bg-white border-slate-100 hover:border-slate-200"
+                                    : "bg-white border-slate-100 hover:border-slate-200 dark:bg-slate-800 dark:border-slate-700 dark:hover:border-slate-600"
                                 }`}
                               >
                                 <Checkbox
@@ -586,12 +586,12 @@ export function UserAccessManagementPage() {
                                     className="cursor-pointer"
                                   >
                                     <div className="flex items-center justify-between">
-                                      <span className="font-medium text-brand-blue text-sm">
+                                      <span className="font-medium text-brand-blue dark:text-slate-100 text-sm">
                                         {plant.plantCode}
                                       </span>
                                       <Badge
                                         variant="badge"
-                                        className="text-brand-blue/60 font-normal text-xs"
+                                        className="text-brand-blue dark:text-slate-100/60 dark:text-slate-300 font-normal text-xs"
                                       >
                                         {plant.plantName}
                                       </Badge>
@@ -611,7 +611,7 @@ export function UserAccessManagementPage() {
                             const roleInfo = roleDescriptions[role.name] || {
                               title: role.name,
                               description: "System role",
-                              color: "text-brand-blue"
+                              color: "text-brand-blue dark:text-slate-100"
                             }
                             const isSelected = selectedRoles.has(role.name)
 
@@ -646,13 +646,13 @@ export function UserAccessManagementPage() {
                                         className={
                                           role.name === "sysadmin"
                                             ? "text-brand-red/70 bg-brand-red/5 border-brand-red/20"
-                                            : "text-brand-blue/60 border-slate-200"
+                                            : "text-brand-blue dark:text-slate-100/60 dark:text-slate-300 border-slate-200 dark:border-slate-600 dark:text-slate-400"
                                         }
                                       >
                                         @{role.name}
                                       </Badge>
                                     </div>
-                                    <p className="text-xs text-brand-blue/50">
+                                    <p className="text-xs text-brand-blue dark:text-slate-100/50 dark:text-slate-400">
                                       {roleInfo.description}
                                     </p>
                                   </Label>
@@ -665,7 +665,7 @@ export function UserAccessManagementPage() {
 
                       {/* Footer Actions */}
                       <div className="flex justify-between items-center pt-4 border-t border-slate-100">
-                        <span className="text-xs text-brand-blue/40">
+                        <span className="text-xs text-brand-blue dark:text-slate-100/40 dark:text-slate-400">
                           {hasUserChanges ? "• Unsaved changes" : ""}
                         </span>
                         <Button
@@ -687,11 +687,11 @@ export function UserAccessManagementPage() {
           {activeMainTab === "user-registration" && (
             <div className="max-w-2xl mx-auto">
               <Card>
-                <div className="p-6 border-b border-slate-100">
-                  <h2 className="text-lg font-semibold text-brand-blue">
+                <div className="p-6 border-b border-slate-100 dark:border-slate-800">
+                  <h2 className="text-lg font-semibold text-brand-blue dark:text-slate-100">
                     Register New User
                   </h2>
-                  <p className="text-sm text-brand-blue/50 mt-1">
+                  <p className="text-sm text-brand-blue dark:text-slate-100/50 dark:text-slate-400 mt-1">
                     Create a new user account and assign a system role
                   </p>
                 </div>
@@ -708,7 +708,7 @@ export function UserAccessManagementPage() {
                   <div className="space-y-4">
                     {/* Username */}
                     <div className="space-y-2">
-                      <Label htmlFor="reg-username" className="text-sm font-medium text-brand-blue">
+                      <Label htmlFor="reg-username" className="text-sm font-medium text-brand-blue dark:text-slate-100">
                         Username <span className="text-brand-red">*</span>
                       </Label>
                       <Input
@@ -728,7 +728,7 @@ export function UserAccessManagementPage() {
 
                     {/* Email */}
                     <div className="space-y-2">
-                      <Label htmlFor="reg-email" className="text-sm font-medium text-brand-blue">
+                      <Label htmlFor="reg-email" className="text-sm font-medium text-brand-blue dark:text-slate-100">
                         Email Address <span className="text-brand-red">*</span>
                       </Label>
                       <Input
@@ -749,7 +749,7 @@ export function UserAccessManagementPage() {
 
                     {/* Full Name */}
                     <div className="space-y-2">
-                      <Label htmlFor="reg-fullname" className="text-sm font-medium text-brand-blue">
+                      <Label htmlFor="reg-fullname" className="text-sm font-medium text-brand-blue dark:text-slate-100">
                         Full Name
                       </Label>
                       <Input
@@ -769,7 +769,7 @@ export function UserAccessManagementPage() {
 
                     {/* Password */}
                     <div className="space-y-2">
-                      <Label htmlFor="reg-password" className="text-sm font-medium text-brand-blue">
+                      <Label htmlFor="reg-password" className="text-sm font-medium text-brand-blue dark:text-slate-100">
                         Password <span className="text-brand-red">*</span>
                       </Label>
                       <Input
@@ -790,7 +790,7 @@ export function UserAccessManagementPage() {
 
                     {/* Role Selection */}
                     <div className="space-y-2">
-                      <Label htmlFor="reg-role" className="text-sm font-medium text-brand-blue">
+                      <Label htmlFor="reg-role" className="text-sm font-medium text-brand-blue dark:text-slate-100">
                         Assign Role <span className="text-brand-red">*</span>
                       </Label>
                       <select
@@ -800,8 +800,8 @@ export function UserAccessManagementPage() {
                           setRegisterForm({ ...registerForm, targetRole: e.target.value })
                           setRegisterErrors({ ...registerErrors, targetRole: "" })
                         }}
-                        className={`w-full px-3 py-2 rounded-md border bg-white text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-brand-blue/20 ${
-                          registerErrors.targetRole ? "border-red-300" : "border-slate-200 focus:border-brand-blue"
+                        className={`w-full px-3 py-2 rounded-md border bg-white text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-brand-blue/20 dark:bg-slate-800 dark:text-slate-200 dark:placeholder:text-slate-500 ${
+                          registerErrors.targetRole ? "border-red-300" : "border-slate-200 focus:border-brand-blue dark:border-slate-600 dark:focus:border-brand-blue/60"
                         }`}
                       >
                         <option value="">Select a role...</option>
@@ -815,7 +815,7 @@ export function UserAccessManagementPage() {
                         <p className="text-xs text-red-600">{registerErrors.targetRole}</p>
                       )}
                       {registerForm.targetRole && (
-                        <p className="text-xs text-brand-blue/50 mt-1">
+                        <p className="text-xs text-brand-blue dark:text-slate-100/50 dark:text-slate-400 mt-1">
                           {roleDescriptions[registerForm.targetRole]?.description}
                         </p>
                       )}
@@ -824,7 +824,7 @@ export function UserAccessManagementPage() {
 
                   {/* Actions */}
                   <div className="flex justify-between items-center pt-4 border-t border-slate-100">
-                    <p className="text-xs text-brand-blue/40">
+                    <p className="text-xs text-brand-blue dark:text-slate-100/40 dark:text-slate-400">
                       All fields marked with * are required
                     </p>
                     <Button
@@ -921,7 +921,7 @@ export function UserAccessManagementPage() {
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               {/* Left Column - Role List */}
               <div className="lg:col-span-1 space-y-4">
-                <Label className="text-sm font-medium text-brand-blue/70">
+                <Label className="text-sm font-medium text-brand-blue dark:text-slate-100/70 dark:text-slate-300">
                   Select Role to Configure
                 </Label>
 
@@ -946,13 +946,13 @@ export function UserAccessManagementPage() {
                                   : "bg-brand-blue/10"
                               }`}>
                                 <span className={`text-xs font-semibold ${
-                                  roleName === "sysadmin" ? "text-brand-red" : "text-brand-blue"
+                                  roleName === "sysadmin" ? "text-brand-red" : "text-brand-blue dark:text-slate-100"
                                 }`}>
                                   {roleName.charAt(0).toUpperCase()}
                                 </span>
                               </div>
                               <span className={`text-sm font-medium ${
-                                roleName === "sysadmin" ? "text-brand-red" : "text-brand-blue"
+                                roleName === "sysadmin" ? "text-brand-red" : "text-brand-blue dark:text-slate-100"
                               }`}>
                                 {roleName}
                               </span>
@@ -963,7 +963,7 @@ export function UserAccessManagementPage() {
                                 className={`text-xs font-normal ${
                                   roleName === "sysadmin"
                                     ? "border-brand-red/20 text-brand-red/70"
-                                    : "border-brand-blue/20 text-brand-blue/70"
+                                    : "border-brand-blue/20 text-brand-blue dark:text-slate-100/70 dark:text-slate-300"
                                 }`}
                               >
                                 {roleDescriptions[roleName].title}
@@ -981,9 +981,9 @@ export function UserAccessManagementPage() {
               <div className="lg:col-span-2">
                 {!selectedRoleName ? (
                   <Card>
-                    <CardContent className="p-12 text-center text-brand-blue/60">
+                    <CardContent className="p-12 text-center text-brand-blue dark:text-slate-100/60 dark:text-slate-300">
                       <svg
-                        className="w-12 h-12 mx-auto mb-4 text-brand-blue/30"
+                        className="w-12 h-12 mx-auto mb-4 text-brand-blue dark:text-slate-100/30 dark:text-slate-500"
                         fill="none"
                         stroke="currentColor"
                         viewBox="0 0 24 24"
@@ -1001,13 +1001,13 @@ export function UserAccessManagementPage() {
                 ) : (
                   <Card>
                     {/* Role Info Header */}
-                    <div className="p-6 border-b border-slate-100">
+                    <div className="p-6 border-b border-slate-100 dark:border-slate-800">
                       <div className="flex items-center justify-between">
                         <div>
-                          <h2 className="text-lg font-semibold text-brand-blue">
+                          <h2 className="text-lg font-semibold text-brand-blue dark:text-slate-100">
                             {roleDescriptions[selectedRoleName]?.title || selectedRoleName}
                           </h2>
-                          <p className="text-sm text-brand-blue/50">
+                          <p className="text-sm text-brand-blue dark:text-slate-100/50 dark:text-slate-400">
                             Configure which menus this role can access
                           </p>
                         </div>
@@ -1015,7 +1015,7 @@ export function UserAccessManagementPage() {
                           variant="outline"
                           className={selectedRoleName === "sysadmin"
                             ? "border-brand-red/20 text-brand-red/70"
-                            : "border-brand-blue/20 text-brand-blue/70"
+                            : "border-brand-blue/20 text-brand-blue dark:text-slate-100/70 dark:text-slate-300"
                           }
                         >
                           {selectedRoleMenus.size} / {roleMenuData?.menus.length || 0} menus
@@ -1025,7 +1025,7 @@ export function UserAccessManagementPage() {
 
                     <div className="p-6">
                       {roleMenuLoading ? (
-                        <div className="text-center text-brand-blue/60 py-8">
+                        <div className="text-center text-brand-blue dark:text-slate-100/60 dark:text-slate-300 py-8">
                           Loading menu permissions...
                         </div>
                       ) : (
@@ -1044,12 +1044,12 @@ export function UserAccessManagementPage() {
                               />
                               <Label
                                 htmlFor="select-all-menus"
-                                className="cursor-pointer text-sm font-medium text-brand-blue"
+                                className="cursor-pointer text-sm font-medium text-brand-blue dark:text-slate-100"
                               >
                                 Select All Menus
                               </Label>
                             </div>
-                            <span className="text-xs text-brand-blue/50">
+                            <span className="text-xs text-brand-blue dark:text-slate-100/50 dark:text-slate-400">
                               {selectedRoleMenus.size} / {roleMenuData?.menus.length || 0} selected
                             </span>
                           </div>
@@ -1062,7 +1062,7 @@ export function UserAccessManagementPage() {
                                 className={`flex items-center gap-3 p-4 rounded-lg border transition-all ${
                                   selectedRoleMenus.has(menu.menuCode)
                                     ? "bg-brand-blue/5 border-brand-blue/30"
-                                    : "bg-white border-slate-100 hover:border-slate-200"
+                                    : "bg-white border-slate-100 hover:border-slate-200 dark:bg-slate-800 dark:border-slate-700 dark:hover:border-slate-600"
                                 }`}
                               >
                                 <Checkbox
@@ -1075,11 +1075,11 @@ export function UserAccessManagementPage() {
                                     htmlFor={`menu-${menu.menuCode}`}
                                     className="cursor-pointer"
                                   >
-                                    <span className="font-medium text-brand-blue text-sm">
+                                    <span className="font-medium text-brand-blue dark:text-slate-100 text-sm">
                                       {menu.menuName}
                                     </span>
                                   </Label>
-                                  <div className="text-xs text-brand-blue/40 mt-1 font-mono">
+                                  <div className="text-xs text-brand-blue dark:text-slate-100/40 dark:text-slate-400 mt-1 font-mono">
                                     {menu.menuCode}
                                   </div>
                                 </div>
@@ -1089,7 +1089,7 @@ export function UserAccessManagementPage() {
 
                           {/* Footer Actions */}
                           <div className="flex justify-between items-center pt-4 border-t border-slate-100">
-                            <span className="text-xs text-brand-blue/40">
+                            <span className="text-xs text-brand-blue dark:text-slate-100/40 dark:text-slate-400">
                               {selectedRoleName && roleMenuData && (
                                 <span className="flex items-center gap-2">
                                   <span>Changes affect all users with this role</span>

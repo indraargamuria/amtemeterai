@@ -229,7 +229,7 @@ const SingleBatchDetailRow = memo(({ line, received, canceled }: SingleBatchRowP
 
   const getVarianceBadge = () => {
     if (!received || canceled) {
-      return <span className="text-brand-blue/40">—</span>
+      return <span className="text-brand-blue dark:text-slate-100/40 dark:text-slate-400">—</span>
     }
     if (isShort) {
       return <span className="text-rose-600 font-bold bg-rose-50 px-2 py-0.5 rounded text-xs">{displayVariance}</span>
@@ -237,7 +237,7 @@ const SingleBatchDetailRow = memo(({ line, received, canceled }: SingleBatchRowP
     if (isOver) {
       return <span className="text-emerald-600 font-bold bg-emerald-50 px-2 py-0.5 rounded text-xs">{displayVariance}</span>
     }
-    return <span className="text-brand-blue/40">0%</span>
+    return <span className="text-brand-blue dark:text-slate-100/40 dark:text-slate-400">0%</span>
   }
 
   return (
@@ -256,16 +256,16 @@ const SingleBatchDetailRow = memo(({ line, received, canceled }: SingleBatchRowP
               <span className="text-xs font-bold text-[#1d2351] bg-blue-5 px-2 py-1 rounded-md">
                 Line #{line.deliveryLineNumber}
               </span>
-              <span className="text-sm font-semibold text-slate-900">{line.deliveryItemDescription}</span>
-              <span className="text-xs text-slate-500">(1 batch)</span>
+              <span className="text-sm font-semibold text-slate-900 dark:text-slate-100">{line.deliveryItemDescription}</span>
+              <span className="text-xs text-slate-500 dark:text-slate-400">(1 batch)</span>
             </div>
 
             {/* Second Row: Order/PO Info + Batch */}
-            <div className="flex items-center gap-4 text-xs text-slate-500">
-              <span>Order: <strong className="text-slate-700">{line.orderNumber || '-'}</strong></span>
-              <span>PO: <strong className="text-slate-700">{line.buyerPONumber || '-'}</strong></span>
+            <div className="flex items-center gap-4 text-xs text-slate-500 dark:text-slate-400">
+              <span>Order: <strong className="text-slate-700 dark:text-slate-300">{line.orderNumber || '-'}</strong></span>
+              <span>PO: <strong className="text-slate-700 dark:text-slate-300">{line.buyerPONumber || '-'}</strong></span>
               {line.batchNumber && (
-                <span>Batch: <strong className="text-slate-700">{line.batchNumber}</strong></span>
+                <span>Batch: <strong className="text-slate-700 dark:text-slate-300">{line.batchNumber}</strong></span>
               )}
             </div>
           </div>
@@ -274,7 +274,7 @@ const SingleBatchDetailRow = memo(({ line, received, canceled }: SingleBatchRowP
           <div className="flex items-center gap-4 text-right">
             <div>
               <div className="text-[10px] text-slate-500 uppercase font-medium">Quantity</div>
-              <div className="text-sm font-bold text-slate-900">{line.packQuantity}</div>
+              <div className="text-sm font-bold text-slate-900 dark:text-slate-100">{line.packQuantity}</div>
             </div>
             <div>
               <div className="text-[10px] text-slate-500 uppercase font-medium">Received</div>
@@ -295,11 +295,11 @@ const SingleBatchDetailRow = memo(({ line, received, canceled }: SingleBatchRowP
               </div>
             )}
             {/* Remarks indicator */}
-            <div className="text-xs text-brand-blue/60 font-medium">
+            <div className="text-xs text-brand-blue dark:text-slate-100/60 dark:text-slate-300 font-medium">
               {canceled ? (
                 <span className="text-rose-500/80">Link Revoked</span>
               ) : line.lineComment ? (
-                <span className="text-brand-blue/60 max-w-[150px] truncate">{line.lineComment}</span>
+                <span className="text-brand-blue dark:text-slate-100/60 dark:text-slate-300 max-w-[150px] truncate">{line.lineComment}</span>
               ) : null}
             </div>
           </div>
@@ -350,7 +350,7 @@ const SplitBatchParentDetailRow = memo(({
 
   const getVarianceBadge = () => {
     if (!received || canceled) {
-      return <span className="text-brand-blue/40">—</span>
+      return <span className="text-brand-blue dark:text-slate-100/40 dark:text-slate-400">—</span>
     }
     if (isShort) {
       return <span className="text-rose-600 font-bold bg-rose-50 px-2 py-0.5 rounded text-xs">{displayVariance}</span>
@@ -358,7 +358,7 @@ const SplitBatchParentDetailRow = memo(({
     if (isOver) {
       return <span className="text-emerald-600 font-bold bg-emerald-50 px-2 py-0.5 rounded text-xs">{displayVariance}</span>
     }
-    return <span className="text-brand-blue/40">0%</span>
+    return <span className="text-brand-blue dark:text-slate-100/40 dark:text-slate-400">0%</span>
   }
 
   return (
@@ -382,18 +382,18 @@ const SplitBatchParentDetailRow = memo(({
                 <span className="text-xs font-bold text-[#1d2351] bg-blue-5 px-2 py-1 rounded-md">
                   Line #{parentLine.deliveryLineNumber}
                 </span>
-                <span className="text-sm font-semibold text-slate-900">{parentLine.deliveryItemDescription}</span>
+                <span className="text-sm font-semibold text-slate-900 dark:text-slate-100">{parentLine.deliveryItemDescription}</span>
                 <span className="text-xs text-slate-500">({children.length + 1} batches)</span>
               </div>
-              <div className="flex items-center gap-4 text-xs text-slate-500">
-                <span>Order: <strong className="text-slate-700">{parentLine.orderNumber || '-'}</strong></span>
-                <span>PO: <strong className="text-slate-700">{parentLine.buyerPONumber || '-'}</strong></span>
+              <div className="flex items-center gap-4 text-xs text-slate-500 dark:text-slate-400">
+                <span>Order: <strong className="text-slate-700 dark:text-slate-300">{parentLine.orderNumber || '-'}</strong></span>
+                <span>PO: <strong className="text-slate-700 dark:text-slate-300">{parentLine.buyerPONumber || '-'}</strong></span>
               </div>
             </div>
             <div className="flex items-center gap-4 text-right">
               <div>
                 <div className="text-[10px] text-slate-500 uppercase font-medium">Total Qty</div>
-                <div className="text-sm font-bold text-slate-900">{aggregatedTotals.scheduled.toFixed(2)}</div>
+                <div className="text-sm font-bold text-slate-900 dark:text-slate-100">{aggregatedTotals.scheduled.toFixed(2)}</div>
               </div>
               <div>
                 <div className="text-[10px] text-slate-500 uppercase font-medium">Received</div>
@@ -429,7 +429,7 @@ const SplitBatchParentDetailRow = memo(({
 
         const getChildVarianceBadge = () => {
           if (!received || canceled) {
-            return <span className="text-brand-blue/40">—</span>
+            return <span className="text-brand-blue dark:text-slate-100/40 dark:text-slate-400">—</span>
           }
           if (childIsShort) {
             return <span className="text-rose-600 font-bold bg-rose-50 px-2 py-0.5 rounded text-xs">{childDisplayVariance}</span>
@@ -437,7 +437,7 @@ const SplitBatchParentDetailRow = memo(({
           if (childIsOver) {
             return <span className="text-emerald-600 font-bold bg-emerald-50 px-2 py-0.5 rounded text-xs">{childDisplayVariance}</span>
           }
-          return <span className="text-brand-blue/40">0%</span>
+          return <span className="text-brand-blue dark:text-slate-100/40 dark:text-slate-400">0%</span>
         }
 
         return (
@@ -456,13 +456,13 @@ const SplitBatchParentDetailRow = memo(({
                     <span className="text-xs font-bold text-slate-600 px-2 py-0.5 rounded-md bg-slate-100">
                       {child.deliveryItemCode}
                     </span>
-                    <span className="text-sm font-medium text-slate-800">{child.deliveryItemDescription}</span>
+                    <span className="text-sm font-medium text-slate-800 dark:text-slate-200">{child.deliveryItemDescription}</span>
                   </div>
 
                   {/* Second Row: Batch Number */}
-                  <div className="flex items-center gap-4 text-xs text-slate-500">
-                    <span>Batch: <strong className="text-slate-700 font-mono">{child.batchNumber}</strong></span>
-                    <span>Qty: <strong className="text-slate-700">{child.packQuantity} {child.packUOM}</strong></span>
+                  <div className="flex items-center gap-4 text-xs text-slate-500 dark:text-slate-400">
+                    <span>Batch: <strong className="text-slate-700 dark:text-slate-300 font-mono">{child.batchNumber}</strong></span>
+                    <span>Qty: <strong className="text-slate-700 dark:text-slate-300">{child.packQuantity} {child.packUOM}</strong></span>
                   </div>
                 </div>
 
@@ -487,11 +487,11 @@ const SplitBatchParentDetailRow = memo(({
                     </div>
                   )}
                   {/* Remarks */}
-                  <div className="text-xs text-brand-blue/60 font-medium">
+                  <div className="text-xs text-brand-blue dark:text-slate-100/60 dark:text-slate-300 font-medium">
                     {canceled ? (
                       <span className="text-rose-500/80">Link Revoked</span>
                     ) : child.lineComment ? (
-                      <span className="text-brand-blue/60 max-w-[150px] truncate">{child.lineComment}</span>
+                      <span className="text-brand-blue dark:text-slate-100/60 dark:text-slate-300 max-w-[150px] truncate">{child.lineComment}</span>
                     ) : null}
                   </div>
                 </div>
@@ -547,7 +547,7 @@ const ToastNotification = memo(({ show, type, onClose, title, message }: ToastNo
 
   return (
     <div className="fixed top-4 right-4 z-50 animate-in slide-in-from-top-4 fade-in duration-300">
-      <div className={`bg-white border rounded-lg shadow-xl p-4 flex items-start gap-3 w-[calc(100vw-2rem)] sm:min-w-[300px] sm:w-auto max-w-md ${styles.border}`}>
+      <div className={`bg-white dark:bg-slate-800 border rounded-lg shadow-xl p-4 flex items-start gap-3 w-[calc(100vw-2rem)] sm:min-w-[300px] sm:w-auto max-w-md ${styles.border}`}>
         <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${styles.bg}`}>
           {type === "error" ? (
             <AlertTriangle className={`w-4 h-4 ${styles.iconColor}`} />
@@ -556,7 +556,7 @@ const ToastNotification = memo(({ show, type, onClose, title, message }: ToastNo
           )}
         </div>
         <div className="flex-1">
-          <h4 className="text-sm font-semibold text-slate-900">
+          <h4 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
             {displayTitle}
           </h4>
           {message && (
@@ -789,7 +789,7 @@ export function DeliveryDetailPage() {
         </Badge>
       )
     }
-    return <Badge variant="info" className="text-brand-blue/70 border-brand-blue/10">Pending</Badge>
+    return <Badge variant="info" className="text-brand-blue dark:text-slate-100/70 dark:text-slate-300 border-brand-blue/10">Pending</Badge>
   }
 
   // 🆕 Task 5: Invoice State Badge Display
@@ -803,7 +803,7 @@ export function DeliveryDetailPage() {
         )
       case "Unbilled":
         return (
-          <Badge variant="info" className="text-brand-blue/70 border-brand-blue/10">
+          <Badge variant="info" className="text-brand-blue dark:text-slate-100/70 dark:text-slate-300 border-brand-blue/10">
             Unbilled
           </Badge>
         )
@@ -827,7 +827,7 @@ export function DeliveryDetailPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
-        <p className="text-brand-blue/60">Loading delivery details...</p>
+        <p className="text-brand-blue dark:text-slate-100/60 dark:text-slate-300">Loading delivery details...</p>
       </div>
     )
   }
@@ -840,7 +840,7 @@ export function DeliveryDetailPage() {
         </Button>
         <Card>
           <CardContent className="py-12">
-            <p className="text-center text-brand-blue/60">{error || "Delivery not found"}</p>
+            <p className="text-center text-brand-blue dark:text-slate-100/60 dark:text-slate-300">{error || "Delivery not found"}</p>
           </CardContent>
         </Card>
       </div>
@@ -861,12 +861,12 @@ export function DeliveryDetailPage() {
             >
               ←
             </Button>
-            <h1 className="text-2xl font-semibold text-brand-blue tracking-tight">
+            <h1 className="text-2xl font-semibold text-brand-blue dark:text-slate-100 tracking-tight">
               {delivery.deliveryNumber}
             </h1>
             {delivery.status === 3 && getStatusBadge(delivery.status)}
           </div>
-          <p className="text-sm text-brand-blue/60 ml-8">
+          <p className="text-sm text-brand-blue dark:text-slate-100/60 dark:text-slate-300 ml-8">
             {delivery.postGoodsIssueDate ? formatDate(delivery.postGoodsIssueDate) : formatDate(delivery.deliveryDate)}
           </p>
         </div>
@@ -924,7 +924,7 @@ export function DeliveryDetailPage() {
           {/* Core Dispatch Information */}
           <Card className={delivery.status === 3 ? "border-rose-200/60 bg-rose-50/[0.01]" : ""}>
             <CardHeader>
-              <CardTitle className="text-base font-semibold text-brand-blue tracking-tight">
+              <CardTitle className="text-base font-semibold text-brand-blue dark:text-slate-100 tracking-tight">
                 Core Dispatch Information
               </CardTitle>
             </CardHeader>
@@ -932,19 +932,19 @@ export function DeliveryDetailPage() {
               {/* Customer Section - Hidden completely for warehouse role */}
               {(delivery.customerCode || delivery.customerName) && (
                 <div className="space-y-1">
-                  <p className="text-xs font-medium text-brand-blue/50 uppercase tracking-wider">
+                  <p className="text-xs font-medium text-brand-blue dark:text-slate-100/50 dark:text-slate-400 uppercase tracking-wider">
                     Customer
                   </p>
                   <div className="flex items-center gap-2">
-                    <Badge variant="badge" className="text-brand-blue/70 font-normal text-xs">
+                    <Badge variant="badge" className="text-brand-blue dark:text-slate-100/70 dark:text-slate-300 font-normal text-xs">
                       {delivery.customerCode}
                     </Badge>
-                    <span className="text-sm text-brand-blue/80">{delivery.customerName}</span>
+                    <span className="text-sm text-brand-blue dark:text-slate-100/80 dark:text-slate-200">{delivery.customerName}</span>
                   </div>
                   {/* 🆕 Sneak Peek PIN: initially hidden, reveal on demand */}
                   {delivery.customerPin && (
                     <div className="flex items-center gap-2 pt-0.5">
-                      <span className="text-xs font-medium text-brand-blue/50 uppercase tracking-wider">
+                      <span className="text-xs font-medium text-brand-blue dark:text-slate-100/50 dark:text-slate-400 uppercase tracking-wider">
                         PIN
                       </span>
                       <span className="font-mono text-xs px-2 py-1 rounded bg-slate-100/80 border border-slate-200/40 text-slate-600 tabular-nums">
@@ -968,30 +968,30 @@ export function DeliveryDetailPage() {
               {/* Buyer PO Number - Only shown if user has access (non-warehouse) */}
               {delivery.buyerPONumber && (
                 <div className="space-y-1">
-                  <p className="text-xs font-medium text-brand-blue/50 uppercase tracking-wider">
+                  <p className="text-xs font-medium text-brand-blue dark:text-slate-100/50 dark:text-slate-400 uppercase tracking-wider">
                     Buyer PO Number
                   </p>
-                  <p className="text-sm text-brand-blue/80">{delivery.buyerPONumber}</p>
+                  <p className="text-sm text-brand-blue dark:text-slate-100/80 dark:text-slate-200">{delivery.buyerPONumber}</p>
                 </div>
               )}
 
               {/* Order Number - Only shown if user has access (non-warehouse) */}
               {delivery.orderNumber && (
                 <div className="space-y-1">
-                  <p className="text-xs font-medium text-brand-blue/50 uppercase tracking-wider">
+                  <p className="text-xs font-medium text-brand-blue dark:text-slate-100/50 dark:text-slate-400 uppercase tracking-wider">
                     Order Number
                   </p>
-                  <p className="text-sm text-brand-blue/80">{delivery.orderNumber}</p>
+                  <p className="text-sm text-brand-blue dark:text-slate-100/80 dark:text-slate-200">{delivery.orderNumber}</p>
                 </div>
               )}
 
               {/* Receive Date - Only shown when delivery is received */}
               {delivery.received && delivery.receiveDate && (
                 <div className="space-y-1">
-                  <p className="text-xs font-medium text-brand-blue/50 uppercase tracking-wider">
+                  <p className="text-xs font-medium text-brand-blue dark:text-slate-100/50 dark:text-slate-400 uppercase tracking-wider">
                     Receive Date
                   </p>
-                  <p className="text-sm text-brand-blue/80">
+                  <p className="text-sm text-brand-blue dark:text-slate-100/80 dark:text-slate-200">
                     {formatDate(delivery.receiveDate)}
                   </p>
                 </div>
@@ -1000,7 +1000,7 @@ export function DeliveryDetailPage() {
               {/* 🆕 Invoice State Display - Shown when applicable */}
               {delivery.invoiceState && (
                 <div className="space-y-1">
-                  <p className="text-xs font-medium text-brand-blue/50 uppercase tracking-wider">
+                  <p className="text-xs font-medium text-brand-blue dark:text-slate-100/50 dark:text-slate-400 uppercase tracking-wider">
                     Invoice State
                   </p>
                   {getInvoiceStateBadge(delivery.invoiceState)}
@@ -1010,7 +1010,7 @@ export function DeliveryDetailPage() {
               {/* 🆕 Invoice Number Badge - Shown when invoice exists */}
               {delivery.invoiceNumber && (
                 <div className="space-y-1">
-                  <p className="text-xs font-medium text-brand-blue/50 uppercase tracking-wider">
+                  <p className="text-xs font-medium text-brand-blue dark:text-slate-100/50 dark:text-slate-400 uppercase tracking-wider">
                     SAP Invoice Number
                   </p>
                   <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 font-normal text-xs">
@@ -1020,48 +1020,48 @@ export function DeliveryDetailPage() {
               )}
 
               <div className="space-y-1">
-                <p className="text-xs font-medium text-brand-blue/50 uppercase tracking-wider">
+                <p className="text-xs font-medium text-brand-blue dark:text-slate-100/50 dark:text-slate-400 uppercase tracking-wider">
                   Account Owner
                 </p>
-                <p className="text-sm text-brand-blue/80">
+                <p className="text-sm text-brand-blue dark:text-slate-100/80 dark:text-slate-200">
                   {delivery.plant && delivery.salesPersonName
                     ? `${delivery.plant} (${delivery.salesPersonName})`
                     : delivery.plant || delivery.salesPersonName || "-"}
                 </p>
                 {delivery.salesPersonEmail && (
-                  <p className="text-xs text-brand-blue/60 mt-0.5">{delivery.salesPersonEmail}</p>
+                  <p className="text-xs text-brand-blue dark:text-slate-100/60 dark:text-slate-300 mt-0.5">{delivery.salesPersonEmail}</p>
                 )}
               </div>
 
               <div className="space-y-1">
-                <p className="text-xs font-medium text-brand-blue/50 uppercase tracking-wider">
+                <p className="text-xs font-medium text-brand-blue dark:text-slate-100/50 dark:text-slate-400 uppercase tracking-wider">
                   Drop Zone
                 </p>
-                <p className="text-sm text-brand-blue/80">
+                <p className="text-sm text-brand-blue dark:text-slate-100/80 dark:text-slate-200">
                   {delivery.district && delivery.cityRegency
                     ? `Kec. ${delivery.district}, ${delivery.cityRegency}`
                     : delivery.cityRegency || delivery.district || "-"}
                 </p>
                 {delivery.formattedAddress && (
-                  <p className="text-xs text-brand-blue/60 mt-0.5">{delivery.formattedAddress}</p>
+                  <p className="text-xs text-brand-blue dark:text-slate-100/60 dark:text-slate-300 mt-0.5">{delivery.formattedAddress}</p>
                 )}
               </div>
 
               {delivery.shipToAddress && (
                 <div className="space-y-1">
-                  <p className="text-xs font-medium text-brand-blue/50 uppercase tracking-wider">
+                  <p className="text-xs font-medium text-brand-blue dark:text-slate-100/50 dark:text-slate-400 uppercase tracking-wider">
                     Ship To Address
                   </p>
-                  <p className="text-sm text-brand-blue/80">{delivery.shipToAddress}</p>
+                  <p className="text-sm text-brand-blue dark:text-slate-100/80 dark:text-slate-200">{delivery.shipToAddress}</p>
                 </div>
               )}
 
               {delivery.deliveryRemarks && (
                 <div className="space-y-1">
-                  <p className="text-xs font-medium text-brand-blue/50 uppercase tracking-wider">
+                  <p className="text-xs font-medium text-brand-blue dark:text-slate-100/50 dark:text-slate-400 uppercase tracking-wider">
                     Remarks
                   </p>
-                  <p className="text-sm text-brand-blue/80">{delivery.deliveryRemarks}</p>
+                  <p className="text-sm text-brand-blue dark:text-slate-100/80 dark:text-slate-200">{delivery.deliveryRemarks}</p>
                 </div>
               )}
 
@@ -1080,25 +1080,25 @@ export function DeliveryDetailPage() {
               {delivery.received && delivery.status !== 3 && (
                 <div className="space-y-3 pt-3 border-t border-brand-blue/10">
                   <div className="space-y-1">
-                    <p className="text-xs font-medium text-brand-blue/50 uppercase tracking-wider">
+                    <p className="text-xs font-medium text-brand-blue dark:text-slate-100/50 dark:text-slate-400 uppercase tracking-wider">
                       Fulfillment Status
                     </p>
                     {getStatusBadge(delivery.status)}
                   </div>
                   {delivery.receiverName && (
                     <div className="space-y-1">
-                      <p className="text-xs font-medium text-brand-blue/50 uppercase tracking-wider">
+                      <p className="text-xs font-medium text-brand-blue dark:text-slate-100/50 dark:text-slate-400 uppercase tracking-wider">
                         Received By
                       </p>
-                      <p className="text-sm text-brand-blue/80">{delivery.receiverName}</p>
+                      <p className="text-sm text-brand-blue dark:text-slate-100/80 dark:text-slate-200">{delivery.receiverName}</p>
                     </div>
                   )}
                   {delivery.receiverNotes && (
                     <div className="space-y-1">
-                      <p className="text-xs font-medium text-brand-blue/50 uppercase tracking-wider">
+                      <p className="text-xs font-medium text-brand-blue dark:text-slate-100/50 dark:text-slate-400 uppercase tracking-wider">
                         Receiver Notes
                       </p>
-                      <p className="text-sm text-brand-blue/80">{delivery.receiverNotes}</p>
+                      <p className="text-sm text-brand-blue dark:text-slate-100/80 dark:text-slate-200">{delivery.receiverNotes}</p>
                     </div>
                   )}
                 </div>
@@ -1109,11 +1109,11 @@ export function DeliveryDetailPage() {
           {/* Receiver Access Tokens */}
           <Card>
             <CardContent className="pt-4">
-              <CardTitle className="text-base font-semibold text-brand-blue tracking-tight">
+              <CardTitle className="text-base font-semibold text-brand-blue dark:text-slate-100 tracking-tight">
                 Delivery Confirmation Link for Buyer
               </CardTitle>
               {delivery.status === 3 ? (
-                <div className="mt-3 p-3 bg-slate-50 border border-slate-200/60 rounded-xl text-center">
+                <div className="mt-3 p-3 bg-slate-50 dark:bg-slate-800/50 border border-slate-200/60 dark:border-slate-700 rounded-xl text-center">
                   <p className="text-xs font-medium text-slate-400 uppercase tracking-wider">
                     Access Token Revoked
                   </p>
@@ -1148,7 +1148,7 @@ export function DeliveryDetailPage() {
                   </div>
                   {qrCode && (
                     <div className="mt-3 flex flex-col items-center gap-2">
-                      <div className="p-2 bg-white rounded-lg border border-brand-blue/10">
+                      <div className="p-2 bg-white dark:bg-slate-800 rounded-lg border border-brand-blue/10 dark:border-slate-700">
                         <img
                           src={qrCode}
                           alt="Delivery QR Code"
@@ -1176,7 +1176,7 @@ export function DeliveryDetailPage() {
           {/* LIVE GOOGLE MAPS EMBED */}
           <Card>
             <CardHeader>
-              <CardTitle className="text-base font-semibold text-brand-blue tracking-tight">
+              <CardTitle className="text-base font-semibold text-brand-blue dark:text-slate-100 tracking-tight">
                 Delivery Location
               </CardTitle>
             </CardHeader>
@@ -1194,7 +1194,7 @@ export function DeliveryDetailPage() {
                     src={`https://www.google.com/maps?q=${delivery.latitude},${delivery.longitude}&z=15&output=embed`}
                   />
                 ) : (
-                  <div className="w-full h-full bg-brand-blue/5 flex items-center justify-center text-sm text-brand-blue/40 text-center px-4">
+                  <div className="w-full h-full bg-brand-blue/5 flex items-center justify-center text-sm text-brand-blue dark:text-slate-100/40 dark:text-slate-400 text-center px-4">
                     {delivery.status === 3 
                       ? "Telemetry tracing skipped for canceled route records."
                       : "Awaiting GPS coordinate telemetry initialization from field..."
@@ -1203,7 +1203,7 @@ export function DeliveryDetailPage() {
                 )}
               </div>
               {(delivery.latitude || delivery.longitude) && (
-                <div className="mt-3 flex justify-between items-center text-xs text-brand-blue/50">
+                <div className="mt-3 flex justify-between items-center text-xs text-brand-blue dark:text-slate-100/50 dark:text-slate-400">
                   <span>
                     Coordinates: {delivery.latitude?.toFixed(6) || "-"}, {delivery.longitude?.toFixed(6) || "-"}
                   </span>
@@ -1229,7 +1229,7 @@ export function DeliveryDetailPage() {
           <Card>
             <CardContent className="pt-6">
               <div className="space-y-3">
-                <CardTitle className="text-base font-semibold text-brand-blue tracking-tight">
+                <CardTitle className="text-base font-semibold text-brand-blue dark:text-slate-100 tracking-tight">
                   Proof of Delivery
                 </CardTitle>
                 <div className="grid grid-cols-2 gap-4">
@@ -1238,7 +1238,7 @@ export function DeliveryDetailPage() {
                       <div
                         key={index}
                         onClick={() => setPreviewImageUrl(photo.downloadUrl)}
-                        className="group relative rounded-lg overflow-hidden border border-brand-blue/10 bg-white cursor-pointer hover:border-brand-blue/30 transition-all shadow-xs"
+                        className="group relative rounded-lg overflow-hidden border border-brand-blue/10 bg-white dark:bg-slate-800 cursor-pointer hover:border-brand-blue/30 dark:border-slate-700 transition-all shadow-xs"
                       >
                         <img
                           src={photo.downloadUrl}
@@ -1246,16 +1246,16 @@ export function DeliveryDetailPage() {
                           loading="lazy"
                           className="w-full h-40 object-cover transition-transform group-hover:scale-[1.01]"
                         />
-                        <div className="p-2 text-xs text-brand-blue/60 border-t border-brand-blue/5 bg-brand-blue/[0.01] flex justify-between items-center">
+                        <div className="p-2 text-xs text-brand-blue dark:text-slate-100/60 dark:text-slate-300 border-t border-brand-blue/5 bg-brand-blue/[0.01] flex justify-between items-center">
                           <span className="truncate max-w-[80%] font-medium">{photo.fileName}</span>
-                          <span className="text-[10px] text-brand-blue/40 font-semibold bg-brand-blue/5 px-1.5 py-0.5 rounded">
+                          <span className="text-[10px] text-brand-blue dark:text-slate-100/40 dark:text-slate-400 font-semibold bg-brand-blue/5 px-1.5 py-0.5 rounded">
                             🔍 Preview
                           </span>
                         </div>
                       </div>
                     ))
                   ) : (
-                    <p className="text-sm text-brand-blue/40 italic col-span-2 py-4">
+                    <p className="text-sm text-brand-blue dark:text-slate-100/40 dark:text-slate-400 italic col-span-2 py-4">
                       {delivery.status === 3 
                         ? "No photographic confirmation records collected prior to cancellation execution."
                         : "No photographic evidence attached to this delivery record."
@@ -1272,46 +1272,46 @@ export function DeliveryDetailPage() {
       {/* BOTTOM SECTION: UNIFORM FULL WIDTH (100%) */}
       <div className="w-full">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <h3 className="text-base font-bold text-brand-blue tracking-tight">Fulfillment Line Items</h3>
-          <span className="text-xs text-brand-blue/50 font-medium text-right">
+          <h3 className="text-base font-bold text-brand-blue dark:text-slate-100 tracking-tight">Fulfillment Line Items</h3>
+          <span className="text-xs text-brand-blue dark:text-slate-100/50 dark:text-slate-400 font-medium text-right">
             {totalPhysicalBatches > 0
               ? `Showing ${paginatedGroupedItems.length} of ${totalGroupedItems} item groups (${totalPhysicalBatches} total batches) - Page ${linePage} of ${totalLinePages}`
               : "No items"}
           </span>
         </div>
 
-        <div className="rounded-xl border border-brand-blue/10 overflow-x-auto overflow-y-hidden bg-white shadow-sm w-full">
+        <div className="rounded-xl border border-brand-blue/10 dark:border-slate-700 overflow-x-auto overflow-y-hidden bg-white dark:bg-slate-800 shadow-sm w-full">
           <Table>
             <TableHeader className="bg-brand-blue/[0.02]">
               <TableRow>
-                <TableHead className="text-xs font-semibold uppercase tracking-wider text-brand-blue/60 w-[14%]">
+                <TableHead className="text-xs font-semibold uppercase tracking-wider text-brand-blue dark:text-slate-100/60 dark:text-slate-300 w-[14%]">
                   Item / SKU
                 </TableHead>
-                <TableHead className="text-xs font-semibold uppercase tracking-wider text-brand-blue/60 w-[11%]">
+                <TableHead className="text-xs font-semibold uppercase tracking-wider text-brand-blue dark:text-slate-100/60 dark:text-slate-300 w-[11%]">
                   Batch
                 </TableHead>
-                <TableHead className="text-xs font-semibold uppercase tracking-wider text-brand-blue/60 w-[26%]">
+                <TableHead className="text-xs font-semibold uppercase tracking-wider text-brand-blue dark:text-slate-100/60 dark:text-slate-300 w-[26%]">
                   Description
                 </TableHead>
-                <TableHead className="text-xs font-semibold uppercase tracking-wider text-brand-blue/60 text-right w-[10%]">
+                <TableHead className="text-xs font-semibold uppercase tracking-wider text-brand-blue dark:text-slate-100/60 dark:text-slate-300 text-right w-[10%]">
                   Dispatched
                 </TableHead>
-                <TableHead className="text-xs font-semibold uppercase tracking-wider text-brand-blue/60 text-right w-[10%]">
+                <TableHead className="text-xs font-semibold uppercase tracking-wider text-brand-blue dark:text-slate-100/60 dark:text-slate-300 text-right w-[10%]">
                   Received
                 </TableHead>
-                <TableHead className="text-xs font-semibold uppercase tracking-wider text-brand-blue/60 text-right w-[10%]">
+                <TableHead className="text-xs font-semibold uppercase tracking-wider text-brand-blue dark:text-slate-100/60 dark:text-slate-300 text-right w-[10%]">
                   Rejected
                 </TableHead>
-                <TableHead className="text-xs font-semibold uppercase tracking-wider text-brand-blue/60 text-right w-[10%]">
+                <TableHead className="text-xs font-semibold uppercase tracking-wider text-brand-blue dark:text-slate-100/60 dark:text-slate-300 text-right w-[10%]">
                   Returned
                 </TableHead>
                 {/* Variance column - only shown when delivery is received */}
                 {delivery.received && (
-                  <TableHead className="text-xs font-semibold uppercase tracking-wider text-brand-blue/60 text-right w-[9%]">
+                  <TableHead className="text-xs font-semibold uppercase tracking-wider text-brand-blue dark:text-slate-100/60 dark:text-slate-300 text-right w-[9%]">
                     Variance
                   </TableHead>
                 )}
-                <TableHead className="text-xs font-semibold uppercase tracking-wider text-brand-blue/60 w-[10%]">
+                <TableHead className="text-xs font-semibold uppercase tracking-wider text-brand-blue dark:text-slate-100/60 dark:text-slate-300 w-[10%]">
                   Remarks
                 </TableHead>
               </TableRow>
@@ -1321,7 +1321,7 @@ export function DeliveryDetailPage() {
                 <TableRow>
                   <TableCell
                     colSpan={delivery.received ? 9 : 8}
-                    className="text-center py-12 text-sm text-brand-blue/40 italic"
+                    className="text-center py-12 text-sm text-brand-blue dark:text-slate-100/40 dark:text-slate-400 italic"
                   >
                     No dynamic dispatch line items attached to this delivery record.
                   </TableCell>

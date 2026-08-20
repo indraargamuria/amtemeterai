@@ -26,10 +26,10 @@ export function UnauthorizedPage() {
             </svg>
           </div>
 
-          <h1 className="text-2xl font-semibold text-brand-blue mb-2">
+          <h1 className="text-2xl font-semibold text-brand-blue dark:text-slate-100 mb-2">
             Access Denied
           </h1>
-          <p className="text-brand-blue/60 mb-6">
+          <p className="text-brand-blue/60 dark:text-slate-300 mb-6">
             You don't have permission to access this page. Please contact your
             administrator if you believe this is an error.
           </p>

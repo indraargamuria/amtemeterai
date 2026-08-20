@@ -1,5 +1,8 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:where(.dark, .dark *));
+@custom-variant light (&:where(.light, .light *));
+
 @theme {
   --color-brand-blue: #1d2351;
   --color-brand-red: #e61920;
@@ -7,3 +10,29 @@
   --color-amber: #d97706;
   --color-slate: #64748b;
 }
+
+:root {
+  --chart-ink: #1d2351;
+  --chart-tooltip-bg: #ffffff;
+  --chart-tooltip-border: rgba(29, 35, 81, 0.08);
+  --chart-tooltip-color: #1d2351;
+}
+.dark {
+  --chart-ink: #e2e8f0;
+  --chart-tooltip-bg: #1e293b;
+  --chart-tooltip-border: rgba(226, 232, 240, 0.15);
+  --chart-tooltip-color: #e2e8f0;
+}
+
+/* Customer-facing public pages (e.g. delivery receive forms) are forced
+   light even when the OS/app prefers dark. The `light` scope on the page
+   root re-asserts the light surfaces for shared components. */
+.light .dark\:bg-slate-900 { background-color: #ffffff; }
+.light .dark\:bg-slate-800 { background-color: #ffffff; }
+.light .dark\:bg-slate-800\/50 { background-color: #ffffff; }
+.light .dark\:border-slate-800 { border-color: #e2e8f0; }
+.light .dark\:border-slate-700 { border-color: #e2e8f0; }
+.light .dark\:text-slate-200 { color: #334155; }
+.light .dark\:text-slate-300 { color: #475569; }
+.light .dark\:text-slate-400 { color: #64748b; }
+.light .dark\:text-slate-100 { color: #1e293b; }

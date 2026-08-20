@@ -11,7 +11,7 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
   if (loading) {
     return (
       <div className="min-h-screen bg-brand-blue/[0.02] flex items-center justify-center">
-        <p className="text-brand-blue/60">Loading...</p>
+        <p className="text-brand-blue/60 dark:text-slate-300">Loading...</p>
       </div>
     )
   }

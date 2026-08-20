@@ -2825,7 +2825,7 @@ export function DeliveryReceivePage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-white flex items-center justify-center p-4">
+      <div className="light min-h-screen bg-white flex items-center justify-center p-4">
         <div className="text-center space-y-4">
           <div className="w-12 h-12 rounded-full border-2 border-[#1d2351]/10 border-t-[#1d2351] animate-spin mx-auto" />
           <p className="text-xs font-mono tracking-widest text-slate-400 uppercase">{t('deliveryReceive.loadingDeliveryData')}</p>
@@ -2836,7 +2836,7 @@ export function DeliveryReceivePage() {
 
   if (error || !delivery) {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
+      <div className="light min-h-screen bg-slate-50 flex items-center justify-center p-4">
         <Card className="w-full max-w-md shadow-sm border border-slate-200/80 rounded-xl bg-white">
           <CardContent className="py-12 text-center space-y-5">
             <div className="w-14 h-14 bg-red-50 rounded-full flex items-center justify-center mx-auto">
@@ -2861,7 +2861,7 @@ export function DeliveryReceivePage() {
 
   if (!isVerified) {
     return (
-      <div className="min-h-screen bg-slate-50 flex flex-col">
+      <div className="light min-h-screen bg-slate-50 flex flex-col">
         <div className="h-1 bg-[#1d2351]" />
 
         <div className="flex-1 flex items-center justify-center p-4">
@@ -2959,7 +2959,7 @@ export function DeliveryReceivePage() {
   // ============================================================================
 
   return (
-    <div className="min-h-screen bg-slate-50 pb-32 pt-6 px-4">
+    <div className="light min-h-screen bg-slate-50 pb-32 pt-6 px-4">
       <div className="max-w-2xl mx-auto space-y-5">
 
         {/* Header */}

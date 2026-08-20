@@ -90,16 +90,16 @@ export function EmailComposerModal({
 
       {/* Modal */}
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-        <div className="bg-white rounded-lg shadow-xl w-full max-w-lg transform transition-all max-h-[90vh] flex flex-col">
+        <div className="bg-white rounded-lg shadow-xl w-full max-w-lg transform transition-all max-h-[90vh] flex flex-col dark:bg-slate-900 dark:border dark:border-slate-800">
           {/* Header */}
-          <div className="flex items-center justify-between px-6 py-4 border-b border-brand-blue/5 bg-brand-blue/[0.02]">
+          <div className="flex items-center justify-between px-6 py-4 border-b border-brand-blue/5 bg-brand-blue/[0.02] dark:border-slate-800">
             <div className="flex items-center gap-2">
-              <Mail className="w-5 h-5 text-brand-blue" />
-              <h2 className="text-lg font-semibold text-brand-blue">Send Email with Attachments</h2>
+              <Mail className="w-5 h-5 text-brand-blue dark:text-slate-200" />
+              <h2 className="text-lg font-semibold text-brand-blue dark:text-slate-200">Send Email with Attachments</h2>
             </div>
             <button
               onClick={onClose}
-              className="p-2 rounded-md text-brand-blue/50 hover:bg-brand-blue/5 hover:text-brand-blue transition-colors"
+              className="p-2 rounded-md text-brand-blue/50 hover:bg-brand-blue/5 hover:text-brand-blue transition-colors dark:text-slate-400 dark:hover:bg-slate-800"
             >
               <X className="w-5 h-5" />
             </button>
@@ -108,82 +108,82 @@ export function EmailComposerModal({
           {/* Content */}
           <div className="p-6 space-y-4 overflow-y-auto">
             {/* Reference Info */}
-            <div className="bg-brand-blue/5 rounded-lg p-3 text-sm">
+            <div className="bg-brand-blue/5 rounded-lg p-3 text-sm dark:bg-slate-800">
               <div className="flex items-center gap-2 mb-2">
-                <Paperclip className="w-4 h-4 text-brand-blue/60" />
-                <span className="font-medium text-brand-blue/80">Attachment Reference:</span>
+                <Paperclip className="w-4 h-4 text-brand-blue/60 dark:text-slate-300" />
+                <span className="font-medium text-brand-blue/80 dark:text-slate-300">Attachment Reference:</span>
               </div>
-              <div className="text-brand-blue/60">
+              <div className="text-brand-blue/60 dark:text-slate-400">
                 <span className="font-medium">{referenceType === "delivery" ? "Delivery" : "Invoice"}:</span> {referenceNumber}
               </div>
             </div>
 
             {/* To Email */}
             <div>
-              <label className="block text-sm font-medium text-brand-blue mb-1">
+              <label className="block text-sm font-medium text-brand-blue mb-1 dark:text-slate-300">
                 To <span className="text-red-500">*</span>
               </label>
               <input
                 type="email"
                 value={toEmail}
                 onChange={(e) => setToEmail(e.target.value)}
-                className="w-full px-3 py-2 border border-brand-blue/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/20"
+                className="w-full px-3 py-2 border border-brand-blue/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/20 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-200 dark:placeholder:text-slate-500 dark:focus:ring-brand-blue/40"
                 placeholder="customer@example.com"
               />
             </div>
 
             {/* CC Emails */}
             <div>
-              <label className="block text-sm font-medium text-brand-blue mb-1">CC (comma-separated)</label>
+              <label className="block text-sm font-medium text-brand-blue mb-1 dark:text-slate-300">CC (comma-separated)</label>
               <input
                 type="text"
                 value={ccEmails}
                 onChange={(e) => setCcEmails(e.target.value)}
-                className="w-full px-3 py-2 border border-brand-blue/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/20"
+                className="w-full px-3 py-2 border border-brand-blue/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/20 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-200 dark:placeholder:text-slate-500 dark:focus:ring-brand-blue/40"
                 placeholder="cc1@example.com, cc2@example.com"
               />
             </div>
 
             {/* Subject */}
             <div>
-              <label className="block text-sm font-medium text-brand-blue mb-1">
+              <label className="block text-sm font-medium text-brand-blue mb-1 dark:text-slate-300">
                 Subject <span className="text-red-500">*</span>
               </label>
               <input
                 type="text"
                 value={subject}
                 onChange={(e) => setSubject(e.target.value)}
-                className="w-full px-3 py-2 border border-brand-blue/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/20"
+                className="w-full px-3 py-2 border border-brand-blue/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/20 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-200 dark:placeholder:text-slate-500 dark:focus:ring-brand-blue/40"
                 placeholder="Email subject"
               />
             </div>
 
             {/* Body */}
             <div>
-              <label className="block text-sm font-medium text-brand-blue mb-1">Message</label>
+              <label className="block text-sm font-medium text-brand-blue mb-1 dark:text-slate-300">Message</label>
               <textarea
                 value={body}
                 onChange={(e) => setBody(e.target.value)}
                 className="w-full px-3 py-2 border border-brand-blue/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/20 min-h-[150px]"
                 placeholder="Enter your message (HTML allowed)..."
               />
-              <p className="text-xs text-brand-blue/40 mt-1">Leave blank to use default template</p>
+              <p className="text-xs text-brand-blue/40 mt-1 dark:text-slate-500">Leave blank to use default template</p>
             </div>
 
             {/* Error Message */}
             {error && (
-              <div className="bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded-lg text-sm">
+              <div className="bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded-lg text-sm dark:bg-red-950 dark:border-red-900 dark:text-red-400">
                 {error}
               </div>
             )}
           </div>
 
           {/* Footer */}
-          <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-brand-blue/5 bg-brand-blue/[0.02]">
+          <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-brand-blue/5 bg-brand-blue/[0.02] dark:border-slate-800">
             <button
               onClick={onClose}
               disabled={sending}
-              className="px-4 py-2 text-sm font-medium text-brand-blue/70 hover:text-brand-blue hover:bg-brand-blue/5 rounded-lg transition-colors disabled:opacity-50"
+              className="px-4 py-2 text-sm font-medium text-brand-blue/70 hover:text-brand-blue hover:bg-brand-blue/5 rounded-lg transition-colors disabled:opacity-50 dark:text-slate-300 dark:hover:text-slate-100 dark:hover:bg-slate-800"
             >
               Cancel
             </button>

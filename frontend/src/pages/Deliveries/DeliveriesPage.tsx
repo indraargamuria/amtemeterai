@@ -281,7 +281,7 @@ export function DeliveriesPage() {
     }
     if (!received) {
       return (
-        <Badge variant="info" className="text-brand-blue/70 border-brand-blue/10">
+        <Badge variant="info" className="text-brand-blue dark:text-slate-100/70 dark:text-slate-300 border-brand-blue/10">
           Pending Delivery
         </Badge>
       )
@@ -315,7 +315,7 @@ export function DeliveriesPage() {
         )
       case "Unbilled":
         return (
-          <Badge variant="info" className="text-brand-blue/70 border-brand-blue/10">
+          <Badge variant="info" className="text-brand-blue dark:text-slate-100/70 dark:text-slate-300 border-brand-blue/10">
             Unbilled
           </Badge>
         )
@@ -354,7 +354,7 @@ export function DeliveriesPage() {
     if (isCanceled) return <span className="text-xs text-slate-300">-</span>
     if (!count || count === 0) {
       return (
-        <div className="flex items-center gap-1.5 text-brand-blue/30 justify-center">
+        <div className="flex items-center gap-1.5 text-brand-blue dark:text-slate-100/30 dark:text-slate-500 justify-center">
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -364,7 +364,7 @@ export function DeliveriesPage() {
       )
     }
     return (
-      <div className="flex items-center gap-1.5 text-brand-blue/80 justify-center">
+      <div className="flex items-center gap-1.5 text-brand-blue dark:text-slate-100/80 dark:text-slate-200 justify-center">
         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -443,10 +443,10 @@ export function DeliveriesPage() {
     <div className="space-y-6">
       {/* Page Header */}
       <div className="space-y-1">
-        <h1 className="text-2xl font-semibold text-brand-blue tracking-tight">
+        <h1 className="text-2xl font-semibold text-brand-blue dark:text-slate-100 tracking-tight">
           Deliveries
         </h1>
-        <p className="text-sm text-brand-blue/60">
+        <p className="text-sm text-brand-blue dark:text-slate-100/60 dark:text-slate-300">
           Track and manage all delivery operations
         </p>
       </div>
@@ -461,7 +461,7 @@ export function DeliveriesPage() {
               <div className="flex-1">
                 <div className="relative">
                   <svg
-                    className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-brand-blue/40"
+                    className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-brand-blue dark:text-slate-100/40 dark:text-slate-400"
                     fill="none"
                     stroke="currentColor"
                     viewBox="0 0 24 24"
@@ -500,14 +500,14 @@ export function DeliveriesPage() {
             <div className="flex flex-wrap gap-3 items-center">
               {/* Compliance Type Selector */}
               <div className="flex items-center gap-2 bg-brand-blue/5 rounded-lg px-3 py-2">
-                <span className="text-xs text-brand-blue/60 whitespace-nowrap">Type:</span>
+                <span className="text-xs text-brand-blue dark:text-slate-100/60 dark:text-slate-300 whitespace-nowrap">Type:</span>
                 <div className="flex gap-1">
                   <button
                     onClick={() => setComplianceFilter("all")}
                     className={`px-2 py-1 text-xs rounded-md transition-colors ${
                       complianceFilter === "all"
                         ? "bg-brand-blue text-white"
-                        : "text-brand-blue/70 hover:bg-brand-blue/10"
+                        : "text-brand-blue dark:text-slate-100/70 dark:text-slate-300 hover:bg-brand-blue/10"
                     }`}
                   >
                     All
@@ -517,7 +517,7 @@ export function DeliveriesPage() {
                     className={`px-2 py-1 text-xs rounded-md transition-colors ${
                       complianceFilter === "bc"
                         ? "bg-emerald-600 text-white"
-                        : "text-brand-blue/70 hover:bg-brand-blue/10"
+                        : "text-brand-blue dark:text-slate-100/70 dark:text-slate-300 hover:bg-brand-blue/10"
                     }`}
                   >
                     BC
@@ -527,7 +527,7 @@ export function DeliveriesPage() {
                     className={`px-2 py-1 text-xs rounded-md transition-colors ${
                       complianceFilter === "nonbc"
                         ? "bg-slate-500 text-white"
-                        : "text-brand-blue/70 hover:bg-brand-blue/10"
+                        : "text-brand-blue dark:text-slate-100/70 dark:text-slate-300 hover:bg-brand-blue/10"
                     }`}
                   >
                     Non-BC
@@ -537,11 +537,11 @@ export function DeliveriesPage() {
 
               {/* NEW: Delivery Status Selector */}
               <div className="flex items-center gap-2 bg-brand-blue/5 rounded-lg px-3 py-2">
-                <span className="text-xs text-brand-blue/60 whitespace-nowrap">Delivery:</span>
+                <span className="text-xs text-brand-blue dark:text-slate-100/60 dark:text-slate-300 whitespace-nowrap">Delivery:</span>
                 <select
                   value={deliveryStatusFilter}
                   onChange={(e) => setDeliveryStatusFilter(e.target.value as DeliveryStatusFilter)}
-                  className="bg-transparent text-xs text-brand-blue/70 font-medium focus:outline-none cursor-pointer hover:text-brand-blue"
+                  className="bg-transparent text-xs text-brand-blue dark:text-slate-100/70 dark:text-slate-300 font-medium focus:outline-none cursor-pointer hover:text-brand-blue dark:text-slate-100"
                 >
                   <option value="all">All</option>
                   <option value="notDelivered">Not Delivered</option>
@@ -553,11 +553,11 @@ export function DeliveriesPage() {
 
               {/* NEW: Invoice Status Selector */}
               <div className="flex items-center gap-2 bg-brand-blue/5 rounded-lg px-3 py-2">
-                <span className="text-xs text-brand-blue/60 whitespace-nowrap">Invoice:</span>
+                <span className="text-xs text-brand-blue dark:text-slate-100/60 dark:text-slate-300 whitespace-nowrap">Invoice:</span>
                 <select
                   value={invoiceStatusFilter}
                   onChange={(e) => setInvoiceStatusFilter(e.target.value as InvoiceStatusFilter)}
-                  className="bg-transparent text-xs text-brand-blue/70 font-medium focus:outline-none cursor-pointer hover:text-brand-blue"
+                  className="bg-transparent text-xs text-brand-blue dark:text-slate-100/70 dark:text-slate-300 font-medium focus:outline-none cursor-pointer hover:text-brand-blue dark:text-slate-100"
                 >
                   <option value="all">All</option>
                   <option value="invoiced">Invoiced</option>
@@ -573,9 +573,9 @@ export function DeliveriesPage() {
                   checked={showDiscrepancyOnly}
                   onChange={(e) => setShowDiscrepancyOnly(e.target.checked)}
                   disabled={pipelineFilter === "canceled"}
-                  className="w-4 h-4 rounded border-brand-blue/20 text-brand-blue focus:ring-brand-red/50 disabled:opacity-50"
+                  className="w-4 h-4 rounded border-brand-blue/20 text-brand-blue dark:text-slate-100 focus:ring-brand-red/50 disabled:opacity-50"
                 />
-                <span className={`text-xs text-brand-blue/70 whitespace-nowrap ${pipelineFilter === "canceled" ? "opacity-50" : ""}`}>
+                <span className={`text-xs text-brand-blue dark:text-slate-100/70 dark:text-slate-300 whitespace-nowrap ${pipelineFilter === "canceled" ? "opacity-50" : ""}`}>
                   Discrepancies Only
                 </span>
               </label>
@@ -591,7 +591,7 @@ export function DeliveriesPage() {
           <TableHeader>
             <TableRow>
               <TableHead
-                className="font-medium text-brand-blue/50 uppercase text-xs tracking-wider cursor-pointer hover:text-brand-blue/70 transition-colors"
+                className="font-medium text-brand-blue dark:text-slate-100/50 dark:text-slate-400 uppercase text-xs tracking-wider cursor-pointer hover:text-brand-blue dark:text-slate-100/70 dark:text-slate-300 transition-colors"
                 onClick={() => handleSort("deliveryDate")}
               >
                 PGI Date {getSortIcon("deliveryDate")}
@@ -599,30 +599,30 @@ export function DeliveriesPage() {
               
               {/* 🚀 CONDITIONAL HEADER: Drop Customer column dynamically if the warehouse role matches */}
               {!isWarehouse && (
-                <TableHead className="font-medium text-brand-blue/50 uppercase text-xs tracking-wider">
+                <TableHead className="font-medium text-brand-blue dark:text-slate-100/50 dark:text-slate-400 uppercase text-xs tracking-wider">
                   Customer
                 </TableHead>
               )}
 
-              <TableHead className="font-medium text-brand-blue/50 uppercase text-xs tracking-wider">
+              <TableHead className="font-medium text-brand-blue dark:text-slate-100/50 dark:text-slate-400 uppercase text-xs tracking-wider">
                 Compliance
               </TableHead>
               <TableHead
-                className="font-medium text-brand-blue/50 uppercase text-xs tracking-wider cursor-pointer hover:text-brand-blue/70 transition-colors"
+                className="font-medium text-brand-blue dark:text-slate-100/50 dark:text-slate-400 uppercase text-xs tracking-wider cursor-pointer hover:text-brand-blue dark:text-slate-100/70 dark:text-slate-300 transition-colors"
                 onClick={() => handleSort("status")}
               >
                 Status {getSortIcon("status")}
               </TableHead>
-              <TableHead className="font-medium text-brand-blue/50 uppercase text-xs tracking-wider text-center">
+              <TableHead className="font-medium text-brand-blue dark:text-slate-100/50 dark:text-slate-400 uppercase text-xs tracking-wider text-center">
                 Proof
               </TableHead>
-              <TableHead className="font-medium text-brand-blue/50 uppercase text-xs tracking-wider">
+              <TableHead className="font-medium text-brand-blue dark:text-slate-100/50 dark:text-slate-400 uppercase text-xs tracking-wider">
                 Drop Location
               </TableHead>
-              <TableHead className="font-medium text-brand-blue/50 uppercase text-xs tracking-wider">
+              <TableHead className="font-medium text-brand-blue dark:text-slate-100/50 dark:text-slate-400 uppercase text-xs tracking-wider">
                 Account Owner
               </TableHead>
-              {/* <TableHead className="font-medium text-brand-blue/50 uppercase text-xs tracking-wider">
+              {/* <TableHead className="font-medium text-brand-blue dark:text-slate-100/50 dark:text-slate-400 uppercase text-xs tracking-wider">
                 Actions
               </TableHead> */}
             </TableRow>
@@ -630,13 +630,13 @@ export function DeliveriesPage() {
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={isWarehouse ? 7 : 8} className="text-center text-brand-blue/60 py-12">
+                <TableCell colSpan={isWarehouse ? 7 : 8} className="text-center text-brand-blue dark:text-slate-100/60 dark:text-slate-300 py-12">
                   Loading deliveries...
                 </TableCell>
               </TableRow>
             ) : filteredAndSortedDeliveries.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={isWarehouse ? 7 : 8} className="text-center text-brand-blue/60 py-12">
+                <TableCell colSpan={isWarehouse ? 7 : 8} className="text-center text-brand-blue dark:text-slate-100/60 dark:text-slate-300 py-12">
                   {deliveries.length === 0
                     ? "No deliveries found"
                     : "No deliveries match your filter criteria"}
@@ -656,10 +656,10 @@ export function DeliveriesPage() {
                   {/* Combined Delivery Column */}
                   <TableCell className="py-4">
                     <div className="space-y-0.5">
-                      <p className={`text-sm font-semibold ${delivery.isCanceled ? "text-slate-500 line-through decoration-slate-400" : "text-brand-blue"}`}>
+                      <p className={`text-sm font-semibold ${delivery.isCanceled ? "text-slate-500 line-through decoration-slate-400" : "text-brand-blue dark:text-slate-100"}`}>
                         {delivery.deliveryNumber}
                       </p>
-                      <p className="text-xs text-brand-blue/40">
+                      <p className="text-xs text-brand-blue dark:text-slate-100/40 dark:text-slate-400">
                         {delivery.postGoodsIssueDate ? formatDate(delivery.postGoodsIssueDate) : formatDate(delivery.deliveryDate)}
                       </p>
                     </div>
@@ -670,15 +670,15 @@ export function DeliveriesPage() {
                     <TableCell className="py-4">
                       {delivery.customerCode && delivery.customerName ? (
                         <div className="flex items-center gap-2">
-                          <Badge variant="badge" className={`font-normal ${delivery.isCanceled ? "text-slate-400 bg-slate-100" : "text-brand-blue/70"}`}>
+                          <Badge variant="badge" className={`font-normal ${delivery.isCanceled ? "text-slate-400 bg-slate-100 dark:bg-slate-800 dark:text-slate-500" : "text-brand-blue dark:text-slate-100/70 dark:text-slate-300"}`}>
                             {delivery.customerCode}
                           </Badge>
-                          <span className={`text-sm ${delivery.isCanceled ? "text-slate-500" : "text-brand-blue/80"}`}>
+                          <span className={`text-sm ${delivery.isCanceled ? "text-slate-500" : "text-brand-blue dark:text-slate-100/80 dark:text-slate-200"}`}>
                             {delivery.customerName}
                           </span>
                         </div>
                       ) : (
-                        <span className="text-sm text-brand-blue/40 italic">Confidential</span>
+                        <span className="text-sm text-brand-blue dark:text-slate-100/40 dark:text-slate-400 italic">Confidential</span>
                       )}
                     </TableCell>
                   )}
@@ -700,7 +700,7 @@ export function DeliveriesPage() {
                         <>
                           {getInvoiceStateBadge(delivery.invoiceState, delivery.isCanceled)}
                           {/* {delivery.invoiceState === "Billed" && delivery.invoiceNumber && (
-                            <p className="text-[11px] font-medium text-brand-blue/70 max-w-45 truncate" title={delivery.invoiceNumber}>
+                            <p className="text-[11px] font-medium text-brand-blue dark:text-slate-100/70 dark:text-slate-300 max-w-45 truncate" title={delivery.invoiceNumber}>
                               {delivery.invoiceNumber}
                             </p>
                           )} */}
@@ -716,14 +716,14 @@ export function DeliveriesPage() {
 
                   {/* Geographical Routing Zone Column */}
                   <TableCell className="py-4">
-                    <p className={`text-sm ${delivery.isCanceled ? "text-slate-400" : "text-brand-blue/70"}`}>
+                    <p className={`text-sm ${delivery.isCanceled ? "text-slate-400" : "text-brand-blue dark:text-slate-100/70 dark:text-slate-300"}`}>
                       {getRoutingString(delivery.cityRegency, delivery.district)}
                     </p>
                   </TableCell>
 
                   {/* Destination Owner Column */}
                   <TableCell className="py-4">
-                    <p className={`text-sm ${delivery.isCanceled ? "text-slate-400" : "text-brand-blue/70"}`}>
+                    <p className={`text-sm ${delivery.isCanceled ? "text-slate-400" : "text-brand-blue dark:text-slate-100/70 dark:text-slate-300"}`}>
                       {getDestinationOwner(delivery.plant, delivery.salesPersonName)}
                     </p>
                   </TableCell>
@@ -766,7 +766,7 @@ export function DeliveriesPage() {
 
       {/* Results Summary & Pagination */}
       <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
-        <p className="text-sm text-brand-blue/50">
+        <p className="text-sm text-brand-blue dark:text-slate-100/50 dark:text-slate-400">
           Showing {currentDeliveries.length} of {filteredAndSortedDeliveries.length} deliveries
         </p>
         {totalPages > 1 && (

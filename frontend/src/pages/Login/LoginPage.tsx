@@ -59,7 +59,7 @@ export function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex bg-white">
+    <div className="min-h-screen flex bg-white dark:bg-slate-950">
       {/* Left Side - Login Form */}
       <div className="w-full lg:w-1/2 flex items-center justify-center p-6 lg:p-16 bg-gradient-to-br from-slate-50 to-white">
         <div className="w-full max-w-md">
@@ -80,10 +80,10 @@ export function LoginPage() {
             }`}
             style={{ transitionDelay: '100ms' }}
           >
-            <h2 className="text-3xl font-bold text-brand-blue tracking-tight">
+            <h2 className="text-3xl font-bold text-brand-blue dark:text-slate-100 tracking-tight">
               Welcome Back
             </h2>
-            <p className="text-base text-slate-500">
+            <p className="text-base text-slate-500 dark:text-slate-400">
               Sign in to access your integration dashboard
             </p>
           </div>
@@ -116,12 +116,12 @@ export function LoginPage() {
             <div className="space-y-2 group">
               <Label
                 htmlFor="email"
-                className="text-sm font-semibold text-slate-700 transition-colors group-focus-within:text-brand-blue"
+                className="text-sm font-semibold text-slate-700 dark:text-slate-300 transition-colors group-focus-within:text-brand-blue dark:text-slate-300"
               >
                 Email Address
               </Label>
               <div className="relative">
-                <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 transition-colors group-focus-within:text-brand-blue" />
+                <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 transition-colors group-focus-within:text-brand-blue dark:text-slate-100" />
                 <Input
                   id="email"
                   type="email"
@@ -129,7 +129,7 @@ export function LoginPage() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   disabled={loading}
-                  className="pl-11 h-12 text-sm border-slate-200 rounded-xl focus:border-brand-blue focus:ring-2 focus:ring-brand-blue/10 transition-all"
+                  className="pl-11 h-12 text-sm border-slate-200 rounded-xl focus:border-brand-blue focus:ring-2 focus:ring-brand-blue/10 transition-all dark:bg-slate-900 dark:border-slate-700 dark:text-slate-200 dark:placeholder:text-slate-500 dark:focus:border-brand-blue/60"
                   required
                 />
               </div>
@@ -139,12 +139,12 @@ export function LoginPage() {
             <div className="space-y-2 group">
               <Label
                 htmlFor="password"
-                className="text-sm font-semibold text-slate-700 transition-colors group-focus-within:text-brand-blue"
+                className="text-sm font-semibold text-slate-700 dark:text-slate-300 transition-colors group-focus-within:text-brand-blue dark:text-slate-300"
               >
                 Password
               </Label>
               <div className="relative">
-                <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 transition-colors group-focus-within:text-brand-blue" />
+                <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 transition-colors group-focus-within:text-brand-blue dark:text-slate-100" />
                 <Input
                   id="password"
                   type={showPassword ? "text" : "password"}
@@ -152,13 +152,13 @@ export function LoginPage() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   disabled={loading}
-                  className="pl-11 pr-11 h-12 text-sm border-slate-200 rounded-xl focus:border-brand-blue focus:ring-2 focus:ring-brand-blue/10 transition-all"
+                  className="pl-11 pr-11 h-12 text-sm border-slate-200 rounded-xl focus:border-brand-blue focus:ring-2 focus:ring-brand-blue/10 transition-all dark:bg-slate-900 dark:border-slate-700 dark:text-slate-200 dark:placeholder:text-slate-500 dark:focus:border-brand-blue/60"
                   required
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
+                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors dark:text-slate-500 dark:hover:text-slate-300"
                 >
                   {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                 </button>
@@ -198,16 +198,16 @@ export function LoginPage() {
             style={{ transitionDelay: '300ms' }}
           >
             <details className="group">
-              <summary className="cursor-pointer text-xs font-semibold text-slate-400 hover:text-slate-600 transition-colors select-none">
+              <summary className="cursor-pointer text-xs font-semibold text-slate-400 hover:text-slate-600 transition-colors select-none dark:text-slate-500 dark:hover:text-slate-300">
                 Demo Credentials
               </summary>
-              <div className="mt-3 p-4 rounded-xl bg-slate-50 border border-slate-100 space-y-2">
+              <div className="mt-3 p-4 rounded-xl bg-slate-50 border border-slate-100 space-y-2 dark:bg-slate-900 dark:border-slate-800">
                 <div className="flex items-center justify-between">
                   <span className="text-xs text-slate-500">Email:</span>
                   <button
                     type="button"
                     onClick={() => setEmail("admin@amtemeterai.com")}
-                    className="text-xs font-mono text-brand-blue hover:text-brand-blue/80 transition-colors"
+                    className="text-xs font-mono text-brand-blue dark:text-slate-100 hover:text-brand-blue dark:text-slate-100/80 dark:text-slate-200 transition-colors"
                   >
                     admin@amtemeterai.com
                   </button>
@@ -217,7 +217,7 @@ export function LoginPage() {
                   <button
                     type="button"
                     onClick={() => setPassword("Admin@123")}
-                    className="text-xs font-mono text-brand-blue hover:text-brand-blue/80 transition-colors"
+                    className="text-xs font-mono text-brand-blue dark:text-slate-100 hover:text-brand-blue dark:text-slate-100/80 dark:text-slate-200 transition-colors"
                   >
                     Admin@123
                   </button>
@@ -233,7 +233,7 @@ export function LoginPage() {
             }`}
             style={{ transitionDelay: '400ms' }}
           >
-            <p className="text-xs text-slate-400">
+            <p className="text-xs text-slate-400 dark:text-slate-500">
               © 2026 AMT e-Meterai. Enterprise Document Automation with SAP & e-Meterai Integration.
             </p>
           </div>

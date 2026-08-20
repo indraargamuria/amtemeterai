@@ -112,14 +112,14 @@ export function DocumentsPage() {
         return "bg-emerald-50 text-emerald-700 border-emerald-200"
       case "Not Stamped":
       case "Draft":
-        return "bg-slate-100 text-slate-600 border-slate-200"
+        return "bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700"
       case "Pending":
         return "bg-amber-50 text-amber-700 border-amber-200"
       case "Failed":
       case "Sync Failed":
         return "bg-brand-red/10 text-brand-red border-brand-red/20"
       default:
-        return "bg-slate-50 text-slate-500 border-slate-100"
+        return "bg-slate-50 text-slate-500 border-slate-100 dark:bg-slate-800/50 dark:text-slate-400 dark:border-slate-700/50"
     }
   }
 
@@ -156,8 +156,8 @@ export function DocumentsPage() {
       <div className="border-b border-brand-blue/5 pb-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h1 className="text-2xl font-semibold text-brand-blue tracking-tight">Document Hub</h1>
-            <p className="text-sm text-brand-blue/60 mt-1">
+            <h1 className="text-2xl font-semibold text-brand-blue dark:text-slate-100 tracking-tight">Document Hub</h1>
+            <p className="text-sm text-brand-blue dark:text-slate-100/60 dark:text-slate-300 mt-1">
               Unified view of invoices and delivery documents
             </p>
           </div>
@@ -201,19 +201,19 @@ export function DocumentsPage() {
           <Table>
             <TableHeader>
               <TableRow className="bg-brand-blue/[0.02]">
-                <TableHead className="py-3 px-4 text-xs font-semibold text-brand-blue/60 uppercase tracking-wider">
+                <TableHead className="py-3 px-4 text-xs font-semibold text-brand-blue dark:text-slate-100/60 dark:text-slate-300 uppercase tracking-wider">
                   Invoice Ref
                 </TableHead>
-                <TableHead className="py-3 px-4 text-xs font-semibold text-brand-blue/60 uppercase tracking-wider">
+                <TableHead className="py-3 px-4 text-xs font-semibold text-brand-blue dark:text-slate-100/60 dark:text-slate-300 uppercase tracking-wider">
                   Fulfillment
                 </TableHead>
-                <TableHead className="py-3 px-4 text-xs font-semibold text-brand-blue/60 uppercase tracking-wider text-right">
+                <TableHead className="py-3 px-4 text-xs font-semibold text-brand-blue dark:text-slate-100/60 dark:text-slate-300 uppercase tracking-wider text-right">
                   Amount
                 </TableHead>
-                <TableHead className="py-3 px-4 text-xs font-semibold text-brand-blue/60 uppercase tracking-wider">
+                <TableHead className="py-3 px-4 text-xs font-semibold text-brand-blue dark:text-slate-100/60 dark:text-slate-300 uppercase tracking-wider">
                   Status
                 </TableHead>
-                <TableHead className="py-3 px-4 text-xs font-semibold text-brand-blue/60 uppercase tracking-wider text-right">
+                <TableHead className="py-3 px-4 text-xs font-semibold text-brand-blue dark:text-slate-100/60 dark:text-slate-300 uppercase tracking-wider text-right">
                   Actions
                 </TableHead>
               </TableRow>
@@ -223,8 +223,8 @@ export function DocumentsPage() {
                 <TableRow>
                   <TableCell colSpan={5} className="text-center py-12">
                     <div className="flex flex-col items-center gap-3">
-                      <Loader2 className="w-6 h-6 text-brand-blue/40 animate-spin" />
-                      <p className="text-sm text-brand-blue/40">Loading documents...</p>
+                      <Loader2 className="w-6 h-6 text-brand-blue dark:text-slate-100/40 dark:text-slate-400 animate-spin" />
+                      <p className="text-sm text-brand-blue dark:text-slate-100/40 dark:text-slate-400">Loading documents...</p>
                     </div>
                   </TableCell>
                 </TableRow>
@@ -233,9 +233,9 @@ export function DocumentsPage() {
                   <TableCell colSpan={5} className="text-center py-12">
                     <div className="flex flex-col items-center gap-3">
                       <div className="w-12 h-12 rounded-full bg-brand-blue/5 flex items-center justify-center">
-                    <AlertCircle className="w-6 h-6 text-brand-blue/30" />
+                    <AlertCircle className="w-6 h-6 text-brand-blue dark:text-slate-100/30 dark:text-slate-500" />
                       </div>
-                      <p className="text-sm text-brand-blue/40">No documents found</p>
+                      <p className="text-sm text-brand-blue dark:text-slate-100/40 dark:text-slate-400">No documents found</p>
                     </div>
                   </TableCell>
                 </TableRow>
@@ -250,9 +250,9 @@ export function DocumentsPage() {
                     <TableCell className="py-2.5 px-4">
                       <div className="flex items-center gap-2">
                         <div className="w-8 h-8 rounded-md bg-brand-blue/10 flex items-center justify-center">
-                          <FileText className="w-4 h-4 text-brand-blue" />
+                          <FileText className="w-4 h-4 text-brand-blue dark:text-slate-100" />
                         </div>
-                        <code className="text-sm font-mono text-brand-blue tracking-tight">
+                        <code className="text-sm font-mono text-brand-blue dark:text-slate-100 tracking-tight">
                           {doc.invoiceNumber}
                         </code>
                       </div>
@@ -263,7 +263,7 @@ export function DocumentsPage() {
                       {doc.isStandalone ? (
                         <Badge
                           variant="outline"
-                          className="border-dashed border-slate-300 bg-slate-50/50 text-slate-500"
+                          className="border-dashed border-slate-300 bg-slate-50/50 text-slate-500 dark:border-slate-600 dark:bg-slate-800/50 dark:text-slate-400"
                         >
                           Direct Standalone Bill
                         </Badge>
@@ -281,7 +281,7 @@ export function DocumentsPage() {
 
                     {/* Financial Weight */}
                     <TableCell className="py-2.5 px-4 text-right">
-                      <span className="text-sm font-mono font-medium text-brand-blue">
+                      <span className="text-sm font-mono font-medium text-brand-blue dark:text-slate-100">
                         {formatRp(doc.invoiceAmount)}
                       </span>
                     </TableCell>
@@ -363,19 +363,19 @@ export function DocumentsPage() {
           />
 
           {/* Sheet Panel */}
-          <div className="fixed top-0 right-0 bottom-0 w-full sm:w-[480px] bg-white shadow-2xl z-50 transform transition-transform duration-300 ease-out">
+          <div className="fixed top-0 right-0 bottom-0 w-full sm:w-[480px] bg-white shadow-2xl z-50 transform transition-transform duration-300 ease-out dark:bg-slate-900">
             <div className="h-full flex flex-col">
               {/* Sheet Header */}
-              <div className="flex items-center justify-between px-6 py-4 border-b border-brand-blue/5 bg-brand-blue/[0.02]">
+              <div className="flex items-center justify-between px-6 py-4 border-b border-brand-blue/5 bg-brand-blue/[0.02] dark:border-slate-800">
                 <div>
-                  <h2 className="text-lg font-semibold text-brand-blue">Document Workspace</h2>
-                  <p className="text-xs text-brand-blue/50 mt-0.5">
+                  <h2 className="text-lg font-semibold text-brand-blue dark:text-slate-100">Document Workspace</h2>
+                  <p className="text-xs text-brand-blue dark:text-slate-100/50 dark:text-slate-400 mt-0.5">
                     {selectedDoc.invoiceNumber}
                   </p>
                 </div>
                 <button
                   onClick={closeSheet}
-                  className="p-2 rounded-md text-brand-blue/50 hover:bg-brand-blue/5 hover:text-brand-blue transition-colors"
+                  className="p-2 rounded-md text-brand-blue dark:text-slate-100/50 dark:text-slate-400 hover:bg-brand-blue/5 hover:text-brand-blue dark:text-slate-100 transition-colors"
                 >
                   <X className="w-5 h-5" />
                 </button>
@@ -383,7 +383,7 @@ export function DocumentsPage() {
 
               {/* View Tabs */}
               {!selectedDoc.isStandalone && (
-                <div className="flex items-center gap-1 px-6 py-3 border-b border-brand-blue/5 bg-white">
+                <div className="flex items-center gap-1 px-6 py-3 border-b border-brand-blue/5 bg-white dark:bg-slate-900 dark:border-slate-800">
                   <TabButton
                     active={activeTab === "delivery"}
                     onClick={() => setActiveTab("delivery")}
@@ -441,7 +441,7 @@ function StatCard({
   alert?: boolean
 }) {
   const colorMap = {
-    "brand-blue": "text-brand-blue bg-brand-blue/10",
+    "brand-blue": "text-brand-blue dark:text-slate-100 bg-brand-blue/10",
     "emerald": "text-emerald-700 bg-emerald-50",
     "slate": "text-slate-600 bg-slate-100",
     "amber": "text-amber-700 bg-amber-50",
@@ -452,7 +452,7 @@ function StatCard({
       "p-4 rounded-lg border",
       alert ? "border-amber/30 bg-amber-[0.02]" : "border-brand-blue/5"
     )}>
-      <p className="text-xs font-medium text-brand-blue/50 uppercase tracking-wider">{label}</p>
+      <p className="text-xs font-medium text-brand-blue dark:text-slate-100/50 dark:text-slate-400 uppercase tracking-wider">{label}</p>
       <p className={cn(
         "text-2xl font-bold tracking-tight mt-1.5",
         colorMap[color]
@@ -478,8 +478,8 @@ function FilterButton({
       className={cn(
         "flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all duration-200",
         active
-          ? "bg-white text-brand-blue shadow-sm"
-          : "text-brand-blue/60 hover:text-brand-blue hover:bg-white/50"
+          ? "bg-white text-brand-blue dark:text-slate-100 shadow-sm dark:bg-slate-800 dark:text-slate-200"
+          : "text-brand-blue dark:text-slate-100/60 dark:text-slate-300 hover:text-brand-blue dark:text-slate-100 hover:bg-white/50 dark:text-slate-400 dark:hover:text-slate-200 dark:hover:bg-slate-800/50"
       )}
     >
       {icon}
@@ -505,8 +505,8 @@ function TabButton({
       className={cn(
         "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200",
         active
-          ? "bg-brand-blue/10 text-brand-blue border border-brand-blue/20"
-          : "text-brand-blue/50 hover:text-brand-blue hover:bg-brand-blue/5"
+          ? "bg-brand-blue/10 text-brand-blue dark:text-slate-100 border border-brand-blue/20"
+          : "text-brand-blue dark:text-slate-100/50 dark:text-slate-400 hover:text-brand-blue dark:text-slate-100 hover:bg-brand-blue/5"
       )}
     >
       {icon}
@@ -520,7 +520,7 @@ function InvoiceTabContent({ doc }: { doc: DocumentRow }) {
     <div className="space-y-6">
       {/* Invoice Details Card */}
       <div className="bg-brand-blue/[0.02] rounded-lg p-5 border border-brand-blue/5">
-        <h3 className="text-sm font-semibold text-brand-blue/70 mb-4">Invoice Details</h3>
+        <h3 className="text-sm font-semibold text-brand-blue dark:text-slate-100/70 dark:text-slate-300 mb-4">Invoice Details</h3>
         <div className="grid grid-cols-2 gap-4">
           <DetailRow label="Invoice Number" value={doc.invoiceNumber} mono />
           <DetailRow label="Customer" value={`${doc.customerNumber} — ${doc.customerName || "N/A"}`} />
@@ -539,7 +539,7 @@ function InvoiceTabContent({ doc }: { doc: DocumentRow }) {
 
       {/* e-Meterai Status */}
       <div className="bg-brand-blue/[0.02] rounded-lg p-5 border border-brand-blue/5">
-        <h3 className="text-sm font-semibold text-brand-blue/70 mb-4">e-Meterai Status</h3>
+        <h3 className="text-sm font-semibold text-brand-blue dark:text-slate-100/70 dark:text-slate-300 mb-4">e-Meterai Status</h3>
         <div className="flex items-center gap-3">
           <div className={cn(
             "w-3 h-3 rounded-full",
@@ -547,14 +547,14 @@ function InvoiceTabContent({ doc }: { doc: DocumentRow }) {
             doc.stampingStatusText === "Pending" ? "bg-amber-500 animate-pulse" :
             "bg-slate-300"
           )} />
-          <span className="text-sm font-medium text-brand-blue">
+          <span className="text-sm font-medium text-brand-blue dark:text-slate-100">
             {doc.stampingStatusText}
           </span>
         </div>
         {doc.serialNumber && (
           <div className="mt-4">
-            <p className="text-xs text-brand-blue/50 uppercase tracking-wider mb-1">Serial Number</p>
-            <code className="text-sm font-mono text-brand-blue bg-brand-blue/5 px-2 py-1 rounded">
+            <p className="text-xs text-brand-blue dark:text-slate-100/50 dark:text-slate-400 uppercase tracking-wider mb-1">Serial Number</p>
+            <code className="text-sm font-mono text-brand-blue dark:text-slate-100 bg-brand-blue/5 px-2 py-1 rounded">
               {doc.serialNumber}
             </code>
           </div>
@@ -563,7 +563,7 @@ function InvoiceTabContent({ doc }: { doc: DocumentRow }) {
 
       {/* Document Links */}
       <div className="bg-brand-blue/[0.02] rounded-lg p-5 border border-brand-blue/5">
-        <h3 className="text-sm font-semibold text-brand-blue/70 mb-4">Document Links</h3>
+        <h3 className="text-sm font-semibold text-brand-blue dark:text-slate-100/70 dark:text-slate-300 mb-4">Document Links</h3>
         <div className="space-y-3">
           {doc.stampedDocumentUrl ? (
             <DocumentLink
@@ -572,7 +572,7 @@ function InvoiceTabContent({ doc }: { doc: DocumentRow }) {
               status="available"
             />
           ) : (
-            <div className="flex items-center gap-3 p-3 rounded-md bg-slate-50/50 border border-slate-200">
+            <div className="flex items-center gap-3 p-3 rounded-md bg-slate-50/50 border border-slate-200 dark:bg-slate-800/50 dark:border-slate-700">
               <AlertCircle className="w-4 h-4 text-slate-400" />
               <span className="text-sm text-slate-500">No stamped document available</span>
             </div>
@@ -582,10 +582,10 @@ function InvoiceTabContent({ doc }: { doc: DocumentRow }) {
 
       {/* Standalone Indicator */}
       {doc.isStandalone && (
-        <div className="flex items-start gap-3 p-4 rounded-lg bg-slate-50 border border-dashed border-slate-300">
+        <div className="flex items-start gap-3 p-4 rounded-lg bg-slate-50 dark:bg-slate-800/50 border border-dashed border-slate-300 dark:border-slate-600">
           <Package className="w-5 h-5 text-slate-400 mt-0.5" />
           <div>
-            <p className="text-sm font-medium text-slate-700">Direct Standalone Invoice</p>
+            <p className="text-sm font-medium text-slate-700 dark:text-slate-300">Direct Standalone Invoice</p>
             <p className="text-xs text-slate-500 mt-1">
               This invoice originated directly from ERP billing without an upstream delivery order.
             </p>
@@ -618,7 +618,7 @@ function DeliveryTabContent({ doc }: { doc: DocumentRow }) {
       </div>
 
       <div className="bg-brand-blue/[0.02] rounded-lg p-5 border border-brand-blue/5">
-        <h3 className="text-sm font-semibold text-brand-blue/70 mb-4">Customer Information</h3>
+        <h3 className="text-sm font-semibold text-brand-blue dark:text-slate-100/70 dark:text-slate-300 mb-4">Customer Information</h3>
         <div className="space-y-3">
           <DetailRow label="Customer Number" value={doc.customerNumber} mono />
           <DetailRow label="Customer Name" value={doc.customerName || "N/A"} />
@@ -626,7 +626,7 @@ function DeliveryTabContent({ doc }: { doc: DocumentRow }) {
       </div>
 
       <div className="bg-brand-blue/[0.02] rounded-lg p-5 border border-brand-blue/5">
-        <h3 className="text-sm font-semibold text-brand-blue/70 mb-4">Document Links</h3>
+        <h3 className="text-sm font-semibold text-brand-blue dark:text-slate-100/70 dark:text-slate-300 mb-4">Document Links</h3>
         <div className="space-y-3">
           {doc.stampedDocumentUrl ? (
             <DocumentLink
@@ -635,7 +635,7 @@ function DeliveryTabContent({ doc }: { doc: DocumentRow }) {
               status="available"
             />
           ) : (
-            <div className="flex items-center gap-3 p-3 rounded-md bg-slate-50/50 border border-slate-200">
+            <div className="flex items-center gap-3 p-3 rounded-md bg-slate-50/50 border border-slate-200 dark:bg-slate-800/50 dark:border-slate-700">
               <AlertCircle className="w-4 h-4 text-slate-400" />
               <span className="text-sm text-slate-500">No stamped document available</span>
             </div>
@@ -657,9 +657,9 @@ function DetailRow({
 }) {
   return (
     <div>
-      <p className="text-xs text-brand-blue/50 uppercase tracking-wider">{label}</p>
+      <p className="text-xs text-brand-blue dark:text-slate-100/50 dark:text-slate-400 uppercase tracking-wider">{label}</p>
       <p className={cn(
-        "text-sm font-medium text-brand-blue mt-0.5",
+        "text-sm font-medium text-brand-blue dark:text-slate-100 mt-0.5",
         mono && "font-mono"
       )}>{value}</p>
     </div>
@@ -679,17 +679,17 @@ function DocumentLink({
       href={url}
       target="_blank"
       rel="noopener noreferrer"
-      className="flex items-center justify-between p-3 rounded-md bg-white border border-brand-blue/10 hover:border-brand-blue/20 hover:bg-brand-blue/[0.02] transition-colors group"
+      className="flex items-center justify-between p-3 rounded-md bg-white dark:bg-slate-800 border border-brand-blue/10 dark:border-slate-700 hover:border-brand-blue/20 hover:bg-brand-blue/[0.02] transition-colors group"
     >
       <div className="flex items-center gap-3">
         <div className="w-8 h-8 rounded-md bg-brand-blue/10 flex items-center justify-center">
-          <FileText className="w-4 h-4 text-brand-blue" />
+          <FileText className="w-4 h-4 text-brand-blue dark:text-slate-100" />
         </div>
-        <span className="text-sm font-medium text-brand-blue group-hover:text-brand-blue/80">
+        <span className="text-sm font-medium text-brand-blue dark:text-slate-100 group-hover:text-brand-blue dark:text-slate-100/80 dark:text-slate-200">
           {label}
         </span>
       </div>
-      <ChevronRight className="w-4 h-4 text-brand-blue/40 group-hover:text-brand-blue/60 transition-colors" />
+      <ChevronRight className="w-4 h-4 text-brand-blue dark:text-slate-100/40 dark:text-slate-400 group-hover:text-brand-blue dark:text-slate-100/60 dark:text-slate-300 transition-colors" />
     </a>
   )
 }

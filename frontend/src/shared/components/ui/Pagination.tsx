@@ -46,8 +46,8 @@ export function Pagination({
         className={cn(
           "w-16 h-10 rounded-md flex items-center justify-center text-sm font-medium transition-colors",
           currentPage === 1
-            ? "text-brand-blue/30 cursor-not-allowed"
-            : "text-brand-blue hover:bg-brand-blue/10"
+            ? "text-brand-blue/30 cursor-not-allowed dark:text-slate-600"
+            : "text-brand-blue hover:bg-brand-blue/10 dark:text-slate-200 dark:hover:bg-slate-800"
         )}
       >
         Previous
@@ -61,8 +61,8 @@ export function Pagination({
             className={cn(
               "w-10 h-10 rounded-md flex items-center justify-center text-sm font-medium transition-colors",
               currentPage === page
-                ? "bg-brand-blue text-white"
-                : "text-brand-blue hover:bg-brand-blue/10"
+                ? "bg-brand-blue text-white dark:bg-brand-blue dark:hover:bg-brand-blue/80"
+                : "text-brand-blue hover:bg-brand-blue/10 dark:text-slate-200 dark:hover:bg-slate-800"
             )}
           >
             {page}
@@ -70,7 +70,7 @@ export function Pagination({
         ) : (
           <span
             key={index}
-            className="w-10 h-10 flex items-center justify-center text-brand-blue/50"
+            className="w-10 h-10 flex items-center justify-center text-brand-blue/50 dark:text-slate-400"
           >
             {page}
           </span>
@@ -83,8 +83,8 @@ export function Pagination({
         className={cn(
           "w-10 h-10 rounded-md flex items-center justify-center text-sm font-medium transition-colors",
           currentPage === totalPages
-            ? "text-brand-blue/30 cursor-not-allowed"
-            : "text-brand-blue hover:bg-brand-blue/10"
+            ? "text-brand-blue/30 cursor-not-allowed dark:text-slate-600"
+            : "text-brand-blue hover:bg-brand-blue/10 dark:text-slate-200 dark:hover:bg-slate-800"
         )}
       >
         Next
