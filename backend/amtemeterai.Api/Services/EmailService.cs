@@ -44,6 +44,13 @@ namespace amtemeterai.Api.Services
             return sslPolicyErrors == System.Net.Security.SslPolicyErrors.None;
         }
 
+        /// <summary>
+        /// SMTP 465 = implicit TLS (SslOnConnect); 587/25 = STARTTLS upgrade.
+        /// Host firewall blocks 587, so 465 is the working path.
+        /// </summary>
+        private SecureSocketOptions GetSmtpSocketOptions() =>
+            _smtpSettings.Port == 465 ? SecureSocketOptions.SslOnConnect : SecureSocketOptions.StartTls;
+
         public EmailService(
             AppDbContext db,
             IOptions<SmtpSettings> smtpSettings,
@@ -178,8 +185,8 @@ namespace amtemeterai.Api.Services
                 client.ServerCertificateValidationCallback = ValidateSmtpCertificate;
             try
             {
-                // Connect using explicitly typed STARTTLS configurations required by Google
-                await client.ConnectAsync(_smtpSettings.Host, _smtpSettings.Port, SecureSocketOptions.StartTls);
+                // Port-aware TLS: 465 implicit, else STARTTLS
+                await client.ConnectAsync(_smtpSettings.Host, _smtpSettings.Port, GetSmtpSocketOptions());
                 await client.AuthenticateAsync(_smtpSettings.Username, _smtpSettings.Password);
                 await client.SendAsync(message);
                 
@@ -314,7 +321,7 @@ namespace amtemeterai.Api.Services
                 client.ServerCertificateValidationCallback = ValidateSmtpCertificate;
             try
             {
-                await client.ConnectAsync(_smtpSettings.Host, _smtpSettings.Port, SecureSocketOptions.StartTls);
+                await client.ConnectAsync(_smtpSettings.Host, _smtpSettings.Port, GetSmtpSocketOptions());
                 await client.AuthenticateAsync(_smtpSettings.Username, _smtpSettings.Password);
                 await client.SendAsync(message);
 
@@ -523,7 +530,7 @@ namespace amtemeterai.Api.Services
                 client.ServerCertificateValidationCallback = ValidateSmtpCertificate;
                 try
                 {
-                    await client.ConnectAsync(_smtpSettings.Host, _smtpSettings.Port, SecureSocketOptions.StartTls);
+                    await client.ConnectAsync(_smtpSettings.Host, _smtpSettings.Port, GetSmtpSocketOptions());
                     await client.AuthenticateAsync(_smtpSettings.Username, _smtpSettings.Password);
                     await client.SendAsync(message);
 
