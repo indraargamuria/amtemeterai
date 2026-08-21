@@ -84,7 +84,7 @@ public class AuditSaveChangesInterceptor : SaveChangesInterceptor
             if (action is null)
                 continue;
 
-            Dictionary<string, Dictionary<string, object?>>? diff = action switch
+            string? diff = action switch
             {
                 // For inserts: log every non-null initial value so the row's birth state is known.
                 "Created" => Snapshot(entry),
@@ -101,15 +101,15 @@ public class AuditSaveChangesInterceptor : SaveChangesInterceptor
                 EntityName = entityName,
                 EntityId = PrimaryKeyValue(entry) ?? "?",
                 Action = action,
-                ChangedFields = diff
+                ChangedFieldsJson = diff
             });
         }
     }
 
     /// <summary>Only properties that actually changed, as {prop: {from, to}}.</summary>
-    private static Dictionary<string, Dictionary<string, object?>>? Diff(EntityEntry entry)
+    private static string? Diff(EntityEntry entry)
     {
-        Dictionary<string, Dictionary<string, object?>>? result = null;
+        var result = new Dictionary<string, Dictionary<string, object?>>();
 
         foreach (var prop in entry.Properties)
         {
@@ -129,20 +129,20 @@ public class AuditSaveChangesInterceptor : SaveChangesInterceptor
             if (!changed)
                 continue;
 
-            (result ??= new())[prop.Metadata.Name] = new Dictionary<string, object?>
+            result[prop.Metadata.Name] = new Dictionary<string, object?>
             {
                 ["from"] = original,
                 ["to"] = current
             };
         }
 
-        return result;
+        return System.Text.Json.JsonSerializer.Serialize(result);
     }
 
     /// <summary>All non-null column values (initial insert / final delete state).</summary>
-    private static Dictionary<string, Dictionary<string, object?>>? Snapshot(EntityEntry entry)
+    private static string? Snapshot(EntityEntry entry)
     {
-        Dictionary<string, Dictionary<string, object?>>? result = null;
+        var result = new Dictionary<string, Dictionary<string, object?>>();
 
         foreach (var prop in entry.Properties)
         {
@@ -153,14 +153,14 @@ public class AuditSaveChangesInterceptor : SaveChangesInterceptor
             if (value is null or "")
                 continue;
 
-            (result ??= new())[prop.Metadata.Name] = new Dictionary<string, object?>
+            result[prop.Metadata.Name] = new Dictionary<string, object?>
             {
                 ["from"] = null,
                 ["to"] = value
             };
         }
 
-        return result;
+        return System.Text.Json.JsonSerializer.Serialize(result);
     }
 
     private static string? PrimaryKeyValue(EntityEntry entry)

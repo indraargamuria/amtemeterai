@@ -3,7 +3,7 @@ namespace amtemeterai.Api.Models;
 /// <summary>
 /// Automatic data-change audit record written by AuditSaveChangesInterceptor
 /// in the same transaction as the change itself.
-/// ChangedFields JSON shape: {"PropName": {"from": <old>, "to": <new>}, ...}
+/// ChangedFieldsJson stores serialized JSON: {PropName: {from: <old>, to: <new>}, ...}
 /// </summary>
 public class AuditLog
 {
@@ -25,6 +25,7 @@ public class AuditLog
     /// <summary>Created | Updated | Deleted</summary>
     public string Action { get; set; } = string.Empty;
 
-    /// <summary>jsonb: property-level diff. Null for Created rows with no defaults worth logging.</summary>
-    public Dictionary<string, Dictionary<string, object?>>? ChangedFields { get; set; }
+    /// <summary>jsonb: property-level diff stored as serialized JSON string. Null for Created rows.</summary>
+    /// Serialized in-memory as {PropName: {from: <old>, to: <new>}, ...}. Changed in interceptor only.</summary>
+    public string? ChangedFieldsJson { get; set; }
 }

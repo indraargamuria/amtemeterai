@@ -47,7 +47,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
         modelBuilder.Entity<AuditLog>()
             .HasKey(x => x.AuditID);
         modelBuilder.Entity<AuditLog>()
-            .Property(x => x.ChangedFields)
+            .Property(x => x.ChangedFieldsJson)
             .HasColumnType("jsonb");
 
         modelBuilder.Entity<DeliveryHeader>()

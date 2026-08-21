@@ -14,7 +14,7 @@ public class AuditLogDto
     public string EntityName { get; set; } = "";
     public string EntityId { get; set; } = "";
     public string Action { get; set; } = "";
-    public Dictionary<string, Dictionary<string, object?>>? ChangedFields { get; set; }
+    public Dictionary<string, Dictionary<string, object?>>? ChangedFields { get; set; }  // parsed from ChangedFieldsJson
 }
 
 public class AuditLogPagedDto
@@ -86,7 +86,7 @@ public class AuditTrailController : ControllerBase
                 EntityName = a.EntityName,
                 EntityId = a.EntityId,
                 Action = a.Action,
-                ChangedFields = a.ChangedFields
+                ChangedFields = ParseJson(a.ChangedFieldsJson)
             })
             .ToListAsync();
 
@@ -111,4 +111,9 @@ public class AuditTrailController : ControllerBase
 
         return Ok(new { entities, users });
     }
+    /// <summary>Parse the jsonb diff payload for the API response.</summary>
+    private static Dictionary<string, Dictionary<string, object?>>? ParseJson(string? json) =>
+        json is null
+            ? null
+            : System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, Dictionary<string, object?>>>(json);
 }
