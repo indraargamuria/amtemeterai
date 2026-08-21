@@ -53,9 +53,9 @@ public class DeliveryResponseDto
         public string? FormattedAddress { get; set; }
 
         /// <summary>
-        /// Ship mode from SAP (e.g., "AIR", "SEA", "LAND"). Null when not selected on the DO.
-        /// </summary>
-        public string? ShipMode { get; set; }
+                /// Ship mode — free text from SAP. Null/empty = not selected on the DO; lead time resolved from ShippingParameters DEFAULT row.
+                /// </summary>
+                public string? ShipMode { get; set; }
 
         /// <summary>
         /// Lead time in days resolved from ShippingParameters for this delivery's

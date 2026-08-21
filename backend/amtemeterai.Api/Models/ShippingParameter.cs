@@ -20,11 +20,11 @@ public class ShippingParameter
     [MaxLength(50)]
     public string? Region { get; set; }
 
-    /// <summary>Ship mode code (e.g., "AIR", "SEA", "LAND"). "DEFAULT" for the fallback row.</summary>
+    /// <summary>Ship mode — free text from SAP (values not fixed by contract).</summary>
     [Required, MaxLength(50)]
     public string ShipMode { get; set; } = null!;
 
-    /// <summary>True when ShipMode == "DEFAULT" (reserved row for DOs without ship mode).</summary>
+    /// <summary>True when this row is the reserved fallback row for DOs without ship mode.</summary>
     public bool IsDefault { get; set; }
 
     /// <summary>Lead time in days.</summary>

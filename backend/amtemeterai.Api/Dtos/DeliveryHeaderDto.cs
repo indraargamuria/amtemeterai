@@ -38,9 +38,7 @@ namespace amtemeterai.Api.Dtos
         public bool IsCanceled { get; set; }
         public string? CancelReason { get; set; }
 
-        /// <summary>
-        /// Ship mode from SAP (e.g., "AIR", "SEA", "LAND"). Null when not selected on the DO.
-        /// </summary>
+        /// <summary>Ship mode — free text from SAP. Null/empty when not selected on the DO.</summary>
         public string? ShipMode { get; set; }
 
         /// <summary>

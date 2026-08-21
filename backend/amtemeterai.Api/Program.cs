@@ -131,6 +131,7 @@ builder.Services.AddHostedService<DeliveryAutoConfirmService>();
 
 // Register Shipping Parameter Sync background job (lead time master data from SAP)
 builder.Services.AddHostedService<ShippingParameterBackgroundService>();
+    builder.Services.AddHostedService<CustomerSyncBackgroundService>();
 
 // Register the named HttpClient that your DeliveriesController uses to talk to SAP
 builder.Services.AddHttpClient("SapClient", (serviceProvider, client) =>
