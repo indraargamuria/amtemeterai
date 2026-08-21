@@ -184,6 +184,14 @@ public static class DbInitializer
                 Description = "Syncs shipping parameter master data (country, region, ship mode, lead time) from SAP.",
                 IntervalMinutes = 60,
                 IsEnabled = true
+            },
+            new()
+            {
+                JobKey = "customer:sync",
+                DisplayName = "Customer Sync",
+                Description = "Syncs customer master data (name, email, PIN, region, country) from SAP.",
+                IntervalMinutes = 1440,
+                IsEnabled = true
             }
         };
 
