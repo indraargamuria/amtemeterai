@@ -35,6 +35,9 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
     // Document Hub email send tracking - 2026-08-21
     public DbSet<EmailSend> EmailSends => Set<EmailSend>();
 
+    // Shipping parameter master data (lead time per country+region+ship mode) - 2026-08-21
+    public DbSet<ShippingParameter> ShippingParameters => Set<ShippingParameter>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);

@@ -10,6 +10,7 @@ import {
   Settings,
   Sun,
   Moon,
+  Ship,
   type LucideIcon,
 } from "lucide-react"
 import { cn } from "../utils/cn"
@@ -32,6 +33,7 @@ interface MenuItem {
 const menuItems: MenuItem[] = [
   { path: "/", label: "Dashboard", requiredPermission: "dashboard:read", icon: LayoutDashboard },
   { path: "/customers", label: "Customers", requiredPermission: "customer:read", icon: Users },
+  { path: "/shipping-parameters", label: "Shipping Parameters", requiredPermission: "customer:read", icon: Ship },
   { path: "/deliveries", label: "Deliveries", requiredPermission: "delivery:read", icon: Package },
   { path: "/invoices", label: "Invoices", requiredPermission: "invoice:read", icon: FileText },
   { path: "/documents", label: "Document Hub", requiredPermission: "invoice:read", icon: FolderOpen },

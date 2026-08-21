@@ -7,6 +7,7 @@ import { LoginPage } from "./pages/Login"
 import { DashboardPage } from "./pages/Dashboard"
 import { CustomersPage } from "./pages/Customers"
 import { DeliveriesPage, DeliveryDetailPage } from "./pages/Deliveries"
+import { ShippingParametersPage } from "./pages/ShippingParameters"
 import { DeliveryReceivePage } from "./pages/Public"
 import { InvoicesPage } from "./pages/Invoices"
 import { DocumentsPage } from "./pages/Documents"
@@ -90,6 +91,18 @@ function AppRoutes() {
             <RouteGuard>
               <DashboardLayout>
                 <DeliveryDetailPage />
+              </DashboardLayout>
+            </RouteGuard>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/shipping-parameters"
+        element={
+          <ProtectedRoute>
+            <RouteGuard>
+              <DashboardLayout>
+                <ShippingParametersPage />
               </DashboardLayout>
             </RouteGuard>
           </ProtectedRoute>

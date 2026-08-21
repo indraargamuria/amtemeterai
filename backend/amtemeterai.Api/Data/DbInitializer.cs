@@ -176,6 +176,14 @@ public static class DbInitializer
                 Description = "Checks received BC deliveries with Unbilled status and syncs invoices from SAP.",
                 IntervalMinutes = 3,
                 IsEnabled = true
+            },
+            new()
+            {
+                JobKey = "ShippingParameterSync",
+                DisplayName = "Shipping Parameter Sync",
+                Description = "Syncs shipping parameter master data (country, region, ship mode, lead time) from SAP.",
+                IntervalMinutes = 60,
+                IsEnabled = true
             }
         };
 

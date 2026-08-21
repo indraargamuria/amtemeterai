@@ -83,13 +83,16 @@ var customerSourceType = builder.Configuration["CustomerSource"] ?? "Dummy";
 if (customerSourceType == "Dummy")
 {
     builder.Services.AddScoped<ICustomerSource, DummyCustomerSource>();
+    builder.Services.AddScoped<IShippingParameterSource, DummyShippingParameterSource>();
 }
 else
 {
     builder.Services.AddHttpClient<ICustomerSource, ErpCustomerSource>();
+    builder.Services.AddHttpClient<IShippingParameterSource, ErpShippingParameterSource>();
 }
 
 builder.Services.AddScoped<CustomerService>();
+builder.Services.AddScoped<ShippingParameterService>();
 
 // Bind the Smtp Settings Payload Block
 builder.Services.Configure<SmtpSettings>(builder.Configuration.GetSection(SmtpSettings.SectionName));
@@ -125,6 +128,9 @@ builder.Services.AddHostedService<BillingBackgroundService>();
 
 // Register Delivery Auto Confirm Service for automatic delivery confirmation
 builder.Services.AddHostedService<DeliveryAutoConfirmService>();
+
+// Register Shipping Parameter Sync background job (lead time master data from SAP)
+builder.Services.AddHostedService<ShippingParameterBackgroundService>();
 
 // Register the named HttpClient that your DeliveriesController uses to talk to SAP
 builder.Services.AddHttpClient("SapClient", (serviceProvider, client) =>
