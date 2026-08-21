@@ -43,6 +43,9 @@ interface DeliveryHeader {
   // 🆕 Task 5: Invoice State Transition Matrix Fields
   invoiceState?: string // "Unbilled", "Billed", "Blocked & Voided", "Ready to Re Billing"
   invoiceNumber?: string | null
+  // 🆕 Ship mode from SAP (null = not selected) + resolved lead time
+  shipMode?: string | null
+  leadTimeDays?: number | null
 }
 
 type SortField = "deliveryDate" | "deliveryNumber" | "status"
@@ -613,6 +616,9 @@ export function DeliveriesPage() {
               >
                 Status {getSortIcon("status")}
               </TableHead>
+              <TableHead className="font-medium text-brand-blue dark:text-slate-100/50 dark:text-slate-400 uppercase text-xs tracking-wider">
+                Ship Mode
+              </TableHead>
               <TableHead className="font-medium text-brand-blue dark:text-slate-100/50 dark:text-slate-400 uppercase text-xs tracking-wider text-center">
                 Proof
               </TableHead>
@@ -630,13 +636,13 @@ export function DeliveriesPage() {
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={isWarehouse ? 7 : 8} className="text-center text-brand-blue dark:text-slate-100/60 dark:text-slate-300 py-12">
+                <TableCell colSpan={isWarehouse ? 9 : 10} className="text-center text-brand-blue dark:text-slate-100/60 dark:text-slate-300 py-12">
                   Loading deliveries...
                 </TableCell>
               </TableRow>
             ) : filteredAndSortedDeliveries.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={isWarehouse ? 7 : 8} className="text-center text-brand-blue dark:text-slate-100/60 dark:text-slate-300 py-12">
+                <TableCell colSpan={isWarehouse ? 9 : 10} className="text-center text-brand-blue dark:text-slate-100/60 dark:text-slate-300 py-12">
                   {deliveries.length === 0
                     ? "No deliveries found"
                     : "No deliveries match your filter criteria"}
@@ -686,6 +692,33 @@ export function DeliveriesPage() {
                   {/* Compliance Type Column */}
                   <TableCell className="py-4">
                     {getComplianceBadge(delivery.type)}
+                  </TableCell>
+
+                  {/* Ship Mode Column with lead time (shows "Not selected" when DO has no ship mode) */}
+                  <TableCell className="py-4">
+                    {delivery.shipMode ? (
+                      <div className="flex flex-col gap-0.5">
+                        <span className="text-sm font-semibold text-brand-blue dark:text-slate-100">
+                          {delivery.shipMode}
+                        </span>
+                        {delivery.leadTimeDays != null && (
+                          <span className="text-xs text-brand-blue dark:text-slate-100/50 dark:text-slate-400">
+                            {delivery.leadTimeDays} days
+                          </span>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="flex flex-col gap-0.5">
+                        <Badge variant="outline" className="border-dashed border-slate-300 text-slate-400 dark:border-slate-600 dark:text-slate-500 w-fit">
+                          Not selected
+                        </Badge>
+                        {delivery.leadTimeDays != null && (
+                          <span className="text-xs text-brand-blue dark:text-slate-100/50 dark:text-slate-400">
+                            default: {delivery.leadTimeDays} days
+                          </span>
+                        )}
+                      </div>
+                    )}
                   </TableCell>
 
                   {/* Fulfillment State Column with Invoiced Badge / Cancel Reason */}

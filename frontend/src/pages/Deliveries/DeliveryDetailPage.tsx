@@ -78,6 +78,9 @@ interface DeliveryDetail {
   lines: DeliveryLine[]
   // 🆕 Task 5: Invoice State Transition Matrix Field
   invoiceState?: string // "Unbilled", "Billed", "Blocked & Voided", "Ready to Re Billing"
+  // 🆕 Ship mode from SAP (null = not selected) + resolved lead time
+  shipMode?: string | null
+  leadTimeDays?: number | null
 }
 
 // 🆕 Toast notification interface
@@ -1030,6 +1033,36 @@ export function DeliveryDetailPage() {
                 </p>
                 {delivery.salesPersonEmail && (
                   <p className="text-xs text-brand-blue dark:text-slate-100/60 dark:text-slate-300 mt-0.5">{delivery.salesPersonEmail}</p>
+                )}
+              </div>
+
+              {/* 🆕 Ship Mode + Lead Time (shows "Not selected" when DO has no ship mode) */}
+              <div className="space-y-1">
+                <p className="text-xs font-medium text-brand-blue dark:text-slate-100/50 dark:text-slate-400 uppercase tracking-wider">
+                  Ship Mode
+                </p>
+                {delivery.shipMode ? (
+                  <div className="flex items-center gap-2">
+                    <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 font-normal text-xs">
+                      {delivery.shipMode}
+                    </Badge>
+                    {delivery.leadTimeDays != null && (
+                      <span className="text-xs text-brand-blue dark:text-slate-100/50 dark:text-slate-400">
+                        lead time: {delivery.leadTimeDays} days
+                      </span>
+                    )}
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <Badge variant="outline" className="border-dashed border-slate-300 text-slate-400 dark:border-slate-600 dark:text-slate-500 font-normal text-xs">
+                      Not selected
+                    </Badge>
+                    {delivery.leadTimeDays != null && (
+                      <span className="text-xs text-brand-blue dark:text-slate-100/50 dark:text-slate-400">
+                        default: {delivery.leadTimeDays} days
+                      </span>
+                    )}
+                  </div>
                 )}
               </div>
 

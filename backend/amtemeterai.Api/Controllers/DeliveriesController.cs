@@ -28,6 +28,7 @@ public class DeliveriesController : ControllerBase
     private readonly SapOptions _sapOptions;
     private readonly IServiceProvider _serviceProvider;
     private readonly IServiceScopeFactory _scopeFactory;
+    private readonly ShippingParameterService _shippingParameterService;
     private readonly ILogger<DeliveriesController> _logger;
 
     // Helper method to log activity
@@ -45,28 +46,30 @@ public class DeliveriesController : ControllerBase
     }
 
     public DeliveriesController(
-        AppDbContext db,
-        IOptions<AppOptions> appOptions,
-        IOptions<GoogleMapsOptions> googleMapsOptions,
-        IWebHostEnvironment env,
-        IStorageService storageService,
-        IHttpClientFactory httpClientFactory,
-        IOptions<SapOptions> sapOptions,
-        IServiceProvider serviceProvider,
-        IServiceScopeFactory scopeFactory,
-        ILogger<DeliveriesController> logger)
-    {
-        _db = db;
-        _appOptions = appOptions.Value;
-        _googleMapsOptions = googleMapsOptions.Value;
-        _env = env;
-        _storageService = storageService;
-        _httpClientFactory = httpClientFactory;
-        _sapOptions = sapOptions.Value;
-        _serviceProvider = serviceProvider;
-        _scopeFactory = scopeFactory;
-        _logger = logger;
-    }
+            AppDbContext db,
+            IOptions<AppOptions> appOptions,
+            IOptions<GoogleMapsOptions> googleMapsOptions,
+            IWebHostEnvironment env,
+            IStorageService storageService,
+            IHttpClientFactory httpClientFactory,
+            IOptions<SapOptions> sapOptions,
+            IServiceProvider serviceProvider,
+            IServiceScopeFactory scopeFactory,
+            ShippingParameterService shippingParameterService,
+            ILogger<DeliveriesController> logger)
+        {
+            _db = db;
+            _appOptions = appOptions.Value;
+            _googleMapsOptions = googleMapsOptions.Value;
+            _env = env;
+            _storageService = storageService;
+            _httpClientFactory = httpClientFactory;
+            _sapOptions = sapOptions.Value;
+            _serviceProvider = serviceProvider;
+            _scopeFactory = scopeFactory;
+            _shippingParameterService = shippingParameterService;
+            _logger = logger;
+        }
 
     private static string GetPublicUrl(Guid token, string? baseUrl = null)
     {
@@ -130,6 +133,8 @@ public class DeliveriesController : ControllerBase
                 // Conditional: Hide customer info for warehouse role
                 CustomerCode = isWarehouseRole ? (string?)null : (d.Customer != null ? d.Customer.CustomerCode : "UNKNOWN"),
                 CustomerName = isWarehouseRole ? (string?)null : (d.Customer != null ? d.Customer.CustomerName : "UNKNOWN"),
+                CustomerCountry = d.Customer != null ? d.Customer.Country : null,
+                CustomerRegion = d.Customer != null ? d.Customer.Region : null,
 
                 Received = d.Received,
                 ReceiveDate = d.ReceiveDate,
@@ -137,6 +142,9 @@ public class DeliveriesController : ControllerBase
                 ReceiverToken = d.ReceiverToken,
                 BillingStatus = d.BillingStatus,
                 IsOpen = d.IsOpen,
+
+                // Ship mode from SAP (null when not selected on the DO)
+                ShipMode = d.ShipMode,
 
                 Plant = d.Plant,
                 Type = d.Type,
@@ -156,6 +164,29 @@ public class DeliveriesController : ControllerBase
             })
             .OrderByDescending(d => d.DeliveryDate)
             .ToListAsync();
+
+        // Batch-resolve lead times for all deliveries in one pass (avoids per-row DB hits).
+        var shippingParams = await _db.ShippingParameters.AsNoTracking().ToListAsync();
+
+        int? ResolveLeadTime(string? country, string? region, string? shipMode)
+        {
+            if (string.IsNullOrWhiteSpace(country)) return null;
+
+            IEnumerable<ShippingParameter> scope = shippingParams.Where(x => x.Country == country);
+            if (!string.IsNullOrWhiteSpace(region))
+                scope = scope.Where(x => x.Region == region || x.Region == null);
+            else
+                scope = scope.Where(x => x.Region == null);
+
+            if (!string.IsNullOrWhiteSpace(shipMode))
+            {
+                var sm = shipMode.Trim().ToUpperInvariant();
+                var exact = scope.FirstOrDefault(x => x.ShipMode == sm);
+                if (exact != null) return exact.LeadTimeDays;
+            }
+
+            return scope.FirstOrDefault(x => x.IsDefault)?.LeadTimeDays;
+        }
 
         var result = deliveries.Select(d =>
         {
@@ -223,7 +254,9 @@ public class DeliveriesController : ControllerBase
                 IsCanceled = d.IsCanceled,
                 CancelReason = d.CancelReason,
                 Type = (int?)d.Type,
-                Status = (int?)d.Status
+                Status = (int?)d.Status,
+                ShipMode = d.ShipMode,
+                LeadTimeDays = ResolveLeadTime(d.CustomerCountry, d.CustomerRegion, d.ShipMode)
             };
         }).ToList();
 
@@ -606,7 +639,13 @@ public class DeliveriesController : ControllerBase
             District = delivery.District,
             FormattedAddress = delivery.FormattedAddress,
 
-            Photos = photos,
+                        // NEW: Ship mode from SAP (null when not selected on the DO)
+                        ShipMode = delivery.ShipMode,
+
+                        // NEW: Lead time resolved from ShippingParameters (country+region+ship_mode fallback)
+                        LeadTimeDays = _shippingParameterService.ResolveLeadTimeAsync(delivery.Customer?.Country, delivery.Customer?.Region, delivery.ShipMode).GetAwaiter().GetResult(),
+
+                        Photos = photos,
 
             Lines = dbLines.Select(l => 
             {

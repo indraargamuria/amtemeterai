@@ -39,6 +39,18 @@ namespace amtemeterai.Api.Dtos
         public string? CancelReason { get; set; }
 
         /// <summary>
+        /// Ship mode from SAP (e.g., "AIR", "SEA", "LAND"). Null when not selected on the DO.
+        /// </summary>
+        public string? ShipMode { get; set; }
+
+        /// <summary>
+        /// Lead time in days resolved from ShippingParameters for this delivery's
+        /// customer country + region + ship mode (DEFAULT row fallback). Null when
+        /// no parameter row matches.
+        /// </summary>
+        public int? LeadTimeDays { get; set; }
+
+        /// <summary>
         /// Indicates whether the delivery order is open for structural modifications.
         /// When false, the delivery is locked from further changes while still allowing receipt submission.
         /// </summary>

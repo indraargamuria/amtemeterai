@@ -45,12 +45,24 @@ public class DeliveryResponseDto
     public int? Status { get; set; }              // 1 = FullyReceived, 2 = PartialReceived
 
     // --- Added: Full Geographical Telemetry --- 2026-05-19 21:19:17
-    public double? Latitude { get; set; }
-    public double? Longitude { get; set; }
-    public string? Province { get; set; }
-    public string? CityRegency { get; set; }
-    public string? District { get; set; }
-    public string? FormattedAddress { get; set; }
+        public double? Latitude { get; set; }
+        public double? Longitude { get; set; }
+        public string? Province { get; set; }
+        public string? CityRegency { get; set; }
+        public string? District { get; set; }
+        public string? FormattedAddress { get; set; }
+
+        /// <summary>
+        /// Ship mode from SAP (e.g., "AIR", "SEA", "LAND"). Null when not selected on the DO.
+        /// </summary>
+        public string? ShipMode { get; set; }
+
+        /// <summary>
+        /// Lead time in days resolved from ShippingParameters for this delivery's
+        /// customer country + region + ship mode (DEFAULT row fallback). Null when
+        /// no parameter row matches.
+        /// </summary>
+        public int? LeadTimeDays { get; set; }
 
     public bool IsCanceled { get; set; }
     public string? CancelReason { get; set; }
