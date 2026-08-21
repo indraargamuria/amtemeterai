@@ -57,7 +57,8 @@ public static class DbInitializer
             // pre-existing rows on a production database (e.g. finance_menu_access
             // already occupies Id 10). Lookups use PermissionKey, not Id.
             new() { PermissionKey = "job:read", Description = "View background jobs and execution history", Category = "Background Jobs", DisplayOrder = 10 },
-            new() { PermissionKey = "job:manage", Description = "Enable/disable background jobs, change intervals, trigger runs", Category = "Background Jobs", DisplayOrder = 11 }
+            new() { PermissionKey = "job:manage", Description = "Enable/disable background jobs, change intervals, trigger runs", Category = "Background Jobs", DisplayOrder = 11 },
+            new() { PermissionKey = "audit:read", Description = "View the audit trail of every data change", Category = "Audit", DisplayOrder = 12 }
         };
 
         foreach (var perm in defaultPermissions)
@@ -80,7 +81,8 @@ public static class DbInitializer
             new() { Id = 3, MenuKey = "invoices", Label = "Invoices", Path = "/invoices", IconName = "FileText", DisplayOrder = 3 },
             new() { Id = 4, MenuKey = "deliveries", Label = "Deliveries", Path = "/deliveries", IconName = "Package", DisplayOrder = 4 },
             new() { Id = 5, MenuKey = "uam", Label = "Access Management", Path = "/admin/uam", IconName = "ShieldAlert", DisplayOrder = 5 },
-            new() { Id = 6, MenuKey = "backgroundjobs", Label = "Background Jobs", Path = "/background-jobs", IconName = "Settings", DisplayOrder = 6 }
+            new() { Id = 6, MenuKey = "backgroundjobs", Label = "Background Jobs", Path = "/background-jobs", IconName = "Settings", DisplayOrder = 6 },
+            new() { Id = 7, MenuKey = "audit-trail", Label = "Audit Trail", Path = "/audit-trail", IconName = "Activity", DisplayOrder = 7 }
         };
 
         foreach (var menu in defaultMenus)
@@ -110,6 +112,16 @@ public static class DbInitializer
             !await context.MenuPermissions.AnyAsync(x => x.MenuId == jobsMenu.Id && x.PermissionId == jobReadPerm.Id))
         {
             await context.MenuPermissions.AddAsync(new MenuPermission { MenuId = jobsMenu.Id, PermissionId = jobReadPerm.Id });
+        }
+
+        // Menu permission for Audit Trail (audit:read)
+        // Seeded by key lookup to stay idempotent
+        var auditMenu = await context.ApplicationMenus.FirstOrDefaultAsync(m => m.MenuKey == "audit-trail");
+        var auditReadPerm = await context.Permissions.FirstOrDefaultAsync(p => p.PermissionKey == "audit:read");
+        if (auditMenu != null && auditReadPerm != null &&
+            !await context.MenuPermissions.AnyAsync(x => x.MenuId == auditMenu.Id && x.PermissionId == auditReadPerm.Id))
+        {
+            await context.MenuPermissions.AddAsync(new MenuPermission { MenuId = auditMenu.Id, PermissionId = auditReadPerm.Id });
         }
 
         foreach (var mp in menuPermissions)

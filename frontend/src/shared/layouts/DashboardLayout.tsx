@@ -8,6 +8,7 @@ import {
   FolderOpen,
   ShieldAlert,
   Settings,
+  Activity,
   Sun,
   Moon,
   Ship,
@@ -39,6 +40,7 @@ const menuItems: MenuItem[] = [
   { path: "/documents", label: "Document Hub", requiredPermission: "invoice:read", icon: FolderOpen },
   { path: "/admin/uam", label: "User Management", requiredPermission: "uam:read", sysAdminOnly: true, icon: ShieldAlert },
   { path: "/background-jobs", label: "Background Jobs", requiredPermission: "job:read", icon: Settings },
+  { path: "/audit-trail", label: "Audit Trail", requiredPermission: "audit:read", icon: Activity },
 ]
 
 // Helper to decode JWT payload
