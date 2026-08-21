@@ -1001,10 +1001,11 @@ public class InvoicesController : ControllerBase
             // Set invoice status to Voided
             invoice.Status = Invoice.InvoiceStatus.Voided;
 
-            // Traverse to the associated DeliveryHeader and set billing status to blocked
+            // Traverse to the associated DeliveryHeader and release it for re-billing
+            // so users can immediately generate a new invoice from SAP
             if (invoice.DeliveryHeader != null)
             {
-                invoice.DeliveryHeader.BillingStatus = DeliveryHeader.DeliveryBillingStatus.BillingBlocked;
+                invoice.DeliveryHeader.BillingStatus = DeliveryHeader.DeliveryBillingStatus.ReadyToRebill;
             }
 
             await _db.SaveChangesAsync();
@@ -1013,14 +1014,14 @@ public class InvoicesController : ControllerBase
             await transaction.CommitAsync();
 
             _logger.LogInformation(
-                "Invoice {InvoiceNumber} voided and delivery {DeliveryNumber} billing blocked.",
+                "Invoice {InvoiceNumber} voided and delivery {DeliveryNumber} set to ReadyToRebill.",
                 invoiceNumber,
                 invoice.DeliveryHeader?.DeliveryNumber ?? "N/A");
 
             return Ok(new
             {
                 success = true,
-                message = $"Invoice {invoiceNumber} has been voided and associated delivery billing blocked.",
+                message = $"Invoice {invoiceNumber} has been voided and the delivery is ready for re-billing.",
                 invoiceNumber = invoiceNumber,
                 deliveryNumber = invoice.DeliveryHeader?.DeliveryNumber,
                 invoiceStatus = "Voided",

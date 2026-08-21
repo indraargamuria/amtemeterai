@@ -2105,20 +2105,20 @@ public class DeliveriesController : ControllerBase
                 if (isVoidedOrCanceled)
                 {
                     _logger.LogWarning(
-                        "Sync blocked for Delivery {DeliveryNumber}: SAP returned voided invoice {InvoiceNumber}. New billing must be generated in SAP first.",
+                        "Generation blocked for Delivery {DeliveryNumber}: SAP returned billing number {InvoiceNumber} identical to the voided/canceled invoice. New billing must be generated in SAP first.",
                         deliveryNumber,
                         sapBillingData.SapInvoiceNumber);
 
                     await LogActivity(
                         "SyncBlockedVoidedInvoice",
                         deliveryNumber,
-                        $"Sync blocked for delivery {deliveryNumber}: SAP returned voided invoice {sapBillingData.SapInvoiceNumber}. Please generate new billing in SAP first.",
+                        $"Invoice generation blocked for delivery {deliveryNumber}: SAP returned billing number {sapBillingData.SapInvoiceNumber}, which is identical to the voided invoice. A new billing document must be created in SAP first.",
                         "Warning");
 
                     return BadRequest(new
                     {
                         success = false,
-                        message = "No new BC Billing document found in SAP. Please create the BC Billing in SAP first before syncing.",
+                        message = $"Invoice generation failed: SAP returned billing number {sapBillingData.SapInvoiceNumber}, which is identical to the voided invoice. Please create a NEW billing document in SAP for this delivery, then generate again.",
                         deliveryNumber = deliveryNumber,
                         sapInvoiceNumber = sapBillingData.SapInvoiceNumber,
                         localInvoiceStatus = existingInvoice.Status.ToString()
