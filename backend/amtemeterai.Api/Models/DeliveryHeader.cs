@@ -89,6 +89,12 @@ public class DeliveryHeader
     public string? SalesPersonName { get; set; }
     public string? SalesPersonEmail { get; set; }
 
+    /// <summary>
+    /// Ship mode code from SAP (e.g., "AIR", "SEA", "LAND").
+    /// Null = no ship mode selected on the DO; lead time falls back to the default ship mode row in ShippingParameters.
+    /// </summary>
+    public string? ShipMode { get; set; }
+
     // Use the nested enum types directly
     public DeliveryType Type { get; set; }            
     public ReceiverStatus? Status { get; set; } // Changed name to 'Status' for clean reading: DeliveryHeader.Status

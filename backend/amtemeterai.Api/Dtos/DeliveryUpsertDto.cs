@@ -19,5 +19,11 @@ public class DeliveryUpsertDto
     public string? SalesPersonName { get; set; }
     public string? SalesPersonEmail { get; set; }
 
+    /// <summary>
+    /// Ship mode code from SAP (e.g., "AIR", "SEA", "LAND").
+    /// Null/empty = no ship mode selected; lead time falls back to the default ship mode row in ShippingParameters.
+    /// </summary>
+    public string? ShipMode { get; set; }
+
     public List<DeliveryLineDto> Lines { get; set; } = new();
 }

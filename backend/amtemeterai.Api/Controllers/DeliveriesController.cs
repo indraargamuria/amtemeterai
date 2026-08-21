@@ -812,6 +812,7 @@ public class DeliveriesController : ControllerBase
             Plant = dto.Plant,
             SalesPersonName = dto.SalesPersonName,
             SalesPersonEmail = dto.SalesPersonEmail,
+            ShipMode = dto.ShipMode,
             // Note: OrderNumber and BuyerPONumber moved to line level
             Type = (DeliveryHeader.DeliveryType)dto.Type,
             ReceiverToken = Guid.NewGuid()
@@ -879,6 +880,7 @@ public class DeliveriesController : ControllerBase
         existing.Plant = dto.Plant;
         existing.SalesPersonName = dto.SalesPersonName;
         existing.SalesPersonEmail = dto.SalesPersonEmail;
+        existing.ShipMode = dto.ShipMode;
         // Note: OrderNumber and BuyerPONumber moved to line level
         existing.Type = (DeliveryHeader.DeliveryType)dto.Type;
 
