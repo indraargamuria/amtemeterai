@@ -12,5 +12,5 @@ public record CustomerDto
     public string? CustomerEmail { get; init; }
     public string? CustomerPin { get; init; }
     public string? Region { get; init; }
-    public int? LeadTimeDays { get; init; }
+    public string? Country { get; init; }
 }

@@ -54,7 +54,7 @@ public class CustomersController : ControllerBase
                 CustomerEmail = c.CustomerEmail,
                 CustomerPin = c.CustomerPin,
                 Region = c.Region,
-                LeadTimeDays = c.LeadTimeDays
+                Country = c.Country
             })
             .ToListAsync();
 

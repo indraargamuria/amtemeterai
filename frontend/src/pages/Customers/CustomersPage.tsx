@@ -23,10 +23,10 @@ interface Customer {
   customerEmail: string | null
   customerPin: string | null // 🚀 Added to match backend contract mapping
   region: string | null // 🚀 Region code from SAP (short text, less than 20 characters)
-  leadTimeDays: number | null // 🚀 Lead time in days from SAP
+  country: string | null // 🚀 Country code from SAP (e.g., "ID", "SG")
 }
 
-type SortField = "customerCode" | "customerName" | "customerEmail" | "customerPin" | "region" | "leadTimeDays"
+type SortField = "customerCode" | "customerName" | "customerEmail" | "customerPin" | "region" | "country"
 type SortOrder = "asc" | "desc"
 
 export function CustomersPage() {
@@ -124,7 +124,8 @@ export function CustomersPage() {
           c.customerName.toLowerCase().includes(query) ||
           (c.customerEmail?.toLowerCase().includes(query) ?? false) ||
           (c.customerPin?.toLowerCase().includes(query) ?? false) || // 🚀 Allows search by PIN
-          (c.region?.toLowerCase().includes(query) ?? false) // 🚀 Allows search by region
+          (c.region?.toLowerCase().includes(query) ?? false) || // 🚀 Allows search by region
+          (c.country?.toLowerCase().includes(query) ?? false) // 🚀 Allows search by country
       )
     }
 
@@ -270,9 +271,9 @@ export function CustomersPage() {
               </TableHead>
               <TableHead
                 className="font-medium text-brand-blue dark:text-slate-100/50 dark:text-slate-400 uppercase text-xs tracking-wider cursor-pointer hover:text-brand-blue dark:text-slate-100/70 dark:text-slate-300 transition-colors text-right"
-                onClick={() => handleSort("leadTimeDays")}
+                onClick={() => handleSort("country")}
               >
-                Lead Time {getSortIcon("leadTimeDays")}
+                Country {getSortIcon("country")}
               </TableHead>
               <TableHead
                 className="font-medium text-brand-blue dark:text-slate-100/50 dark:text-slate-400 uppercase text-xs tracking-wider cursor-pointer hover:text-brand-blue dark:text-slate-100/70 dark:text-slate-300 transition-colors"
@@ -339,14 +340,13 @@ export function CustomersPage() {
                     )}
                   </TableCell>
 
-                  {/* Lead Time Days Column */}
+                  {/* Country Column */}
                   <TableCell className="py-4 text-right">
-                    {customer.leadTimeDays != null ? (
+                    {customer.country ? (
                       <span className="inline-flex items-center gap-1">
                         <span className="text-sm font-semibold text-brand-blue dark:text-slate-100">
-                          {customer.leadTimeDays}
+                          {customer.country}
                         </span>
-                        <span className="text-xs text-brand-blue dark:text-slate-100/50 dark:text-slate-400">days</span>
                       </span>
                     ) : (
                       <span className="text-slate-400 italic text-sm">—</span>

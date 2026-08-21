@@ -16,9 +16,10 @@ public class Customer
     public string? Region { get; set; }
 
     /// <summary>
-    /// Lead time in days (expected delivery duration from SAP)
+    /// Country code from SAP (e.g., "ID", "SG")
+    /// Lead time moved to ShippingParameter master data (T3)
     /// </summary>
-    public int? LeadTimeDays { get; set; }
+    public string? Country { get; set; }
 
     public ICollection<DeliveryHeader> Deliveries { get; set; } = new List<DeliveryHeader>();
 }

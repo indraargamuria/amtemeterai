@@ -33,7 +33,7 @@ public class CustomerService
                     CustomerEmail = c.CustomerEmail,
                     CustomerPin = c.CustomerPin ?? "123456",
                     Region = c.Region,
-                    LeadTimeDays = c.LeadTimeDays
+                    Country = c.Country
                 });
                 inserted++;
             }
@@ -71,10 +71,10 @@ public class CustomerService
                     isDirty = true;
                 }
 
-                // Update LeadTimeDays if changed (allow null to clear)
-                if (existing.LeadTimeDays != c.LeadTimeDays)
+                // Update Country if changed (allow null to clear)
+                if (existing.Country != c.Country)
                 {
-                    existing.LeadTimeDays = c.LeadTimeDays;
+                    existing.Country = c.Country;
                     isDirty = true;
                 }
 

@@ -8,6 +8,6 @@ namespace amtemeterai.Api.Dtos
         public string? CustomerEmail { get; set; }
         public string? CustomerPin { get; set; }
         public string? Region { get; set; }
-        public int? LeadTimeDays { get; set; }
+        public string? Country { get; set; }
     }
 }

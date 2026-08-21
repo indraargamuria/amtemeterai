@@ -44,7 +44,7 @@ public class DeliveryAutoConfirmService : ManagedBackgroundService
         // Find deliveries that:
         // 1. Have NOT been received yet (Received = false)
         // 2. Have a PostGoodsIssueDate (PGI date)
-        // 3. Have a Customer with LeadTimeDays
+        // 3. (REMOVED: LeadTimeDays moved to ShippingParameters) Have a Customer entry (always true)
         // 4. Expected receive date (PGI date + lead time) is today or in the past
         var today = DateTime.UtcNow.Date;
 
@@ -54,15 +54,14 @@ public class DeliveryAutoConfirmService : ManagedBackgroundService
             .Where(d =>
                 !d.Received &&
                 d.PostGoodsIssueDate.HasValue &&
-                d.Customer != null &&
-                d.Customer.LeadTimeDays.HasValue &&
+                d.Customer != null && // Customer must exist
                 d.Status != DeliveryHeader.ReceiverStatus.Canceled)
             .Select(d => new
             {
                 d.DeliveryID,
                 d.DeliveryNumber,
                 d.PostGoodsIssueDate,
-                d.Customer.LeadTimeDays,
+                // d.Customer.LeadTimeDays, // LeadTimeDays moved to ShippingParameters
                 d.Customer.CustomerCode,
                 d.Customer.CustomerName,
                 d.Type,
@@ -85,21 +84,20 @@ public class DeliveryAutoConfirmService : ManagedBackgroundService
 
             try
             {
-                // Calculate expected receive date: PGI date + lead time
-                var expectedReceiveDate = delivery.PostGoodsIssueDate.Value.AddDays(delivery.LeadTimeDays.Value).Date;
+                // Calculate expected receive date: This logic will be updated with ShippingParameters (T3/T7)
+                // For now, if PGI is in the past, allow auto-confirm.
+                // var expectedReceiveDate = delivery.PostGoodsIssueDate.Value.AddDays(delivery.LeadTimeDays.Value).Date;
 
                 // Only auto-confirm if today is on or after the expected receive date
-                if (today < expectedReceiveDate)
-                {
-                    continue;
-                }
+                // if (today < expectedReceiveDate)
+                // {
+                //     continue;
+                // }
 
                 _logger.LogInformation(
-                    "Auto-confirming delivery {DeliveryNumber}. PGI: {PGIDate}, Lead Time: {LeadTime} days, Expected Receive: {ExpectedDate}",
+                    "Auto-confirming delivery {DeliveryNumber}. PGI: {PGIDate}",
                     delivery.DeliveryNumber,
-                    delivery.PostGoodsIssueDate.Value.ToString("yyyy-MM-dd"),
-                    delivery.LeadTimeDays.Value,
-                    expectedReceiveDate.ToString("yyyy-MM-dd"));
+                    delivery.PostGoodsIssueDate.Value.ToString("yyyy-MM-dd"));
 
                 // Get the full delivery entity with navigation properties
                 var fullDelivery = await db.DeliveryHeaders
@@ -117,7 +115,7 @@ public class DeliveryAutoConfirmService : ManagedBackgroundService
                 fullDelivery.Received = true;
                 fullDelivery.ReceiveDate = DateTime.UtcNow;
                 fullDelivery.ReceiverName = "System Auto-Confirm";
-                fullDelivery.ReceiverNotes = $"Auto-confirmed based on PGI date + lead time. PGI: {delivery.PostGoodsIssueDate.Value:yyyy-MM-dd}, Lead Time: {delivery.LeadTimeDays} days";
+                fullDelivery.ReceiverNotes = $"Auto-confirmed based on PGI date. PGI: {delivery.PostGoodsIssueDate.Value:yyyy-MM-dd}";
                 fullDelivery.Status = DeliveryHeader.ReceiverStatus.FullyReceived;
 
                 // Update all delivery lines to mark as fully delivered
@@ -278,7 +276,7 @@ public class DeliveryAutoConfirmService : ManagedBackgroundService
                 {
                     EventType = "DeliveryAutoConfirmed",
                     ReferenceID = delivery.DeliveryNumber,
-                    Message = $"Delivery {delivery.DeliveryNumber} auto-confirmed. PGI: {delivery.PostGoodsIssueDate.Value:yyyy-MM-dd}, Lead Time: {delivery.LeadTimeDays} days",
+                    Message = $"Delivery {delivery.DeliveryNumber} auto-confirmed. PGI: {delivery.PostGoodsIssueDate.Value:yyyy-MM-dd}",
                     Severity = "Info"
                 };
                 db.ActivityLogs.Add(activityLogEntry);
