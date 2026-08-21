@@ -12,6 +12,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<DeliveryHeader> DeliveryHeaders => Set<DeliveryHeader>();
     public DbSet<DeliveryLine> DeliveryLines => Set<DeliveryLine>();
     public DbSet<ActivityLog> ActivityLogs => Set<ActivityLog>();
+    public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
 
     // 1. Add the new Unified Documents DbSet - 2026-05-19 11:08:58 - Arga
     public DbSet<Document> Documents { get; set; }
@@ -41,6 +42,13 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
+
+        // 2026-08-23 - Audit trail: map diff dictionary to a single jsonb column
+        modelBuilder.Entity<AuditLog>()
+            .HasKey(x => x.AuditID);
+        modelBuilder.Entity<AuditLog>()
+            .Property(x => x.ChangedFields)
+            .HasColumnType("jsonb");
 
         modelBuilder.Entity<DeliveryHeader>()
             .HasKey(x => x.DeliveryID);
