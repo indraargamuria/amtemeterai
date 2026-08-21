@@ -13,6 +13,7 @@ import { InvoicesPage } from "./pages/Invoices"
 import { DocumentsPage } from "./pages/Documents"
 import { UserAccessManagementPage } from "./pages/UserAccessManagement"
 import { BackgroundJobsPage } from "./pages/BackgroundJobs"
+import { AuditTrailPage } from "./pages/AuditTrail"
 import { UnauthorizedPage } from "./pages/Unauthorized"
 import { DashboardLayout } from "./shared/layouts"
 import { SecuritySessionGuard } from "./shared/components/SecuritySessionGuard"
@@ -152,6 +153,19 @@ function AppRoutes() {
             <RouteGuard>
               <DashboardLayout>
                 <BackgroundJobsPage />
+              </DashboardLayout>
+            </RouteGuard>
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/audit-trail"
+        element={
+          <ProtectedRoute>
+            <RouteGuard>
+              <DashboardLayout>
+                <AuditTrailPage />
               </DashboardLayout>
             </RouteGuard>
           </ProtectedRoute>

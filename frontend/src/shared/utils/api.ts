@@ -438,3 +438,55 @@ export async function getBackgroundJobLogs(jobKey: string, page = 1, pageSize = 
   if (!response.ok) throw new Error("Failed to fetch background job logs")
   return await response.json()
 }
+
+// ---------------------------------------------------------------------------
+// Audit Trail
+// ---------------------------------------------------------------------------
+
+export interface AuditLogEntry {
+  auditID: number
+  timestamp: string
+  userName: string
+  ipAddress: string | null
+  entityName: string
+  entityId: string
+  action: string
+  changedFields: Record<string, { from: unknown; to: unknown }> | null
+}
+
+export interface AuditLogPaged {
+  items: AuditLogEntry[]
+  totalCount: number
+  page: number
+  pageSize: number
+}
+
+export async function getAuditLogs(params: {
+  page?: number
+  pageSize?: number
+  entity?: string
+  entityId?: string
+  user?: string
+  action?: string
+  from?: string
+  to?: string
+}): Promise<AuditLogPaged> {
+  const qs = new URLSearchParams()
+  if (params.page) qs.set("page", String(params.page))
+  if (params.pageSize) qs.set("pageSize", String(params.pageSize))
+  if (params.entity) qs.set("entity", params.entity)
+  if (params.entityId) qs.set("entityId", params.entityId)
+  if (params.user) qs.set("user", params.user)
+  if (params.action) qs.set("action", params.action)
+  if (params.from) qs.set("from", params.from)
+  if (params.to) qs.set("to", params.to)
+  const response = await authGet(`/api/audittrail?${qs.toString()}`)
+  if (!response.ok) throw new Error("Failed to fetch audit logs")
+  return await response.json()
+}
+
+export async function getAuditFacets(): Promise<{ entities: string[]; users: string[] }> {
+  const response = await authGet("/api/audittrail/facets")
+  if (!response.ok) throw new Error("Failed to fetch audit facets")
+  return await response.json()
+}
