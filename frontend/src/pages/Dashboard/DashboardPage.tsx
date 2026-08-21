@@ -49,14 +49,6 @@ const STAMP_STATUS_COLORS: Record<number, string> = {
   4: "#ef4444"
 }
 
-function formatIDR(value: number): string {
-  return new Intl.NumberFormat("id-ID", {
-    style: "currency",
-    currency: "IDR",
-    maximumFractionDigits: 0
-  }).format(value)
-}
-
 export function DashboardPage() {
   const [stats, setStats] = useState<DashboardStats | null>(null)
   const [chartsData, setChartsData] = useState<DashboardCharts | null>(null)
