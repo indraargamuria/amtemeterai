@@ -22,20 +22,15 @@ builder.Configuration.AddEnvironmentVariables();
 // Add services to the container.
 
 // 2026-04-30 - Add Db Context
-builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
-
-// 2026-05-20 - Configure SAP Options
-builder.Services.Configure<SapOptions>(builder.Configuration.GetSection(SapOptions.Position));
-
 // 2026-08-23 - Audit trail: per-property data-change interceptor
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddSingleton<ICurrentUserProvider, CurrentUserProvider>();
 
+// ponytail: single registration must carry the interceptor — EF Core TryAdd drops
+// any second AddDbContext, so a plain registration elsewhere silently disables auditing.
 builder.Services.AddDbContext<AppDbContext>((sp, options) =>
 {
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection"));
-    // Audit interceptor: resolves current user/IP per request via IHttpContextAccessor
     options.AddInterceptors(sp.GetRequiredService<AuditSaveChangesInterceptor>());
 });
 builder.Services.AddSingleton<AuditSaveChangesInterceptor>();
