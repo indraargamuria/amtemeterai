@@ -223,7 +223,6 @@ export function DashboardPage() {
             <MetricCard title="Pending e-Meterai Stamps" value={stats?.pendingStamps ?? 0} subtitle={`${stats?.stamped ?? 0} stamped · ${stats?.failedStamps ?? 0} failed`} isAlert={(stats?.pendingStamps ?? 0) > 0} icon="🏷️" />
             <MetricCard title="Stamp Quota" value={stampQuotaError ? "—" : stampQuota ? stampQuota.saldo : "…"} subtitle={stampQuotaError ? "Unavailable — retrying" : stampQuota ? `${stampQuota.saldo - (stats?.pendingStamps ?? 0)} after pending` : "Loading..."} isAlert={stampQuota !== null && stampQuota.saldo <= (stats?.pendingStamps ?? 0)} icon="🏷️" />
             <MetricCard title="Failed Stamps" value={stats?.failedStamps ?? 0} subtitle="Require attention" isAlert={(stats?.failedStamps ?? 0) > 0} icon="⚠️" />
-            <MetricCard title="Invoice Value (Stamped)" value={formatIDR(stats?.invoiceValueStamped ?? 0)} subtitle={`of ${formatIDR(stats?.invoiceValueTotal ?? 0)} total`} icon="💰" />
             <MetricCard title="Rejection Rate" value={`${stats?.rejectionRate ?? 0}%`} subtitle="of delivered quantity" isAlert={(stats?.rejectionRate ?? 0) > 5} icon="📉" />
             <MetricCard title="Active Customers" value={stats?.activeCustomers ?? 0} subtitle="distinct customers" icon="🏢" />
           </div>
@@ -312,7 +311,7 @@ export function DashboardPage() {
                     ))}
                   </div>
                   <p className="text-[11px] text-brand-blue dark:text-slate-100/40 dark:text-slate-400 mt-2">
-                    {formatIDR(totalStampValue)} total invoice value
+                    {totalStampValue} stamps total
                   </p>
                 </CardContent>
               </Card>
