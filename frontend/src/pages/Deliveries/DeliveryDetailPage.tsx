@@ -713,9 +713,12 @@ export function DeliveryDetailPage() {
 
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({ message: "Failed to generate invoice" }))
+        // API returns either { message } JSON or plain-text error strings
+        const errorMessage = typeof errorData === "string" ? errorData
+          : errorData.message || `Invoice generation failed (HTTP ${res.status}).`
         setToastType("error")
         setToastTitle("Invoice Generation Failed")
-        setToastMessage(errorData.message || "An error occurred while generating the SAP invoice.")
+        setToastMessage(errorMessage)
         setShowToast(true)
         setProcessingBilling(false)
         return
@@ -888,6 +891,7 @@ export function DeliveryDetailPage() {
             const shouldShowButton = isNonBC || (delivery.received && delivery.status !== 3)
 
             if (shouldShowButton) {
+              const buttonLabel = processingBilling ? "Processing..." : "Generate Invoice"
               if (isNonBC && canBill) {
                 return (
                   <Button
@@ -897,7 +901,7 @@ export function DeliveryDetailPage() {
                     disabled={processingBilling}
                     className="whitespace-nowrap"
                   >
-                    {processingBilling ? "Processing..." : "Generate SAP Invoice"}
+                    {buttonLabel}
                   </Button>
                 )
               }
@@ -910,7 +914,7 @@ export function DeliveryDetailPage() {
                     disabled={processingBilling}
                     className="whitespace-nowrap"
                   >
-                    {processingBilling ? "Processing..." : "Sync SAP Invoice"}
+                    {buttonLabel}
                   </Button>
                 )
               }
