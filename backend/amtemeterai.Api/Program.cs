@@ -28,6 +28,18 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 // 2026-05-20 - Configure SAP Options
 builder.Services.Configure<SapOptions>(builder.Configuration.GetSection(SapOptions.Position));
 
+// 2026-08-23 - Audit trail: per-property data-change interceptor
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddSingleton<ICurrentUserProvider, CurrentUserProvider>();
+
+builder.Services.AddDbContext<AppDbContext>((sp, options) =>
+{
+    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection"));
+    // Audit interceptor: resolves current user/IP per request via IHttpContextAccessor
+    options.AddInterceptors(sp.GetRequiredService<AuditSaveChangesInterceptor>());
+});
+builder.Services.AddSingleton<AuditSaveChangesInterceptor>();
+
 // 2026-06-09 - Configure Peruri Options for e-Meterai on-premise stamping
 builder.Services.Configure<PeruriOptions>(builder.Configuration.GetSection(PeruriOptions.SectionName));
 
